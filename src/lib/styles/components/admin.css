@@ -1,0 +1,33 @@
+/* ============================================================
+   atmobb — ADMIN component styles
+   Shared chrome for the admin accordion lists (boards, topics).
+   Vendored from the atmobb Design System project.
+   ============================================================ */
+
+/* ---- Accordion row (a <details> that opens an edit form) ---- */
+.atm-adminrow {
+  border: var(--border-hair) solid var(--forum-line);
+  border-radius: var(--radius-md);
+  background: var(--forum-surface-2);
+}
+.atm-adminrow > summary {
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+.atm-adminrow__name { font: var(--type-board-title); color: var(--forum-ink); }
+.atm-adminrow__meta { font: var(--type-meta); color: var(--forum-ink-soft); white-space: nowrap; }
+
+/* ---- Stacked edit form (the accordion body) ---- */
+.atm-editform {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-top: var(--border-hair) solid var(--forum-line);
+}
+.atm-editform__row { display: flex; gap: var(--space-3); }
+.atm-editform__row .atm-field { flex: 1; }
+.atm-editform__actions { display: flex; align-items: center; gap: var(--space-3); }

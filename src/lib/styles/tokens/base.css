@@ -1,0 +1,67 @@
+/* ============================================================
+   atmobb — BASE RESET & ELEMENT DEFAULTS
+   Minimal, opinionated. Reads --forum-* so any surface themes.
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  font: var(--type-body);
+  color: var(--forum-ink);
+  background: var(--forum-bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* headings default to display face; components override as needed */
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  color: var(--forum-ink);
+  margin: 0 0 var(--space-3);
+  line-height: var(--lh-snug);
+}
+h1 { font: var(--type-page-title); }
+h2 { font: var(--type-section); }
+h3 { font: var(--type-thread-title); }
+
+p { margin: 0 0 var(--space-4); }
+p:last-child { margin-bottom: 0; }
+
+a {
+  color: var(--forum-link);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--forum-link-hover);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+hr {
+  border: 0;
+  border-top: var(--border-hair) solid var(--forum-line);
+  margin: var(--space-5) 0;
+}
+
+code, kbd, samp { font-family: var(--font-mono); font-size: 0.92em; }
+
+img { max-width: 100%; display: block; }
+
+::selection {
+  background: color-mix(in oklch, var(--forum-accent) 26%, transparent);
+}
+
+/* shared utility: pixelated sprite rendering */
+.pixelated {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* focus-visible ring for interactive elements */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}

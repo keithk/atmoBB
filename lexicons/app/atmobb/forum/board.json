@@ -1,0 +1,99 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.forum.board",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A board within a forum. Lives in the forum account's repo. Subforums reference their parent board.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 1000,
+            "maxGraphemes": 100
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 10000,
+            "maxGraphemes": 1000
+          },
+          "parent": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "Parent board for subforums. Must reference an app.atmobb.forum.board in the same repo."
+          },
+          "category": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "Category this board is grouped under on the index. Must reference an app.atmobb.forum.category in the same repo."
+          },
+          "topic": {
+            "type": "string",
+            "maxLength": 640,
+            "maxGraphemes": 64,
+            "description": "Normalized topic slug (lowercase, hyphen-separated). Boards across the atmosphere sharing a topic merge their threads; appviews do the joining."
+          },
+          "topicFederation": {
+            "type": "string",
+            "knownValues": [
+              "open",
+              "allowlist"
+            ],
+            "maxLength": 64,
+            "description": "Whose boards merge into this board's topic window. Absent means open."
+          },
+          "topicAllow": {
+            "type": "array",
+            "maxLength": 100,
+            "items": {
+              "type": "string",
+              "format": "did"
+            },
+            "description": "Allowlist mode: forums whose same-topic boards merge here."
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Sort position within the parent (or the forum root)."
+          },
+          "access": {
+            "type": "union",
+            "refs": [
+              "#public",
+              "#space"
+            ],
+            "description": "Who can read this board. Defaults to public when absent."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    },
+    "public": {
+      "type": "object",
+      "description": "Anyone can read; threads and replies are public repo records.",
+      "properties": {}
+    },
+    "space": {
+      "type": "object",
+      "description": "Members-only board. Threads and replies live in the referenced permissioned space rather than public repos.",
+      "required": [
+        "space"
+      ],
+      "properties": {
+        "space": {
+          "type": "string",
+          "description": "The at:// URI of the permissioned space backing this board (at://<did>/space/<type>/<skey>).",
+          "maxLength": 1000
+        }
+      }
+    }
+  }
+}

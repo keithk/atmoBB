@@ -1,0 +1,86 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.actor.profile",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A user's atmoBB profile, global across all forums. Lives in the user's repo.",
+      "key": "literal:self",
+      "record": {
+        "type": "object",
+        "properties": {
+          "displayName": { "type": "string", "maxLength": 640, "maxGraphemes": 64 },
+          "description": {
+            "type": "string",
+            "description": "Free-text bio, shown on the profile's About panel. Global across forums.",
+            "maxLength": 2560,
+            "maxGraphemes": 256
+          },
+          "avatar": { "type": "blob", "accept": ["image/png", "image/jpeg", "image/webp", "image/gif"], "maxSize": 1000000 },
+          "signature": {
+            "type": "array",
+            "description": "Rendered under every post, phpBB style. Keep it short; clients may truncate.",
+            "maxLength": 3,
+            "items": {
+              "type": "union",
+              "refs": ["app.atmobb.richtext.block#text", "app.atmobb.richtext.block#quote", "app.atmobb.richtext.block#code", "app.atmobb.richtext.block#image"]
+            }
+          },
+          "title": {
+            "type": "string",
+            "description": "Self-chosen user title, shown under the username where the forum allows it.",
+            "maxLength": 640,
+            "maxGraphemes": 64
+          },
+          "pronouns": { "type": "string", "maxLength": 640, "maxGraphemes": 64 },
+          "website": { "type": "string", "format": "uri" },
+          "avatarBuilder": {
+            "type": "ref",
+            "ref": "#avatarBuilder",
+            "description": "Layered avatar recipe. The source of truth; the `avatar` blob is a baked render of it for generic clients."
+          },
+          "createdAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    },
+    "avatarBuilder": {
+      "type": "object",
+      "description": "A built avatar as part + colour choices. Rendered by stacking pre-positioned SVG parts (RhosGFX Vector Avatars Pro).",
+      "required": ["v", "skin"],
+      "properties": {
+        "v": { "type": "integer", "description": "Recipe schema version.", "minimum": 1 },
+        "skin": { "type": "string", "description": "Skin tone id; drives body, head, nose and facial-feature colouring." },
+        "hairBack": { "type": "ref", "ref": "#part" },
+        "top": { "type": "ref", "ref": "#garment" },
+        "neckwear": { "type": "ref", "ref": "#garment" },
+        "facialFeature": { "type": "ref", "ref": "#part" },
+        "nose": { "type": "ref", "ref": "#part" },
+        "eyes": { "type": "ref", "ref": "#part" },
+        "eyebrows": { "type": "ref", "ref": "#part" },
+        "mouth": { "type": "ref", "ref": "#part" },
+        "facialHair": { "type": "ref", "ref": "#part" },
+        "hairFront": { "type": "ref", "ref": "#part" },
+        "hat": { "type": "ref", "ref": "#part" },
+        "accessory": { "type": "ref", "ref": "#part" }
+      }
+    },
+    "part": {
+      "type": "object",
+      "description": "A part choice: a shape id and, where the part is colourable, a palette colour id.",
+      "required": ["shape"],
+      "properties": {
+        "shape": { "type": "string" },
+        "color": { "type": "string" }
+      }
+    },
+    "garment": {
+      "type": "object",
+      "description": "A garment choice: which type (e.g. jacket, tie) in which colour.",
+      "required": ["type", "color"],
+      "properties": {
+        "type": { "type": "string" },
+        "color": { "type": "string" }
+      }
+    }
+  }
+}

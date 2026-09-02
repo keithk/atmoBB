@@ -1,0 +1,47 @@
+# atmoBB appview stack — paste this YAML into the deploy dashboard as a
+# "compose" site named `atmobb-appview`, primary service `happyview`, port 3000.
+#
+# Before pasting: replace CHANGE-ME-PG-PASSWORD (both places) with one value
+# (openssl rand -hex 24). Postgres is never published on the host — deploy
+# strips all ports except the primary service binding — so the password only
+# guards the compose-internal network.
+#
+# Postgres data is bind-mounted to the site's persistent data dir on the host,
+# so it survives redeploys (and even site deletion).
+#
+# Set these as site env vars in the dashboard (they merge into `happyview`):
+#   SESSION_SECRET          openssl rand -hex 32
+#   TOKEN_ENCRYPTION_KEY    openssl rand -base64 32
+
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    # Happyview uses separate main and backfill pools that can exceed
+    # PostgreSQL's default 100-connection limit during a full backfill.
+    command: ["postgres", "-c", "max_connections=200"]
+    environment:
+      POSTGRES_USER: happyview
+      POSTGRES_PASSWORD: CHANGE-ME-PG-PASSWORD
+      POSTGRES_DB: happyview
+    volumes:
+      - /var/deploy/data/atmobb-appview/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U happyview"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  happyview:
+    image: ghcr.io/gamesgamesgamesgamesgames/happyview:2.13.1
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://happyview:CHANGE-ME-PG-PASSWORD@postgres/happyview
+      PUBLIC_URL: https://hv.atmobb.app
+      RELAY_URL: https://relay1.us-east.bsky.network
+      PORT: "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy

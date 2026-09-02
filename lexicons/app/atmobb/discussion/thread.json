@@ -1,0 +1,96 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.discussion.thread",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A discussion thread (topic). Lives in the author's repo, pointing at a board in a forum's repo.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": [
+          "board",
+          "title"
+        ],
+        "properties": {
+          "board": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "The app.atmobb.forum.board this thread belongs to. The board URI's authority is the forum's DID."
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 3000,
+            "maxGraphemes": 300
+          },
+          "body": {
+            "type": "array",
+            "maxLength": 200,
+            "items": {
+              "type": "union",
+              "refs": [
+                "app.atmobb.richtext.block#text",
+                "app.atmobb.richtext.block#quote",
+                "app.atmobb.richtext.block#code",
+                "app.atmobb.richtext.block#image"
+              ]
+            }
+          },
+          "poll": {
+            "type": "ref",
+            "ref": "#poll"
+          },
+          "tags": {
+            "type": "array",
+            "maxLength": 8,
+            "items": {
+              "type": "string",
+              "maxLength": 640,
+              "maxGraphemes": 64
+            }
+          },
+          "editedAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When the author last edited the body (or title). Absent means never edited."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    },
+    "poll": {
+      "type": "object",
+      "description": "An embedded poll. Votes are app.atmobb.poll.vote records referencing this thread.",
+      "required": [
+        "options"
+      ],
+      "properties": {
+        "question": {
+          "type": "string",
+          "maxLength": 3000,
+          "maxGraphemes": 300
+        },
+        "options": {
+          "type": "array",
+          "minLength": 2,
+          "maxLength": 10,
+          "items": {
+            "type": "string",
+            "maxLength": 1000,
+            "maxGraphemes": 100
+          }
+        },
+        "multipleChoice": {
+          "type": "boolean"
+        },
+        "closesAt": {
+          "type": "string",
+          "format": "datetime"
+        }
+      }
+    }
+  }
+}

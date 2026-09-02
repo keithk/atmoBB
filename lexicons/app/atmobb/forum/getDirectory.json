@@ -1,0 +1,24 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.forum.getDirectory",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Every forum the index has seen, in founding order. Powers the cross-forum directory and the atmosphere webring.",
+      "parameters": {
+        "type": "params",
+        "properties": {}
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["forums"],
+          "properties": {
+            "forums": { "type": "array", "items": { "type": "unknown" } }
+          }
+        }
+      }
+    }
+  }
+}

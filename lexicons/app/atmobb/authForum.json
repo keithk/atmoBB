@@ -1,0 +1,25 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.authForum",
+  "defs": {
+    "main": {
+      "type": "permission-set",
+      "title": "atmobb",
+      "detail": "Post threads and replies, join forums, vote in polls, and customize your profile and signature.",
+      "permissions": [
+        {
+          "type": "permission",
+          "resource": "repo",
+          "collection": [
+            "app.atmobb.discussion.thread",
+            "app.atmobb.discussion.reply",
+            "app.atmobb.forum.membership",
+            "app.atmobb.forum.accessRequest",
+            "app.atmobb.poll.vote",
+            "app.atmobb.actor.profile"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.forum.getStaff",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "A forum's staff: its moderator records with subject profiles.",
+      "parameters": {
+        "type": "params",
+        "required": ["forum"],
+        "properties": {
+          "forum": { "type": "string", "format": "did" }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["staff"],
+          "properties": {
+            "staff": { "type": "array", "items": { "type": "unknown" } }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.discussion.getLatestThreads",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Most recently active threads. With a forum param, scoped to that forum's own boards plus the merged streams of its topic boards.",
+      "parameters": {
+        "type": "params",
+        "properties": {
+          "forum": {
+            "type": "string",
+            "format": "did"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 25
+          },
+          "cursor": {
+            "type": "string"
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": [
+            "threads"
+          ],
+          "properties": {
+            "threads": {
+              "type": "array",
+              "items": {
+                "type": "unknown"
+              }
+            },
+            "cursor": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

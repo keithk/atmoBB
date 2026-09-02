@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:17
+    # Happyview uses separate main and backfill pools that can exceed
+    # PostgreSQL's default 100-connection limit during a full backfill.
+    command: ["postgres", "-c", "max_connections=200"]
+    environment:
+      POSTGRES_USER: happyview
+      POSTGRES_PASSWORD: happyview
+      POSTGRES_DB: happyview
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U happyview"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  happyview:
+    # Keep this exact release aligned with infra/appview-compose*.yml.
+    image: ghcr.io/gamesgamesgamesgamesgames/happyview:2.13.1
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      DATABASE_URL: postgres://happyview:happyview@postgres/happyview
+      PUBLIC_URL: ${PUBLIC_URL:-http://127.0.0.1:3000}
+      SESSION_SECRET: ${SESSION_SECRET:-dev-only-secret-not-for-production}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
+      RELAY_URL: https://relay1.us-east.bsky.network
+      PORT: 3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

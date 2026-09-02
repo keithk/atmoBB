@@ -1,0 +1,39 @@
+# Generic production Happyview + Postgres stack. Load its required values from
+# a protected env file; docs/self-hosting.md has the complete commands.
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    # Happyview uses separate main and backfill pools that can exceed
+    # PostgreSQL's default 100-connection limit during a full backfill.
+    command: ["postgres", "-c", "max_connections=200"]
+    environment:
+      POSTGRES_USER: happyview
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: happyview
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U happyview"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  happyview:
+    image: ghcr.io/gamesgamesgamesgamesgames/happyview:2.13.1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      DATABASE_URL: postgres://happyview:${POSTGRES_PASSWORD}@postgres/happyview
+      PUBLIC_URL: ${HAPPYVIEW_PUBLIC_URL:?set HAPPYVIEW_PUBLIC_URL}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?set TOKEN_ENCRYPTION_KEY}
+      RELAY_URL: https://relay1.us-east.bsky.network
+      PORT: "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

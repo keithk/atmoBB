@@ -1,0 +1,63 @@
+/* ============================================================
+   atmobb — COLOR PRIMITIVES
+   Old-school forum register, rebuilt: cool GREIGE neutrals (not
+   warm newspaper), coral accent, plum secondary, beveled chrome.
+   Semantic + per-forum aliases live in themes.css.
+   ============================================================ */
+:root {
+  /* --- cool greige "screen" ramp (atmobb chrome) --- */
+  --paper-0: #eceae7;   /* app background — soft greige */
+  --paper-1: #ffffff;   /* card / panel — clean white */
+  --paper-2: #f4f2ef;   /* alt stripe / sunken row */
+  --paper-3: #e5e2de;   /* deep sunken */
+  --line-1: #ddd8d3;    /* hairline borders */
+  --line-2: #c9c3bc;    /* panel edge / stronger dividers */
+  --ink-0: #2b2a2e;     /* near-black, faintly cool */
+  --ink-1: #43424a;     /* body ink */
+  --ink-2: #6c6a70;     /* secondary */
+  --ink-3: #9a97a0;     /* tertiary / disabled */
+
+  /* bevel highlight (the inset top-light that says "panel") */
+  --bevel-hl: rgba(255, 255, 255, 0.85);
+
+  /* --- coral accent ramp --- */
+  --coral-0: #fdeee7;   /* soft tint fill */
+  --coral-1: #f79b7a;   /* accent — light fill, needs dark text */
+  --coral-2: #f2895f;   /* hover */
+  --coral-3: #c05a37;   /* deep — links / on-white text */
+  --coral-4: #9d4529;   /* link hover */
+  --coral-ink: #4a2a1c; /* text ON coral fills */
+
+  /* --- plum secondary (ranks, accents) --- */
+  --plum-1: #8a5a7a;
+  --plum-bg: #f3e7ef;
+
+  /* --- utility semantic hues (shared, not themed) --- */
+  --ok-1: #2f7d55;
+  --ok-bg: #e0efe4;
+  --warn-1: #b06f13;
+  --warn-bg: #f6ecd6;
+  --danger-1: #b23b2c;
+  --danger-bg: #f6ded9;
+  --info-1: #2f6fb0;
+  --info-bg: #e2edf7;
+
+  /* --- online / presence --- */
+  --online: #4a9b4e;
+  --idle: #d0951f;
+  --offline: #a7a2ab;
+
+  /* --- character-picker parchment (atmobb's OWN treatment for
+         the rpg.actor character grid — attribution, not a clone) --- */
+  --parchment-0: #f4e6c4;
+  --parchment-1: #ecd8a8;
+  --parchment-edge: #b8965a;
+  --parchment-ink: #4a3721;
+
+  /* --- rpg.actor system-tag hues (labels are portable data) --- */
+  --tag-dnd: #b5443b;
+  --tag-reverie: #7d54c9;
+  --tag-rmmz: #2f7d55;
+  --tag-dcc: #b58a13;
+  --tag-runway: #c14b9c;
+}

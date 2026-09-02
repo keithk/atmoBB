@@ -1,0 +1,198 @@
+/* ============================================================
+   atmobb — FORMS component styles
+   Vendored from the atmobb Design System project.
+   ============================================================ */
+
+/* ---- Button ---- */
+.atm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font: var(--w-semibold) var(--text-sm)/1 var(--font-body);
+  padding: 9px 16px;
+  border-radius: var(--radius-md);
+  border: var(--border-hair) solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease),
+              transform var(--dur-fast) var(--ease), color var(--dur) var(--ease);
+  user-select: none;
+}
+.atm-btn:active { transform: translateY(1px); }
+.atm-btn:disabled, .atm-btn[aria-disabled="true"] {
+  opacity: 0.5; cursor: not-allowed; transform: none;
+}
+
+.atm-btn--primary {
+  background: linear-gradient(180deg, color-mix(in oklch, var(--forum-accent) 86%, #fff), var(--forum-accent));
+  color: var(--forum-accent-ink);
+  border-color: color-mix(in oklch, var(--forum-accent) 68%, #000);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), var(--shadow-sm);
+}
+.atm-btn--primary:hover:not(:disabled) { background: var(--forum-accent-hover); }
+
+.atm-btn--secondary {
+  background: var(--forum-surface);
+  color: var(--forum-ink);
+  border-color: var(--forum-line-strong);
+  box-shadow: var(--shadow-sm);
+}
+.atm-btn--secondary:hover:not(:disabled) {
+  background: var(--forum-surface-2);
+  border-color: var(--forum-accent);
+}
+
+.atm-btn--ghost {
+  background: transparent;
+  color: var(--forum-ink-soft);
+  border-color: transparent;
+}
+.atm-btn--ghost:hover:not(:disabled) {
+  background: var(--forum-surface-2);
+  color: var(--forum-ink);
+}
+
+.atm-btn--danger {
+  background: var(--danger-1);
+  color: #fff;
+  border-color: color-mix(in oklch, var(--danger-1) 78%, #000);
+}
+.atm-btn--danger:hover:not(:disabled) { filter: brightness(1.08); }
+
+.atm-btn--sm { padding: 6px 11px; font-size: var(--text-xs); border-radius: var(--radius-sm); }
+.atm-btn--lg { padding: 12px 22px; font-size: var(--text-base); }
+.atm-btn--block { display: flex; width: 100%; }
+
+/* ---- Inline spinner ---- */
+/* Inherits the surrounding text colour, so it reads on a button or in a notice. */
+.atm-spinner {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: atm-spin 0.6s linear infinite;
+  vertical-align: -0.12em;
+}
+@keyframes atm-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .atm-spinner { animation-duration: 1.6s; }
+}
+
+/* buttons rendered as links never take the base a:hover underline */
+a.atm-btn:hover { text-decoration: none; }
+
+/* ---- LinkButton (a <button> that reads as an inline link) ---- */
+.atm-linkbtn {
+  all: unset;
+  cursor: pointer;
+  font: var(--type-meta);
+  color: var(--forum-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.atm-linkbtn:hover { color: var(--forum-link-hover); }
+
+/* ---- IconButton ---- */
+.atm-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px; height: 34px;
+  border-radius: var(--radius-md);
+  border: var(--border-hair) solid transparent;
+  background: transparent;
+  color: var(--forum-ink-soft);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--dur-fast);
+  font-size: 16px; line-height: 1;
+}
+.atm-iconbtn:hover:not(:disabled) { background: var(--forum-surface-2); color: var(--forum-ink); }
+.atm-iconbtn:active { transform: translateY(1px); }
+.atm-iconbtn--bordered { border-color: var(--forum-line-strong); background: var(--forum-surface); }
+.atm-iconbtn--sm { width: 28px; height: 28px; font-size: 14px; }
+.atm-iconbtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---- Field / Input / Textarea / Select ---- */
+.atm-field { display: flex; flex-direction: column; gap: 5px; }
+.atm-label {
+  font: var(--w-semibold) var(--text-xs)/1.3 var(--font-body);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--forum-ink-soft);
+}
+.atm-input, .atm-textarea, .atm-select {
+  font: var(--type-ui);
+  color: var(--forum-ink);
+  background: var(--forum-bg);
+  border: var(--border-hair) solid var(--forum-line-strong);
+  border-radius: var(--radius-md);
+  padding: 9px 11px;
+  box-shadow: var(--shadow-well);
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  width: 100%;
+}
+.atm-textarea { resize: vertical; min-height: 96px; line-height: var(--lh-normal); }
+.atm-input::placeholder, .atm-textarea::placeholder { color: var(--forum-ink-faint); }
+.atm-input:focus, .atm-textarea:focus, .atm-select:focus {
+  outline: none;
+  border-color: var(--forum-accent);
+  box-shadow: var(--shadow-well), var(--focus-ring);
+}
+.atm-input:disabled, .atm-textarea:disabled, .atm-select:disabled {
+  opacity: 0.55; cursor: not-allowed;
+}
+.atm-select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--forum-ink-soft) 50%),
+                    linear-gradient(135deg, var(--forum-ink-soft) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 30px;
+}
+.atm-hint { font: var(--type-meta); color: var(--forum-ink-faint); }
+/* form/action feedback text */
+.atm-ok { color: var(--ok-1); font: var(--type-ui); }
+.atm-err { color: var(--danger-1); font: var(--type-ui); }
+.atm-field--error .atm-input,
+.atm-field--error .atm-textarea,
+.atm-field--error .atm-select { border-color: var(--danger-1); }
+.atm-field--error .atm-hint { color: var(--danger-1); }
+
+/* ---- Checkbox & Radio ---- */
+.atm-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: var(--type-ui);
+  color: var(--forum-ink);
+  cursor: pointer;
+  user-select: none;
+}
+.atm-choice input { position: absolute; opacity: 0; width: 0; height: 0; }
+.atm-choice__box {
+  width: 18px; height: 18px;
+  border: var(--border-solid) solid var(--forum-line-strong);
+  background: var(--forum-bg);
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: none;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+  color: var(--forum-accent-ink);
+}
+.atm-choice__box--check { border-radius: var(--radius-xs); }
+.atm-choice__box--radio { border-radius: var(--radius-round); }
+.atm-choice__box svg, .atm-choice__box span { opacity: 0; transition: opacity var(--dur) var(--ease); }
+.atm-choice input:checked + .atm-choice__box {
+  background: var(--forum-accent);
+  border-color: var(--forum-accent);
+}
+.atm-choice input:checked + .atm-choice__box svg,
+.atm-choice input:checked + .atm-choice__box span { opacity: 1; }
+.atm-choice input:focus-visible + .atm-choice__box { box-shadow: var(--focus-ring); }
+.atm-choice__box--radio span {
+  width: 8px; height: 8px; border-radius: var(--radius-round); background: var(--forum-accent-ink);
+}
+.atm-choice--disabled { opacity: 0.5; cursor: not-allowed; }

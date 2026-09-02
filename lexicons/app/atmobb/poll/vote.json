@@ -1,0 +1,28 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.poll.vote",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A vote in a thread's poll. Lives in the voter's repo. One record per selected option; deleting retracts the vote.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["subject", "option"],
+        "properties": {
+          "subject": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "The app.atmobb.discussion.thread whose poll is being voted on."
+          },
+          "option": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Index into the poll's options array."
+          },
+          "createdAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    }
+  }
+}

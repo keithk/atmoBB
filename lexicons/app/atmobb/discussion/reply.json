@@ -1,0 +1,52 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.discussion.reply",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A reply in a thread. Lives in the author's repo. Flat by default; parent enables quote-chain threading.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": [
+          "thread",
+          "body"
+        ],
+        "properties": {
+          "thread": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "The app.atmobb.discussion.thread being replied to."
+          },
+          "parent": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "A specific reply this responds to, for quote-chains. Absent means replying to the thread."
+          },
+          "body": {
+            "type": "array",
+            "maxLength": 200,
+            "items": {
+              "type": "union",
+              "refs": [
+                "app.atmobb.richtext.block#text",
+                "app.atmobb.richtext.block#quote",
+                "app.atmobb.richtext.block#code",
+                "app.atmobb.richtext.block#image"
+              ]
+            }
+          },
+          "editedAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When the author last edited the body (or title). Absent means never edited."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

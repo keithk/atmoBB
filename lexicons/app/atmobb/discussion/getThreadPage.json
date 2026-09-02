@@ -1,0 +1,79 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.discussion.getThreadPage",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "One page of a thread: the thread, total reply count, and a page of replies in chronological order, with author profiles and postcounts hydrated. The thread carries its moderation flags for the viewing forum (hidden, locked, pinned).",
+      "parameters": {
+        "type": "params",
+        "required": [
+          "thread",
+          "forum"
+        ],
+        "properties": {
+          "thread": {
+            "type": "string",
+            "format": "at-uri"
+          },
+          "forum": {
+            "type": "string",
+            "format": "did"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 25
+          },
+          "cursor": {
+            "type": "string"
+          },
+          "reply": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "Return the page holding this reply instead of the cursor's page. Its chronological position comes back as replyIndex."
+          },
+          "viewer": {
+            "type": "string",
+            "format": "did",
+            "description": "The reader, for their own poll votes."
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": [
+            "replies"
+          ],
+          "properties": {
+            "thread": {
+              "type": "unknown"
+            },
+            "replies": {
+              "type": "array",
+              "items": {
+                "type": "unknown"
+              }
+            },
+            "replyCount": {
+              "type": "integer"
+            },
+            "replyIndex": {
+              "type": "integer"
+            },
+            "cursor": {
+              "type": "string"
+            },
+            "poll": {
+              "type": "unknown",
+              "description": "Vote counts per option, voter total, and the viewer's votes, when the thread has a poll."
+            }
+          }
+        }
+      }
+    }
+  }
+}

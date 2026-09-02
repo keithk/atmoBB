@@ -1,0 +1,24 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.discussion.createThread",
+  "defs": {
+    "main": {
+      "type": "procedure",
+      "description": "Create a thread record in the caller's repo (proxied to their PDS).",
+      "input": {
+        "encoding": "application/json",
+        "schema": { "type": "ref", "ref": "app.atmobb.discussion.thread" }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "uri": { "type": "string", "format": "at-uri" },
+            "cid": { "type": "string", "format": "cid" }
+          }
+        }
+      }
+    }
+  }
+}

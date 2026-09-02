@@ -1,0 +1,19 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.forum.membership",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "Declares membership in a forum. Lives in the member's own repo, pointing at the forum's DID — joining is an act of the member, leaving is deleting this record.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["forum"],
+        "properties": {
+          "forum": { "type": "string", "format": "did" },
+          "createdAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    }
+  }
+}

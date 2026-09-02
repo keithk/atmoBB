@@ -1,0 +1,79 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.moderation.action",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A moderation action taken by a forum. Lives in the forum account's repo, making moderation portable and auditable \u2014 any appview can honor it at read time.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": [
+          "subject",
+          "action"
+        ],
+        "properties": {
+          "subject": {
+            "type": "union",
+            "refs": [
+              "com.atproto.repo.strongRef",
+              "#account"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "knownValues": [
+              "hide",
+              "unhide",
+              "lock",
+              "unlock",
+              "pin",
+              "unpin",
+              "ban",
+              "unban",
+              "warn",
+              "block",
+              "unblock",
+              "grantAccess",
+              "denyAccess",
+              "revokeAccess"
+            ],
+            "maxLength": 64
+          },
+          "board": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "Scopes account-level actions (e.g. a ban) to one board. Absent means forum-wide."
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 10000,
+            "maxGraphemes": 1000
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When a temporary action lapses. Absent means until reversed."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    },
+    "account": {
+      "type": "object",
+      "description": "An account as the subject of an action.",
+      "required": [
+        "did"
+      ],
+      "properties": {
+        "did": {
+          "type": "string",
+          "format": "did"
+        }
+      }
+    }
+  }
+}

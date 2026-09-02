@@ -1,0 +1,55 @@
+/* ============================================================
+   atmobb — SPACING, RADII, BORDERS, SHADOWS, LAYOUT
+   These tokens are shared chrome — never themed per-forum.
+   ============================================================ */
+:root {
+  /* --- spacing scale (4px base) --- */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* --- radii (boxy, old-web-crisp; not pill-soft SaaS) --- */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-round: 999px;
+
+  /* --- borders --- */
+  --border-hair: 1px;
+  --border-solid: 2px;
+  --border-heavy: 3px;
+
+  /* --- shadows (soft, warm, no glass/glow) --- */
+  --shadow-none: none;
+  --shadow-sm: 0 1px 0 rgba(33, 28, 22, 0.04), 0 1px 2px rgba(33, 28, 22, 0.06);
+  --shadow-md: 0 1px 2px rgba(33, 28, 22, 0.06), 0 4px 10px rgba(33, 28, 22, 0.08);
+  --shadow-lg: 0 6px 24px rgba(33, 28, 22, 0.14);
+  --shadow-inset: inset 0 1px 2px rgba(33, 28, 22, 0.10);
+  /* pressed-in "sunken well" used for post bodies / inputs */
+  --shadow-well: inset 0 1px 3px rgba(33, 28, 22, 0.08);
+
+  /* --- layout --- */
+  --page-max: 1120px;
+  --sidebar-w: 268px;
+  --rail-w: 156px;        /* avatar rail width in post view */
+  --header-h: 56px;
+
+  /* --- motion (quick, snappy; no bounce) --- */
+  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --dur-fast: 90ms;
+  --dur: 150ms;
+  --dur-slow: 260ms;
+
+  /* --- focus ring --- */
+  --focus-ring: 0 0 0 3px color-mix(in oklch, var(--forum-accent) 40%, transparent);
+}

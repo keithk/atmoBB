@@ -1,0 +1,34 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.forum.accessRequest",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A request to join a members-only (space-backed) board. Lives in the requester's repo. A forum sysop resolves it by granting space membership (approve) or recording a moderation.action denyAccess (deny).",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": [
+          "board"
+        ],
+        "properties": {
+          "board": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "The app.atmobb.forum.board being requested. Its authority is the forum's DID."
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 3000,
+            "maxGraphemes": 300,
+            "description": "Optional note from the requester to the moderators."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

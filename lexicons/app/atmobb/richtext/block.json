@@ -1,0 +1,49 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.richtext.block",
+  "defs": {
+    "text": {
+      "type": "object",
+      "description": "A paragraph of rich text.",
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string", "maxLength": 100000, "maxGraphemes": 10000 },
+        "facets": {
+          "type": "array",
+          "items": { "type": "ref", "ref": "app.atmobb.richtext.facet" }
+        }
+      }
+    },
+    "quote": {
+      "type": "object",
+      "description": "A quote block, optionally attributed to another record (e.g. the reply being quoted).",
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string", "maxLength": 100000, "maxGraphemes": 10000 },
+        "facets": {
+          "type": "array",
+          "items": { "type": "ref", "ref": "app.atmobb.richtext.facet" }
+        },
+        "subject": { "type": "ref", "ref": "com.atproto.repo.strongRef" }
+      }
+    },
+    "code": {
+      "type": "object",
+      "description": "A code block.",
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string", "maxLength": 100000, "maxGraphemes": 10000 },
+        "lang": { "type": "string", "maxLength": 64 }
+      }
+    },
+    "image": {
+      "type": "object",
+      "description": "An embedded image.",
+      "required": ["image"],
+      "properties": {
+        "image": { "type": "blob", "accept": ["image/*"], "maxSize": 2000000 },
+        "alt": { "type": "string", "maxLength": 10000, "maxGraphemes": 1000 }
+      }
+    }
+  }
+}

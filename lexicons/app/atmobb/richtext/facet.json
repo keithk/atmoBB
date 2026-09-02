@@ -1,0 +1,125 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.richtext.facet",
+  "defs": {
+    "main": {
+      "type": "object",
+      "description": "Annotation of a sub-string within rich text.",
+      "required": [
+        "index",
+        "features"
+      ],
+      "properties": {
+        "index": {
+          "type": "ref",
+          "ref": "#byteSlice"
+        },
+        "features": {
+          "type": "array",
+          "items": {
+            "type": "union",
+            "refs": [
+              "#bold",
+              "#italic",
+              "#underline",
+              "#strikethrough",
+              "#code",
+              "#spoiler",
+              "#link",
+              "#mention",
+              "#tag"
+            ]
+          }
+        }
+      }
+    },
+    "byteSlice": {
+      "type": "object",
+      "description": "Sub-string range as byte offsets into the UTF-8 text.",
+      "required": [
+        "byteStart",
+        "byteEnd"
+      ],
+      "properties": {
+        "byteStart": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "byteEnd": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "bold": {
+      "type": "object",
+      "description": "Bold text.",
+      "properties": {}
+    },
+    "italic": {
+      "type": "object",
+      "description": "Italic text.",
+      "properties": {}
+    },
+    "underline": {
+      "type": "object",
+      "description": "Underlined text. A BBCode heritage feature.",
+      "properties": {}
+    },
+    "strikethrough": {
+      "type": "object",
+      "description": "Struck-through text.",
+      "properties": {}
+    },
+    "code": {
+      "type": "object",
+      "description": "Inline code.",
+      "properties": {}
+    },
+    "spoiler": {
+      "type": "object",
+      "description": "Spoiler text, hidden until revealed. A forum culture essential.",
+      "properties": {}
+    },
+    "link": {
+      "type": "object",
+      "description": "A hyperlink.",
+      "required": [
+        "uri"
+      ],
+      "properties": {
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "mention": {
+      "type": "object",
+      "description": "A mention of another account.",
+      "required": [
+        "did"
+      ],
+      "properties": {
+        "did": {
+          "type": "string",
+          "format": "did"
+        }
+      }
+    },
+    "tag": {
+      "type": "object",
+      "description": "A hashtag.",
+      "required": [
+        "tag"
+      ],
+      "properties": {
+        "tag": {
+          "type": "string",
+          "maxLength": 640,
+          "maxGraphemes": 64
+        }
+      }
+    }
+  }
+}

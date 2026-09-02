@@ -1,0 +1,241 @@
+/* ============================================================
+   atmobb — CONTENT component styles
+   Vendored from the atmobb Design System project.
+   ============================================================ */
+
+/* ---- Avatar ---- */
+.atm-avatar {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  border: var(--border-solid) solid var(--forum-line-strong);
+  background: var(--forum-surface-2);
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  line-height: 0;
+}
+.atm-avatar img, .atm-avatar canvas, .atm-avatar svg {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.atm-avatar__fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font-family: var(--font-mono);
+  font-weight: var(--w-bold);
+  line-height: 1;
+  color: white;
+  background: hsl(var(--avatar-hue) 34% 42%);
+}
+.atm-avatar--rounded { border-radius: var(--radius-lg); }
+.atm-avatar--ring { border-color: var(--forum-accent); }
+/* presence dot */
+.atm-avatar__dot {
+  position: absolute;
+  right: -3px; bottom: -3px;
+  width: 12px; height: 12px;
+  border-radius: var(--radius-round);
+  border: 2px solid var(--forum-surface);
+}
+.atm-avatar__dot--online { background: var(--online); }
+.atm-avatar__dot--idle { background: var(--idle); }
+.atm-avatar__dot--offline { background: var(--offline); }
+/* source badge (e.g. rpg.actor) */
+.atm-avatar__src {
+  position: absolute;
+  left: -4px; top: -4px;
+  font: var(--w-bold) 8px/1 var(--font-pixel);
+  letter-spacing: var(--ls-pixel);
+  background: var(--parchment-1);
+  color: var(--parchment-ink);
+  border: 1px solid var(--parchment-edge);
+  border-radius: var(--radius-xs);
+  padding: 2px 3px;
+}
+
+/* ---- RankBadge ---- */
+.atm-rank {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: var(--w-bold) var(--text-2xs)/1 var(--font-pixel);
+  letter-spacing: var(--ls-pixel);
+  text-transform: uppercase;
+  color: var(--forum-rank);
+  background: var(--forum-rank-bg);
+  border: var(--border-hair) solid color-mix(in oklch, var(--forum-rank) 45%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 4px 7px;
+}
+.atm-rank__pips { display: inline-flex; gap: 2px; }
+.atm-rank__pip { width: 4px; height: 4px; background: currentColor; }
+.atm-rank__pip--off { opacity: 0.28; }
+
+/* ---- SystemTag (rpg.actor game-system labels) ---- */
+.atm-systag {
+  display: inline-flex;
+  align-items: center;
+  font: var(--w-bold) 10px/1 var(--font-pixel);
+  letter-spacing: var(--ls-pixel);
+  padding: 3px 6px;
+  border-radius: var(--radius-xs);
+  border: 1px solid currentColor;
+  background: color-mix(in oklch, currentColor 12%, transparent);
+}
+
+/* ---- Badge (numeric / status pill) ---- */
+.atm-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  font: var(--w-semibold) var(--text-2xs)/1 var(--font-body);
+  padding: 3px 6px;
+  border-radius: var(--radius-round);
+  background: var(--forum-surface-2);
+  color: var(--forum-ink-soft);
+  border: var(--border-hair) solid var(--forum-line);
+}
+.atm-badge--accent { background: var(--forum-accent); color: var(--forum-accent-ink); border-color: transparent; }
+.atm-badge--ok { background: var(--ok-bg); color: var(--ok-1); border-color: transparent; }
+.atm-badge--warn { background: var(--warn-bg); color: var(--warn-1); border-color: transparent; }
+.atm-badge--danger { background: var(--danger-bg); color: var(--danger-1); border-color: transparent; }
+.atm-badge--new {
+  font-family: var(--font-pixel); text-transform: uppercase; letter-spacing: var(--ls-pixel);
+  border-radius: var(--radius-xs);
+}
+
+/* ---- Card (surface) ---- */
+.atm-card {
+  background: var(--forum-surface);
+  border: var(--border-hair) solid var(--forum-line);
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 1px 0 var(--forum-bevel), var(--shadow-sm);
+  overflow: hidden;
+}
+.atm-card--flat { box-shadow: none; }
+.atm-card--raised { box-shadow: var(--shadow-md); }
+/* page-level surfaces (hero, masthead, posts) take the stronger panel edge */
+.atm-card--edge { border-color: var(--forum-edge); }
+.atm-card__header {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--forum-surface-2);
+  border-bottom: var(--border-hair) solid var(--forum-line);
+  font: var(--type-board-title);
+}
+.atm-card__body { padding: var(--space-4); }
+
+/* ---- Panel (edge-framed page list: boards, threads, members) ---- */
+.atm-panel {
+  border: var(--border-hair) solid var(--forum-edge);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+/* rows carry their own bottom hairline; the frame supplies the last one */
+.atm-panel > :last-child { border-bottom: none; }
+
+/* ---- Empty state (a list with nothing in it yet) ---- */
+.atm-empty {
+  background: var(--forum-surface);
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--forum-ink-soft);
+  margin: 0;
+}
+/* quiet inline variant for card bodies (admin lists) */
+.atm-empty--bare {
+  background: none;
+  padding: 0;
+  text-align: left;
+  font: var(--type-meta);
+}
+
+/* ---- Eyebrow (uppercase pixel label) & Chip (its bordered pill) ---- */
+.atm-eyebrow {
+  font: var(--w-bold) var(--text-2xs)/1 var(--font-pixel);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--forum-ink-faint);
+}
+.atm-eyebrow--accent { color: var(--forum-link); }
+.atm-chip {
+  display: inline-block;
+  font: var(--w-bold) var(--text-2xs)/1 var(--font-pixel);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: var(--radius-round);
+  border: var(--border-hair) solid var(--forum-line-strong);
+  color: var(--forum-ink-soft);
+  vertical-align: middle;
+}
+.atm-chip--topic {
+  background: var(--forum-accent-soft);
+  color: var(--forum-link);
+  border-color: color-mix(in oklch, var(--forum-accent) 50%, var(--forum-line));
+}
+.atm-chip--ok { color: var(--ok-1); border-color: color-mix(in oklch, var(--ok-1) 50%, transparent); }
+.atm-chip--warn { color: var(--warn-1); border-color: color-mix(in oklch, var(--warn-1) 50%, transparent); }
+.atm-chip--danger {
+  color: var(--danger-1);
+  border-color: color-mix(in oklch, var(--danger-1) 40%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+/* ---- Headline (display lead-in with a highlighted mark) ---- */
+.atm-headline {
+  font: var(--w-regular) var(--text-2xl)/var(--lh-snug) var(--font-display);
+  letter-spacing: var(--ls-tight);
+  margin: 0;
+}
+.atm-headline mark {
+  background: var(--forum-accent-soft);
+  color: var(--forum-link);
+  padding: 0 4px;
+  border-radius: var(--radius-xs);
+}
+
+/* ---- Presence (dot + label) ---- */
+.atm-presence { display: inline-flex; align-items: center; gap: 5px; }
+.atm-presence::before {
+  content: '';
+  width: 8px; height: 8px;
+  border-radius: var(--radius-round);
+  background: var(--offline);
+}
+.atm-presence--online::before { background: var(--online); }
+.atm-presence--idle::before { background: var(--idle); }
+
+/* ---- Via (federated-origin name in mono microtext) ---- */
+.atm-via { font-family: var(--font-mono); font-size: var(--text-2xs); }
+
+/* ---- User title (the italic custom title under a member's name) ---- */
+.atm-usertitle { font: var(--type-meta); color: var(--forum-rank); font-style: italic; }
+
+/* ---- Rich text blocks (shared by the renderer and the composer) ---- */
+.atm-richtext blockquote,
+.atm-prose blockquote {
+  margin: 0 0 var(--space-3);
+  padding: 10px 14px;
+  background: var(--forum-surface-2);
+  border-left: var(--border-heavy) solid var(--forum-accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--forum-ink-soft);
+  font-style: italic;
+}
+.atm-richtext pre,
+.atm-prose pre {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--forum-surface-2);
+  border: var(--border-hair) solid var(--forum-line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-well);
+  overflow-x: auto;
+  font: var(--w-regular) var(--text-sm)/1.5 var(--font-mono);
+}
+.atm-richtext blockquote:last-child, .atm-prose blockquote:last-child,
+.atm-richtext pre:last-child, .atm-prose pre:last-child { margin-bottom: 0; }

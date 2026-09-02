@@ -1,0 +1,45 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.forum.moderator",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "Grants moderator or admin standing on a forum. Lives in the forum account's repo, signed by the forum.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": [
+          "subject",
+          "role"
+        ],
+        "properties": {
+          "subject": {
+            "type": "string",
+            "format": "did"
+          },
+          "role": {
+            "type": "string",
+            "knownValues": [
+              "admin",
+              "moderator"
+            ],
+            "maxLength": 64
+          },
+          "boards": {
+            "type": "array",
+            "description": "Boards this grant is scoped to. Absent means the whole forum.",
+            "maxLength": 100,
+            "items": {
+              "type": "string",
+              "format": "at-uri"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

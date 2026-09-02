@@ -1,0 +1,24 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.forum.getTopics",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Every topic currently carried by any board in the atmosphere, with sizes. The discovery side of getTopic: what could a board join?",
+      "parameters": {
+        "type": "params",
+        "properties": {}
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["topics"],
+          "properties": {
+            "topics": { "type": "array", "items": { "type": "unknown" } }
+          }
+        }
+      }
+    }
+  }
+}

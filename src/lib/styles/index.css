@@ -1,0 +1,21 @@
+/* atmobb design system — global entry point.
+   Vendored from the "atmobb Design System" claude.ai/design project
+   (040c63d5-20b3-48a1-8fcc-aff5f2c72229); keep in sync via /design-sync.
+   Import this once in the root layout.
+
+   All built-ins live in a named layer. Forum-owner CSS is deliberately
+   unlayered, so it overrides these rules without specificity contests or
+   !important — including Svelte's generated scoped selectors. */
+@layer atmobb;
+
+@import './tokens/fonts.css' layer(atmobb);
+@import './tokens/colors.css' layer(atmobb);
+@import './tokens/typography.css' layer(atmobb);
+@import './tokens/spacing.css' layer(atmobb);
+@import './tokens/themes.css' layer(atmobb);
+@import './tokens/base.css' layer(atmobb);
+@import './components/forms.css' layer(atmobb);
+@import './components/content.css' layer(atmobb);
+@import './components/forum.css' layer(atmobb);
+@import './components/navigation.css' layer(atmobb);
+@import './components/admin.css' layer(atmobb);

@@ -1,0 +1,24 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.authSysop",
+  "defs": {
+    "main": {
+      "type": "permission-set",
+      "title": "atmobb forum admin",
+      "detail": "Run a forum: its profile, appearance, and rules, boards and categories, shared-board mounts, staff grants, and moderation actions. Granted to the forum's own account, not to members.",
+      "permissions": [
+        {
+          "type": "permission",
+          "resource": "repo",
+          "collection": [
+            "app.atmobb.forum.profile",
+            "app.atmobb.forum.board",
+            "app.atmobb.forum.category",
+            "app.atmobb.forum.moderator",
+            "app.atmobb.moderation.action"
+          ]
+        }
+      ]
+    }
+  }
+}

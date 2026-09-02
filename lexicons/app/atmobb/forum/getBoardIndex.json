@@ -1,0 +1,28 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.forum.getBoardIndex",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Board index for a forum: boards with thread counts and latest activity.",
+      "parameters": {
+        "type": "params",
+        "required": ["forum"],
+        "properties": {
+          "forum": { "type": "string", "format": "did" }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["boards"],
+          "properties": {
+            "forum": { "type": "unknown" },
+            "boards": { "type": "array", "items": { "type": "unknown" } }
+          }
+        }
+      }
+    }
+  }
+}

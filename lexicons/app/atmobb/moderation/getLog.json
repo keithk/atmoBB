@@ -1,0 +1,28 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.moderation.getLog",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "A forum's moderation actions, newest first. Powers the admin panel's undo affordances; the records are public either way.",
+      "parameters": {
+        "type": "params",
+        "required": ["forum"],
+        "properties": {
+          "forum": { "type": "string", "format": "did" },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["actions"],
+          "properties": {
+            "actions": { "type": "array", "items": { "type": "unknown" } }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.actor.getActivity",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "An actor's public atmobb participation on one forum and across the indexed atmosphere.",
+      "parameters": {
+        "type": "params",
+        "required": [
+          "actor",
+          "forum"
+        ],
+        "properties": {
+          "actor": {
+            "type": "string",
+            "format": "did"
+          },
+          "forum": {
+            "type": "string",
+            "format": "did"
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": [
+            "local",
+            "global",
+            "forums",
+            "recentThreads"
+          ],
+          "properties": {
+            "local": {
+              "type": "unknown"
+            },
+            "global": {
+              "type": "unknown"
+            },
+            "forums": {
+              "type": "array",
+              "items": {
+                "type": "unknown"
+              }
+            },
+            "recentThreads": {
+              "type": "array",
+              "items": {
+                "type": "unknown"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.moderation.getStanding",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "One member's standing with a forum: the bans in force against them and the warnings they've received. Both are derived from the forum's public moderation actions.",
+      "parameters": {
+        "type": "params",
+        "required": ["forum", "actor"],
+        "properties": {
+          "forum": { "type": "string", "format": "did" },
+          "actor": { "type": "string", "format": "did" }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["bans", "warnings"],
+          "properties": {
+            "bans": { "type": "array", "items": { "type": "unknown" } },
+            "warnings": { "type": "array", "items": { "type": "unknown" } }
+          }
+        }
+      }
+    }
+  }
+}

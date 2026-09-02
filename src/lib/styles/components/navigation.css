@@ -1,0 +1,100 @@
+/* ============================================================
+   atmobb — NAVIGATION component styles
+   Vendored from the atmobb Design System project.
+   ============================================================ */
+
+/* ---- Breadcrumb ---- */
+.atm-crumbs {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  font: var(--type-ui); color: var(--forum-ink-soft);
+}
+.atm-crumbs a { color: var(--forum-link); }
+.atm-crumbs__sep { color: var(--forum-ink-faint); }
+.atm-crumbs__current { color: var(--forum-ink); font-weight: var(--w-semibold); }
+.atm-crumbs--spaced { margin-bottom: var(--space-3); }
+
+/* ---- Pagination ---- */
+.atm-pager { display: inline-flex; align-items: center; gap: 4px; }
+.atm-pager__btn {
+  min-width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 8px;
+  font: var(--w-semibold) var(--text-sm)/1 var(--font-body);
+  color: var(--forum-ink-soft);
+  background: var(--forum-surface);
+  border: var(--border-hair) solid var(--forum-line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.atm-pager__btn:hover:not(:disabled) { background: var(--forum-surface-2); color: var(--forum-ink); border-color: var(--forum-line-strong); }
+.atm-pager__btn--active {
+  background: var(--forum-accent); color: var(--forum-accent-ink);
+  border-color: color-mix(in oklch, var(--forum-accent) 78%, #000);
+}
+.atm-pager__btn:disabled { opacity: 0.4; cursor: not-allowed; }
+/* same treatment when the pager renders <a>/<span> instead of <button> */
+.atm-pager__btn[aria-disabled='true'] { opacity: 0.4; pointer-events: none; }
+.atm-pager__gap { color: var(--forum-ink-faint); padding: 0 2px; }
+.atm-pager-row { display: flex; justify-content: center; margin: var(--space-4) 0; }
+.atm-more { margin-top: var(--space-4); }
+
+/* ---- Notice ---- */
+.atm-notice {
+  background: var(--forum-pin-bg);
+  border: var(--border-hair) solid var(--forum-pin-edge);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  color: var(--forum-ink);
+}
+.atm-notice--waiting { text-align: center; padding: var(--space-8) var(--space-3); }
+.atm-notice--danger {
+  background: var(--danger-bg);
+  border-color: color-mix(in oklch, var(--danger-1) 40%, transparent);
+  color: var(--danger-1);
+}
+
+/* ---- Tabs (underline nav) ---- */
+.atm-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  border-bottom: var(--border-hair) solid var(--forum-line);
+}
+.atm-tab {
+  padding: 8px 12px;
+  font: var(--w-semibold) var(--text-sm)/1 var(--font-body);
+  color: var(--forum-ink-soft);
+  text-decoration: none;
+  border-bottom: var(--border-solid) solid transparent;
+  margin-bottom: -1px;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.atm-tab:hover { color: var(--forum-link); text-decoration: none; }
+.atm-tab--active { color: var(--forum-ink); border-bottom-color: var(--forum-cat-edge); }
+
+/* ---- FormatToolbar (composer) ---- */
+.atm-toolbar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 2px;
+  padding: 5px 6px;
+  background: var(--forum-surface-2);
+  border: var(--border-hair) solid var(--forum-line-strong);
+  border-bottom: none;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+.atm-toolbar__sep { width: 1px; align-self: stretch; margin: 4px 5px; background: var(--forum-line-strong); }
+.atm-toolbar__btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 30px; height: 30px; padding: 0 8px;
+  background: transparent; border: var(--border-hair) solid transparent; border-radius: var(--radius-sm);
+  color: var(--forum-ink-soft); cursor: pointer;
+  font: var(--w-bold) var(--text-sm)/1 var(--font-body);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.atm-toolbar__btn:hover { background: var(--forum-surface); color: var(--forum-ink); border-color: var(--forum-line); }
+.atm-toolbar__btn i { font-style: italic; }
+.atm-toolbar__btn u { text-decoration: underline; }
+.atm-toolbar__btn s { text-decoration: line-through; }
+/* a textarea sitting under the toolbar squares its top corners */
+.atm-toolbar + .atm-textarea,
+.atm-toolbar + textarea { border-radius: 0 0 var(--radius-md) var(--radius-md); }

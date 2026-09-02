@@ -1,0 +1,29 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.forum.getTopic",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Everything currently sharing a topic: the boards, their forums, and their sizes. Lets an admin see what tagging a board would federate with before doing it.",
+      "parameters": {
+        "type": "params",
+        "required": ["topic"],
+        "properties": {
+          "topic": { "type": "string", "maxLength": 640, "maxGraphemes": 64 }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["topic", "boards"],
+          "properties": {
+            "topic": { "type": "string" },
+            "totals": { "type": "unknown" },
+            "boards": { "type": "array", "items": { "type": "unknown" } }
+          }
+        }
+      }
+    }
+  }
+}

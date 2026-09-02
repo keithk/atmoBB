@@ -1,0 +1,82 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.forum.profile",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A forum's identity and configuration. Lives in the forum account's repo; the forum's DID is the forum's identity.",
+      "key": "literal:self",
+      "record": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "maxLength": 1000, "maxGraphemes": 100 },
+          "description": { "type": "string", "maxLength": 10000, "maxGraphemes": 1000 },
+          "avatar": { "type": "blob", "accept": ["image/png", "image/jpeg", "image/webp"], "maxSize": 1000000 },
+          "banner": { "type": "blob", "accept": ["image/png", "image/jpeg", "image/webp"], "maxSize": 2000000 },
+          "rules": {
+            "type": "array",
+            "maxLength": 50,
+            "items": {
+              "type": "union",
+              "refs": ["app.atmobb.richtext.block#text", "app.atmobb.richtext.block#quote", "app.atmobb.richtext.block#code"]
+            }
+          },
+          "ranks": {
+            "type": "array",
+            "description": "Post-count rank ladder, ordered ascending by minPosts. Ranks are computed by appviews from indexed post counts.",
+            "maxLength": 50,
+            "items": { "type": "ref", "ref": "#rank" }
+          },
+          "links": {
+            "type": "array",
+            "maxLength": 20,
+            "items": { "type": "string", "format": "uri" }
+          },
+          "customCss": {
+            "type": "string",
+            "description": "Forum-owned CSS applied to public pages. Admin pages deliberately ignore it so a broken stylesheet can always be repaired.",
+            "maxLength": 100000
+          },
+          "customFonts": {
+            "type": "array",
+            "description": "Forum-owned webfont faces available to customCss.",
+            "maxLength": 12,
+            "items": { "type": "ref", "ref": "#font" }
+          },
+          "ogImage": {
+            "type": "blob",
+            "description": "Forum-owned 1200 by 630 PNG used as the forum landing page's social preview image.",
+            "accept": ["image/png"],
+            "maxSize": 2000000
+          },
+          "ogTheme": {
+            "type": "string",
+            "description": "Visual preset used by the generated forum landing page social preview.",
+            "knownValues": ["classic", "midnight", "ocean", "forest", "plum"],
+            "maxLength": 32
+          },
+          "createdAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    },
+    "rank": {
+      "type": "object",
+      "required": ["title", "minPosts"],
+      "properties": {
+        "title": { "type": "string", "maxLength": 640, "maxGraphemes": 64 },
+        "minPosts": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "font": {
+      "type": "object",
+      "required": ["family", "weight", "style", "source"],
+      "properties": {
+        "family": { "type": "string", "maxLength": 640, "maxGraphemes": 64 },
+        "weight": { "type": "integer", "minimum": 100, "maximum": 900 },
+        "style": { "type": "string", "knownValues": ["normal", "italic"], "maxLength": 16 },
+        "source": { "type": "blob", "accept": ["font/woff", "font/woff2"], "maxSize": 2000000 }
+      }
+    }
+  }
+}

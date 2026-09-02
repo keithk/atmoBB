@@ -1,0 +1,49 @@
+/* ============================================================
+   atmobb — SEMANTIC + PER-FORUM THEME TOKENS
+   ------------------------------------------------------------
+   Shared chrome, per-forum skin. :root is the neutral atmobb
+   house skin (greige + coral); owner CSS overrides these values.
+   Every component reads --forum-* — never raw hues.
+   ============================================================ */
+
+:root {
+  /* surfaces */
+  --forum-bg: var(--paper-0);
+  --forum-surface: var(--paper-1);
+  --forum-surface-2: var(--paper-2);
+  --forum-sunken: var(--paper-3);
+  --forum-line: var(--line-1);
+  --forum-line-strong: var(--line-2);
+  --forum-edge: var(--line-2);            /* panel outer edge */
+  --forum-bevel: var(--bevel-hl);         /* inset top highlight */
+
+  /* text */
+  --forum-ink: var(--ink-0);
+  --forum-ink-soft: var(--ink-2);
+  --forum-ink-faint: var(--ink-3);
+
+  /* accent — coral (light fill → dark ink on it; deep coral for links) */
+  --forum-accent: var(--coral-1);
+  --forum-accent-hover: var(--coral-2);
+  --forum-accent-ink: var(--coral-ink);
+  --forum-accent-soft: var(--coral-0);
+  --forum-link: var(--coral-3);
+  --forum-link-hover: var(--coral-4);
+
+  /* category bar (the classic gradient section header) */
+  --forum-cat-bg: linear-gradient(180deg, #f3f0ec, #e9e4de);
+  --forum-cat-ink: var(--ink-0);
+  --forum-cat-edge: var(--coral-1);       /* accent underline */
+
+  /* masthead */
+  --forum-header-bg: var(--paper-1);
+  --forum-header-ink: var(--ink-0);
+
+  /* pinned / announcement (warm "sticky note") */
+  --forum-pin-bg: #fbf1d8;
+  --forum-pin-edge: #d9b24b;
+
+  /* rank — plum secondary */
+  --forum-rank: var(--plum-1);
+  --forum-rank-bg: var(--plum-bg);
+}

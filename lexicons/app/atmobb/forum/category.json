@@ -1,0 +1,31 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.forum.category",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A grouping header for boards on a forum's index. Lives in the forum account's repo; boards reference it via their category field.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 1000,
+            "maxGraphemes": 100
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Sort position among the forum's categories."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

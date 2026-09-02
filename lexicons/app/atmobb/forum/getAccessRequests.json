@@ -1,0 +1,27 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.forum.getAccessRequests",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Open access requests for a forum's members-only boards: accessRequest records pointing at this forum's boards, minus ones already denied, with requester profile and board name for display.",
+      "parameters": {
+        "type": "params",
+        "required": ["forum"],
+        "properties": {
+          "forum": { "type": "string", "format": "did" }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["requests"],
+          "properties": {
+            "requests": { "type": "array", "items": { "type": "unknown" } }
+          }
+        }
+      }
+    }
+  }
+}
