@@ -2,7 +2,6 @@ import {
   listSpaceRepos,
   listSpaceRecords,
   getSpaceRecord,
-  getPublicRecord,
   THREAD_NSID,
   REPLY_NSID,
   parseSpaceUri,
@@ -11,9 +10,7 @@ import {
   type ActorProfile,
   type RichTextBlock,
 } from './appview';
-
-const NS = 'app.atmobb';
-const ACTOR_PROFILE = `${NS}.actor.profile`;
+import { getPublicProfile } from './profiles';
 
 interface ThreadValue {
   board: string;
@@ -36,13 +33,13 @@ interface Gathered<V> {
   value: V;
 }
 
-/** Public actor.profile records (indexed) for a set of DIDs; absent → undefined. */
+/** Public actor.profile records from their authors' PDSes; absent → undefined. */
 async function profilesFor(dids: string[]): Promise<Record<string, ActorProfile | undefined>> {
   const unique = [...new Set(dids)];
   const entries = await Promise.all(
     unique.map(
       async (did) =>
-        [did, (await getPublicRecord<ActorProfile>(did, ACTOR_PROFILE, 'self')) ?? undefined] as const,
+        [did, (await getPublicProfile(did)) ?? undefined] as const,
     ),
   );
   return Object.fromEntries(entries);

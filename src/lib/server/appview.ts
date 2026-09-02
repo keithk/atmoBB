@@ -513,22 +513,6 @@ export function parseSpaceUri(uri: string): ParsedSpaceRecord | null {
   };
 }
 
-/** Fetch a public (indexed) record's value by URI parts, or null if absent. */
-export async function getPublicRecord<T = unknown>(
-  repo: string,
-  collection: string,
-  rkey: string,
-): Promise<T | null> {
-  try {
-    const res = await xrpc<{ value: T }>('GET', 'com.atproto.repo.getRecord', {
-      params: { repo, collection, rkey },
-    });
-    return res.value;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * The permissioned-space URI backing a board, or null if the board is public.
  *
