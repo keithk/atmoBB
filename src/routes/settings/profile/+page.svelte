@@ -134,10 +134,10 @@
           <span class="atm-hint">
             {avatarName || 'PNG, JPEG, WebP, or GIF; up to 1 MB. Choose a file, then save changes.'}
           </span>
-          <span class="atm-hint">Use the avatar lab to crop the image, adjust its shape, or add a frame.</span>
+          <span class="atm-hint">Use the userpic maker to crop the image or add a simple border.</span>
         </div>
         <div class="avatar-row__actions">
-          <a class="atm-btn atm-btn--secondary" href="/settings/avatar">Open avatar lab</a>
+          <a class="atm-btn atm-btn--secondary" href="/settings/avatar">Make a userpic</a>
           {#if data.avatarBuilderUrl}
             <a class="atm-btn atm-btn--secondary" href={data.avatarBuilderUrl} rel="external">Build a cartoon avatar</a>
           {/if}

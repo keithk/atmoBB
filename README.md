@@ -70,7 +70,7 @@ A public reply takes a lap before anyone else sees it: app to the author's PDS, 
 
 The default UI uses Trebuchet MS, IBM Plex Sans, IBM Plex Mono, and Newsreader. Admins can upload licensed WOFF/WOFF2 files and CSS from the Appearance panel. Uploaded assets live in the forum account's PDS and keep their original license terms.
 
-Profiles take image uploads and fall back to generated monograms. The built-in avatar lab crops photos into 100 × 100 old-school forum icons with skew, filters, chunky frames, and stamps; the finished image follows the member across any atmobb forum. The avatar is an ordinary blob on the profile record, so other apps the member authorizes can set it too.
+Profiles take image uploads and fall back to generated monograms. The built-in userpic maker crops photos into 100 × 100 old-school forum icons with an optional simple border; the finished image follows the member across any atmobb forum. The avatar is an ordinary blob on the profile record, so other apps the member authorizes can set it too.
 
 ## License
 

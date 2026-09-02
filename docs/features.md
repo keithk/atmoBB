@@ -20,7 +20,7 @@ Everything an atmobb forum does today. What I haven't built is listed at the [bo
 - **One profile, every forum.** Display name, bio, avatar, signature, user title, pronouns, and website live in a single `app.atmobb.actor.profile` record in the member's own repo, so the same profile follows them to every atmobb forum.
 - **Signatures.** Up to three blocks of text and images, phpBB style, rendered under every post, with a live preview in settings.
 - **Avatars.** Upload an image (1 MB), or fall back to a generated monogram with a hue seeded from the DID. Blobs are fetched by resolving the DID's *current* PDS, so avatars survive migrations.
-- **The avatar lab.** A built-in 100 × 100 forum-icon builder: crop and zoom a photo, rotate and skew it, pick frames, filters (Flash!, Faded, B&W, Pixel…), border and background colors, a text stamp, and sparkles. The finished icon is a real avatar blob, so it works on forums that never heard of the lab.
+- **The userpic maker.** A built-in 100 × 100 forum-icon builder: crop and zoom a photo, then leave it plain or add a simple border. The finished icon is a real avatar blob, so it works on forums that never heard of the maker.
 - **Avatars from anywhere.** The avatar is a plain blob on the profile record, so any app the member authorizes can write one. Set `ATMOBB_AVATAR_BUILDER_URL` to link a builder from profile settings.
 - **Post counts, here and everywhere.** Every post rail shows the member's count on this forum and, when it's higher, their count across every indexed atmobb forum.
 - **Rank ladders.** Each forum defines its own title-by-post-count ladder (up to 50 rungs) in its forum profile record; ranks show up in post rails, the member list, and hovercards.

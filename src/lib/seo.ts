@@ -41,7 +41,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/host': 'Host a forum',
   '/login': 'Log in',
   '/register': 'Register',
-  '/settings/avatar': 'Avatar builder',
+  '/settings/avatar': 'Userpic maker',
   '/settings/profile': 'Edit profile',
   '/admin': 'Admin',
   '/admin/appearance': 'Appearance — Admin',
