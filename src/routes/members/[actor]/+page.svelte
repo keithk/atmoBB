@@ -43,7 +43,7 @@
 
 <article class="profile">
   <header class="cover">
-    <Avatar seed={m.did} profile={p} size={96} presence={m.presence} ring alt={name} />
+    <Avatar seed={m.did} profile={p} size={100} presence={m.presence} ring alt={name} />
     <div class="cover__id">
       <h1 class="cover__name">{name}</h1>
       <code class="cover__handle">@{m.handle}</code>

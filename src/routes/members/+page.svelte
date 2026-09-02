@@ -20,7 +20,7 @@
   <div class="atm-board-section">Members</div>
   {#each data.members as m}
     <article class="atm-memberrow">
-      <Avatar seed={m.did} profile={m.profile} size={40} />
+      <Avatar seed={m.did} profile={m.profile} size={56} />
       <div class="atm-memberrow__id">
         <MemberLink did={m.did} handle={data.handles[m.did]} class="atm-memberrow__name">
           {m.profile?.displayName ?? data.handles[m.did]}

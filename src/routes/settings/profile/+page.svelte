@@ -118,7 +118,7 @@
       </p>
 
       <div class="avatar-row">
-        <Avatar seed={data.did} profile={data.avatarProfile} size={80} alt="Your avatar" />
+        <Avatar seed={data.did} profile={data.avatarProfile} size={100} alt="Your avatar" />
         <div class="avatar-row__text">
           <span class="atm-label">Avatar</span>
           <label class="atm-btn atm-btn--secondary avatar-upload">

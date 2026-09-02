@@ -15,7 +15,7 @@
     <Avatar
       seed={card.did}
       profile={card.profile}
-      size={56}
+      size={72}
       presence={card.presence}
       alt={card.displayName}
     />

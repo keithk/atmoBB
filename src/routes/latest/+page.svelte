@@ -34,7 +34,7 @@
         <Avatar
           seed={t.lastReplyBy ?? t.author}
           profile={t.lastReplyBy && t.lastReplyBy !== t.author ? undefined : t.authorProfile}
-          size={28}
+          size={40}
         />
         <span>{relTime(t.lastActivity)}</span>
       </div>

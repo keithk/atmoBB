@@ -99,7 +99,7 @@
             </form>
           {/if}
           <a class="atm-userchip" href="/settings/profile" title="Edit your profile">
-            <Avatar seed={data.user.did} profile={data.avatarProfile} size={26} />
+            <Avatar seed={data.user.did} profile={data.avatarProfile} size={48} />
             <span class="atm-userchip__name">@{data.user.handle}</span>
           </a>
           <form method="POST" action="/login?/logout">
@@ -336,6 +336,8 @@
   @media (max-width: 480px) {
     .atm-mastnav { gap: 0; padding-inline: var(--space-1); }
     .atm-mastnav__item { padding-inline: 9px; }
+    .atm-masthead__right { gap: var(--space-2); }
+    .atm-userchip__name { display: none; }
     .atm-webring { flex-direction: column; gap: var(--space-2); }
   }
   }

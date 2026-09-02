@@ -64,7 +64,7 @@
             <Avatar
               seed={t.lastReplyBy ?? t.author}
               profile={t.lastReplyBy && t.lastReplyBy !== t.author ? undefined : t.authorProfile}
-              size={28}
+              size={40}
             />
             <span>{relTime(t.lastActivity)}</span>
           </div>
@@ -112,7 +112,7 @@
             </div>
             {#if board.latest}
               <div class="atm-boardrow__last">
-                <Avatar seed={board.latest.author} profile={board.latest.authorProfile} size={28} />
+                <Avatar seed={board.latest.author} profile={board.latest.authorProfile} size={40} />
                 <div class="atm-boardrow__last-body">
                   <div class="atm-boardrow__last-title">
                     <a href={threadPath(board.latest.uri)}>{board.latest.title}</a>
@@ -163,7 +163,7 @@
           <div class="atm-who__list">
             {#each data.presence.members as m}
               <MemberLink did={m.did} class="atm-who__chip">
-                <Avatar seed={m.did} profile={data.avatarProfiles[m.did]} size={18} />
+                <Avatar seed={m.did} profile={data.avatarProfiles[m.did]} size={28} />
                 @{data.handles[m.did] ?? m.did.slice(8, 20)}
                 <span class="atm-who__dot" style="background: var(--{m.presence})"></span>
               </MemberLink>
