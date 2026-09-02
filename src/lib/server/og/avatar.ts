@@ -7,7 +7,8 @@ import { skin } from './palette';
 
 type Fetch = typeof fetch;
 
-async function imageDataUri(fetchFn: Fetch, src: string): Promise<string | null> {
+/** Fetch an image into the self-contained form Satori needs while rendering. */
+export async function imageDataUri(fetchFn: Fetch, src: string): Promise<string | null> {
   try {
     const res = await fetchFn(src);
     if (!res.ok) return null;

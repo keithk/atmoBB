@@ -2,9 +2,12 @@ import type { RequestHandler } from './$types';
 import { renderPng, pngResponse } from '$lib/server/og/render';
 import { threadCard, genericCard } from '$lib/server/og/cards';
 import { getThreadPage, threadUri, getBoardIndex, resolveHandle, FORUM_DID } from '$lib/server/appview';
-import { profileAvatarNode } from '$lib/server/og/avatar';
+import { imageDataUri, profileAvatarNode } from '$lib/server/og/avatar';
 import { rankFor } from '$lib/rank';
 import { relTime } from '$lib/reltime';
+import { blocksToPlainText } from '$lib/richtext/plain';
+import { imageCid } from '$lib/richtext/blocks-tiptap';
+import { blobUrl } from '$lib/server/profiles';
 
 export const GET: RequestHandler = async ({ params, url, fetch }) => {
   const uri = threadUri(params.did, params.rkey);
@@ -23,21 +26,30 @@ export const GET: RequestHandler = async ({ params, url, fetch }) => {
         : board.value.name
       : 'Thread';
 
-    const handle = await resolveHandle(thread.author);
+    const imageBlock = thread.value.body?.find((block) => block.$type.endsWith('#image'));
+    const cid = imageBlock ? imageCid(imageBlock) : undefined;
+    const imageUrl = cid ? await blobUrl(thread.author, cid).catch(() => undefined) : undefined;
+    const [handle, image] = await Promise.all([
+      resolveHandle(thread.author),
+      imageUrl ? imageDataUri(fetch, imageUrl) : null,
+    ]);
     const authorHandle = handle.startsWith('did:') ? thread.author.slice(8, 20) : handle;
     const avatar = await profileAvatarNode(
       thread.authorProfile,
       thread.author,
       fetch,
-      { size: 110, radius: 14 },
+      { size: 64, radius: 10 },
       thread.authorProfile?.displayName ?? authorHandle,
     );
     const rank = rankFor(index.forum?.ranks ?? [], thread.authorPosts).title;
+    const excerpt = blocksToPlainText(thread.value.body).replace(/\s+/g, ' ').trim();
 
     const png = await renderPng(
       threadCard({
         boardPath,
         title: thread.value.title,
+        excerpt: excerpt || undefined,
+        image,
         authorHandle,
         avatar,
         rank: rank || undefined,

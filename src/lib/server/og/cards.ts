@@ -228,6 +228,8 @@ export function forumCard({ name, handle, tagline, members, boards, online, skin
 export interface ThreadData {
   boardPath: string;
   title: string;
+  excerpt?: string;
+  image?: string | null;
   authorHandle: string;
   avatar: VNode | null;
   rank?: string;
@@ -238,6 +240,8 @@ export interface ThreadData {
 export function threadCard({
   boardPath,
   title,
+  excerpt,
+  image,
   authorHandle,
   avatar,
   rank,
@@ -251,14 +255,13 @@ export function threadCard({
       22,
     ),
     box(
-      { flex: 1, gap: 40, padding: '44px 48px' },
+      { flex: 1 },
       box(
-        { flexDirection: 'column', alignItems: 'center', gap: 12, paddingTop: 6 },
-        avatar,
-        rank ? rankBadge(rank) : null,
-      ),
-      box(
-        { flex: 1, flexDirection: 'column' },
+        {
+          flex: 1,
+          flexDirection: 'column',
+          padding: image ? '34px 38px 32px 42px' : '38px 48px',
+        },
         text(
           { fontFamily: font.mono, fontSize: 15, letterSpacing: '0.1em', color: skin.link },
           'THREAD',
@@ -266,31 +269,66 @@ export function threadCard({
         text(
           {
             fontFamily: font.display,
-            fontSize: 50,
+            fontSize: image ? 42 : 48,
             letterSpacing: '-0.01em',
             color: skin.ink,
-            lineHeight: 1.08,
-            marginTop: 14,
-            ...clamp(3),
+            lineHeight: 1.05,
+            marginTop: 10,
+            ...clamp(2),
           },
           title,
         ),
-        text(
-          { fontFamily: font.body, fontSize: 21, color: skin.inkSoft, marginTop: 18 },
-          `Started by @${authorHandle}`,
-        ),
+        excerpt
+          ? text(
+              {
+                fontFamily: font.body,
+                fontSize: image ? 23 : 25,
+                lineHeight: 1.35,
+                color: skin.body,
+                marginTop: 20,
+                ...clamp(image ? 5 : 4),
+              },
+              excerpt,
+            )
+          : null,
         box({ flex: 1 }),
         box(
           {
             alignItems: 'center',
-            gap: 32,
+            justifyContent: 'space-between',
             borderTop: `1px solid ${skin.line}`,
-            paddingTop: 22,
+            paddingTop: 18,
           },
-          stat(nf(replies), 'REPLIES', 30),
-          ...(started ? [vline(34), stat(started, 'STARTED', 30)] : []),
+          box(
+            { alignItems: 'center', gap: 14 },
+            avatar,
+            box(
+              { flexDirection: 'column', gap: 7 },
+              text(
+                { fontFamily: font.body, fontWeight: 600, fontSize: 19, color: skin.ink },
+                `@${authorHandle}`,
+              ),
+              rank ? rankBadge(rank) : null,
+            ),
+          ),
+          box(
+            { alignItems: 'center', gap: 24 },
+            stat(nf(replies), 'REPLIES', 25),
+            ...(started ? [vline(32), stat(started, 'STARTED', 25)] : []),
+          ),
         ),
       ),
+      image
+        ? box(
+            {
+              width: 480,
+              background: skin.surface2,
+              borderLeft: `1px solid ${skin.line}`,
+              overflow: 'hidden',
+            },
+            img(image, { width: 480, height: '100%', objectFit: 'cover' }),
+          )
+        : null,
     ),
   );
 }
