@@ -1153,6 +1153,12 @@ export const schemaDict = {
               accept: ['image/png', 'image/jpeg', 'image/webp'],
               maxSize: 2000000,
             },
+            favicon: {
+              type: 'blob',
+              description: 'Forum-owned browser icon.',
+              accept: ['image/png', 'image/jpeg', 'image/webp'],
+              maxSize: 1000000,
+            },
             rules: {
               type: 'array',
               maxLength: 50,

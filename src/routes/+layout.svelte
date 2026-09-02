@@ -44,6 +44,15 @@
   <meta name="application-name" content={data.forum.name} />
   <meta name="apple-mobile-web-app-title" content={data.forum.name} />
   <link rel="canonical" href={metadata.canonical} />
+  {#if data.forumFavicon}
+    <link rel="icon" href={data.forumFavicon.url} type={data.forumFavicon.mimeType} />
+    <link rel="apple-touch-icon" href={data.forumFavicon.url} />
+  {:else}
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  {/if}
 
   <meta property="og:site_name" content={data.forum.name} />
   <meta property="og:locale" content="en_US" />

@@ -21,6 +21,8 @@ export interface Main {
   description?: string
   avatar?: BlobRef
   banner?: BlobRef
+  /** Forum-owned browser icon. */
+  favicon?: BlobRef
   rules?: (
     | $Typed<AppAtmobbRichtextBlock.Text>
     | $Typed<AppAtmobbRichtextBlock.Quote>

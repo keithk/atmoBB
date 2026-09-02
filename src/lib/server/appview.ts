@@ -64,6 +64,7 @@ export interface ForumProfile {
   name: string;
   description?: string;
   ranks?: { title: string; minPosts: number }[];
+  favicon?: unknown;
   customCss?: string;
   customFonts?: ForumFont[];
   ogImage?: unknown;

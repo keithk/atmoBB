@@ -40,13 +40,14 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
   let forum: ForumProfile = { name: 'atmoBB' };
   let forumFontCss = '';
   let forumCustomCss = '';
+  let forumFavicon: { url: string; mimeType: string } | null = null;
   let appviewDown = false;
   // 404s (route.id === null) also render this layout. Never call the appview
   // for them: if HAPPYVIEW_URL ever routes back to this app (e.g. the appview
   // domain isn't assigned yet), layout-on-404 would recurse into a request
   // loop that floods the box.
   if (!route.id) {
-    return { user: locals.user, membership: null, avatarProfile: null, admin: false, staffRole: null, bans: [], ringSize: 0, forum, forumDid: FORUM_DID(), forumFontCss, forumCustomCss, appviewDown: true };
+    return { user: locals.user, membership: null, avatarProfile: null, admin: false, staffRole: null, bans: [], ringSize: 0, forum, forumDid: FORUM_DID(), forumFontCss, forumCustomCss, forumFavicon, appviewDown: true };
   }
   const [membership, avatarProfile, role, ring, standing] = await Promise.all([
     locals.user ? getMembership(locals.user.did, FORUM_DID()) : null,
@@ -62,6 +63,13 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
           forum = index.forum;
           forumFontCss = await customFontCss(forum);
           forumCustomCss = safeCustomCss(forum.customCss);
+          const cid = blobCid(forum.favicon);
+          const source = forum.favicon as { mimeType?: unknown } | undefined;
+          const mimeType = ['image/png', 'image/jpeg', 'image/webp'].includes(String(source?.mimeType))
+            ? String(source?.mimeType)
+            : null;
+          const url = cid && mimeType ? await blobUrl(FORUM_DID(), cid) : null;
+          if (url && mimeType) forumFavicon = { url, mimeType };
         }
       } catch {
         appviewDown = true;
@@ -83,6 +91,7 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
     forumDid: FORUM_DID(),
     forumFontCss,
     forumCustomCss,
+    forumFavicon,
     appviewDown,
   };
 };

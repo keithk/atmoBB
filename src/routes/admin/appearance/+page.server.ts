@@ -4,12 +4,13 @@ import { getBoardIndex, FORUM_DID, type ForumFont, type ForumProfile } from '$li
 import { adminActor } from '$lib/server/admin';
 import { putForumRecord, uploadForumBlob } from '$lib/server/forum-repo';
 import { savedRedirect } from '$lib/server/saved-redirect';
-import { blobCid } from '$lib/server/profiles';
+import { blobCid, blobUrl } from '$lib/server/profiles';
 
 const PROFILE = 'app.atmobb.forum.profile';
 const MAX_CSS_BYTES = 100_000;
 const MAX_FONT_BYTES = 2_000_000;
 const MAX_OG_IMAGE_BYTES = 2_000_000;
+const MAX_FAVICON_BYTES = 1_000_000;
 const MAX_FONTS = 12;
 const FAMILY = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,63}$/u;
 const OG_THEMES = new Set(['classic', 'midnight', 'ocean', 'forest', 'plum']);
@@ -38,9 +39,27 @@ const profileRedirect = (dest: string, saved: ForumProfile) =>
       !!i.forum &&
       (i.forum.customCss ?? '') === (saved.customCss ?? '') &&
       fontFingerprint(i.forum.customFonts) === fontFingerprint(saved.customFonts) &&
+      blobCid(i.forum.favicon) === blobCid(saved.favicon) &&
       blobCid(i.forum.ogImage) === blobCid(saved.ogImage) &&
       (i.forum.ogTheme ?? 'classic') === (saved.ogTheme ?? 'classic'),
   );
+
+function imageMime(bytes: Uint8Array): 'image/png' | 'image/jpeg' | 'image/webp' | null {
+  if (bytes.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => bytes[i] === byte)) {
+    return 'image/png';
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  if (
+    bytes.length >= 12 &&
+    String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' &&
+    String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP'
+  ) {
+    return 'image/webp';
+  }
+  return null;
+}
 
 function isOgPng(bytes: Uint8Array): boolean {
   if (bytes.length < 24) return false;
@@ -61,6 +80,7 @@ function fontMime(bytes: Uint8Array): 'font/woff' | 'font/woff2' | null {
 
 export const load: PageServerLoad = async () => {
   const profile = await currentProfile();
+  const faviconCid = blobCid(profile.favicon);
   const fonts = (profile.customFonts ?? []).flatMap((font) => {
     const cid = blobCid(font.source);
     if (!cid) return [];
@@ -77,12 +97,54 @@ export const load: PageServerLoad = async () => {
   return {
     customCss: profile.customCss ?? '',
     fonts,
+    faviconCid,
+    faviconUrl: faviconCid ? await blobUrl(FORUM_DID(), faviconCid) : null,
     ogImageCid: blobCid(profile.ogImage),
     ogTheme: OG_THEMES.has(profile.ogTheme ?? '') ? profile.ogTheme : 'classic',
   };
 };
 
 export const actions: Actions = {
+  uploadFavicon: async ({ request, locals }) => {
+    if (!(await adminActor(locals))) return fail(403, { message: 'Only admins can make this change.' });
+    const form = await request.formData();
+    const file = form.get('favicon');
+    if (!(file instanceof File) || file.size === 0) {
+      return fail(400, { message: 'Choose a PNG, JPEG, or WebP favicon.' });
+    }
+    if (file.size > MAX_FAVICON_BYTES) {
+      return fail(413, { message: 'Favicons must be 1 MB or smaller.' });
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const mimeType = imageMime(bytes);
+    if (!mimeType) {
+      return fail(415, { message: 'The favicon must be a PNG, JPEG, or WebP image.' });
+    }
+
+    let profile: ForumProfile;
+    try {
+      profile = await currentProfile();
+      profile.favicon = await uploadForumBlob(bytes, mimeType);
+      await saveProfile(profile);
+    } catch (e) {
+      return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t upload the favicon. Try again.' });
+    }
+    await profileRedirect('/admin/appearance?saved=favicon', profile);
+  },
+
+  removeFavicon: async ({ locals }) => {
+    if (!(await adminActor(locals))) return fail(403, { message: 'Only admins can make this change.' });
+    let profile: ForumProfile;
+    try {
+      profile = await currentProfile();
+      delete profile.favicon;
+      await saveProfile(profile);
+    } catch (e) {
+      return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t restore the default favicon. Try again.' });
+    }
+    await profileRedirect('/admin/appearance?saved=favicon-removed', profile);
+  },
+
   saveOgTheme: async ({ request, locals }) => {
     if (!(await adminActor(locals))) return fail(403, { message: 'Only admins can make this change.' });
     const form = await request.formData();

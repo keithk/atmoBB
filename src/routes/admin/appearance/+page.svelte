@@ -6,6 +6,7 @@
   const saved = $derived(page.url.searchParams.get('saved'));
   const pending = $derived(page.url.searchParams.has('pending'));
   const fontSize = (bytes?: number) => bytes ? `${Math.ceil(bytes / 1024)} KB` : '';
+  let faviconName = $state('');
   let ogImageName = $state('');
   let selectedOgTheme = $state<string>();
   const ogTheme = $derived(selectedOgTheme ?? data.ogTheme);
@@ -24,17 +25,61 @@
       ? 'Font removed.'
       : saved === 'font'
         ? 'Font uploaded.'
-        : saved === 'og'
-          ? 'Social preview saved.'
-          : saved === 'og-theme'
-            ? 'Social preview style saved.'
-          : saved === 'og-removed'
-            ? 'Default social preview restored.'
-            : 'CSS saved.'}
+        : saved === 'favicon'
+          ? 'Favicon saved.'
+          : saved === 'favicon-removed'
+            ? 'Default favicon restored.'
+            : saved === 'og'
+              ? 'Social preview saved.'
+              : saved === 'og-theme'
+                ? 'Social preview style saved.'
+                : saved === 'og-removed'
+                  ? 'Default social preview restored.'
+                  : 'CSS saved.'}
     {#if pending} The change is taking a few extra seconds to show up here — refresh to see it.{/if}
   </p>
 {/if}
 {#if form?.message}<p class="atm-err">{form.message}</p>{/if}
+
+<div class="atm-card panel">
+  <div class="atm-card__header"><span>Favicon</span></div>
+  <div class="atm-card__body">
+    <p class="lede">Use your forum’s own icon in browser tabs and bookmarks.</p>
+    <div class="favicon-setting">
+      <img
+        class="favicon-preview"
+        src={data.faviconUrl ?? '/favicon.svg'}
+        alt="Current forum favicon"
+        width="64"
+        height="64"
+      />
+      <div>
+        <form class="favicon-actions" method="POST" action="?/uploadFavicon" enctype="multipart/form-data">
+          <label class="atm-btn atm-btn--secondary file-button">
+            <input
+              name="favicon"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+              required
+              disabled={data.writeMode === 'index'}
+              onchange={(event) => (faviconName = event.currentTarget.files?.[0]?.name ?? '')}
+            />
+            {faviconName || 'choose image'}
+          </label>
+          <button class="atm-btn atm-btn--primary" disabled={data.writeMode === 'index'}>save favicon</button>
+        </form>
+        {#if data.faviconCid}
+          <form method="POST" action="?/removeFavicon">
+            <button class="atm-btn atm-btn--ghost">restore default</button>
+          </form>
+        {/if}
+        <p class="atm-hint">
+          Square PNG, JPEG, or WebP recommended; up to 1 MB.{#if data.writeMode === 'index'} Uploads require a connected forum account and PDS.{/if}
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="atm-card panel">
   <div class="atm-card__header"><span>Social preview</span></div>
@@ -197,6 +242,9 @@
   .panel { max-width: 80ch; margin-bottom: var(--space-4); }
   .lede { margin: 0 0 var(--space-4); font: var(--type-ui); color: var(--forum-ink-soft); }
   .lede code { font-family: var(--font-mono); }
+  .favicon-setting { display: flex; align-items: flex-start; gap: var(--space-4); }
+  .favicon-preview { object-fit: contain; border: var(--border-hair) solid var(--forum-line); border-radius: var(--radius-sm); }
+  .favicon-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-2); }
   .og-preview { display: block; width: 100%; height: auto; border: var(--border-hair) solid var(--forum-line); }
   .theme-builder { display: grid; gap: var(--space-3); margin-top: var(--space-3); }
   .theme-options { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: 0; border: 0; }
