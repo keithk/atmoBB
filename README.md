@@ -4,11 +4,19 @@ atmobb brings phpBB-style forums to the AT Protocol. Boards, threads, signatures
 
 Public threads and replies live in their authors' atproto repos. The forum is an atproto account too, and its repo holds the boards, categories, staff grants, and moderation actions. atmobb indexes all of that back into something that looks like a forum. Member profiles work across atmobb forums and survive PDS migrations, which is most of the point.
 
-## This is a hobby project
+## The lexicons are the forum
 
-I built atmobb for myself, and it's offered as-is. There's no roadmap and no support. The next commit might change how something works, and I won't always announce it.
+Everything atmobb does runs on eleven published record types under `app.atmobb.*`. A thread is a record in the author's repo that points at a board. A board is a record in the forum's repo. A member's profile is one record that follows them to every forum on the network. The schemas resolve from a dedicated authority account, and anyone can read them, index them, or write to them.
 
-If you hit a bug, post about it on [atmobb.app](https://atmobb.app) and I'll take a look. Fork it, or just take it and rebuild it! Pull requests are welcome, and I'll read them, but I'm going to merge what fits the forum I want to run and pass on the rest. If you need something atmobb doesn't do, the fork is the answer, and the MIT license is there so you don't have to ask.
+atmobb the software is one way to run a forum on those records. You don't have to use it.
+
+- **Run your own forum with this code.** Self-host it and you publish nothing. Your forum shows up in the directory and the webring, your members arrive with the profiles and post counts they already have, and any board you give a topic slug merges threads with every other board in the atmosphere on that topic. Skip the topic and your forum stays its own place that happens to share members with everyone else.
+- **Build a different client for the same records.** Nothing in the schemas says SvelteKit or phpBB. A phone app, a text-mode reader, a bot that mirrors a board to email, a forum that looks nothing like this one. If it reads or writes `app.atmobb.discussion.thread` records, it's on the same network, and its posts show up here.
+- **Fork the whole thing.** Pick your own namespace, publish your own schemas, and run a separate network that has never heard of atmobb. [Lexicons](docs/lexicons.md) walks through it.
+
+You choose how connected to be, and you can choose it board by board. Topic federation is open, allowlisted, or off. Members-only boards skip the public index entirely. An operator can delist a forum from every cross-forum surface with one database row. Whatever you pick, a member's posts stay in their own repo, and they come along when that member migrates PDSes.
+
+I built atmobb for myself and it's offered as-is. There's no roadmap and no support, and the next commit might change how something works. If you hit a bug, post about it on [atmobb.app](https://atmobb.app) and I'll take a look. The beauty of the whole project is that if you want something different, you can just build it. I want to see a bunch of weird variations out there, forums shaped around exactly what Brazil needs, you know?
 
 ## Local quick start
 
