@@ -7,6 +7,7 @@
   import { page } from '$app/state';
   import { postAnchor, postAuthor, postPath, replyPath } from '$lib/appview-paths';
   import PostEditor from '$lib/components/PostEditor.svelte';
+  import ConversationLogin from '$lib/components/ConversationLogin.svelte';
   // Simplified sibling of /t/[did]/[rkey]: private threads live in a space, so
   // reads are immediate (no firehose lag) — no waiting/polling states needed.
   let { data, form } = $props();
@@ -150,7 +151,7 @@
       </form>
     </section>
   {:else}
-    <p class="atm-loginhint"><a href="/login">Log in</a> to reply.</p>
+    <ConversationLogin />
   {/if}
 {:else}
   <p class="atm-notice">Thread not found.</p>

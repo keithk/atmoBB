@@ -7,6 +7,7 @@
   import RichTextEditor from '$lib/components/RichTextEditor.svelte';
   import PostEditor from '$lib/components/PostEditor.svelte';
   import Poll from '$lib/components/Poll.svelte';
+  import ConversationLogin from '$lib/components/ConversationLogin.svelte';
   import { page } from '$app/state';
   let { data, form } = $props();
   const user = $derived(page.data.user);
@@ -281,7 +282,7 @@
       </form>
     </section>
   {:else if !data.thread.locked}
-    <p class="atm-loginhint"><a href="/login">Log in</a> to reply.</p>
+    <ConversationLogin />
   {/if}
 {/if}
 
