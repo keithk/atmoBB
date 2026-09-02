@@ -33,6 +33,7 @@ import * as AppAtmobbForumModerator from './types/app/atmobb/forum/moderator.js'
 import * as AppAtmobbForumProfile from './types/app/atmobb/forum/profile.js'
 import * as AppAtmobbModerationAction from './types/app/atmobb/moderation/action.js'
 import * as AppAtmobbModerationGetLog from './types/app/atmobb/moderation/getLog.js'
+import * as AppAtmobbModerationGetStanding from './types/app/atmobb/moderation/getStanding.js'
 import * as AppAtmobbPollVote from './types/app/atmobb/poll/vote.js'
 import * as AppAtmobbRichtextBlock from './types/app/atmobb/richtext/block.js'
 import * as AppAtmobbRichtextFacet from './types/app/atmobb/richtext/facet.js'
@@ -68,6 +69,7 @@ export * as AppAtmobbForumModerator from './types/app/atmobb/forum/moderator.js'
 export * as AppAtmobbForumProfile from './types/app/atmobb/forum/profile.js'
 export * as AppAtmobbModerationAction from './types/app/atmobb/moderation/action.js'
 export * as AppAtmobbModerationGetLog from './types/app/atmobb/moderation/getLog.js'
+export * as AppAtmobbModerationGetStanding from './types/app/atmobb/moderation/getStanding.js'
 export * as AppAtmobbPollVote from './types/app/atmobb/poll/vote.js'
 export * as AppAtmobbRichtextBlock from './types/app/atmobb/richtext/block.js'
 export * as AppAtmobbRichtextFacet from './types/app/atmobb/richtext/facet.js'
@@ -1091,6 +1093,18 @@ export class AppAtmobbModerationNS {
   ): Promise<AppAtmobbModerationGetLog.Response> {
     return this._client.call(
       'app.atmobb.moderation.getLog',
+      params,
+      undefined,
+      opts,
+    )
+  }
+
+  getStanding(
+    params?: AppAtmobbModerationGetStanding.QueryParams,
+    opts?: AppAtmobbModerationGetStanding.CallOptions,
+  ): Promise<AppAtmobbModerationGetStanding.Response> {
+    return this._client.call(
+      'app.atmobb.moderation.getStanding',
       params,
       undefined,
       opts,

@@ -221,6 +221,7 @@ Relevant app environment variables:
 | `DATA_DIR` | Persistent OAuth state; losing it disconnects every account. |
 | `HAPPYVIEW_SESSION_SECRET` | Copy of Happyview's session secret for private boards. Must be at least 32 bytes; in production the app refuses to start with a weak one, and treats a weak `ATMOBB_COOKIE_SECRET` the same way. |
 | `HAPPYVIEW_CLIENT_KEY` | Optional app identity for Happyview rate limiting. |
+| `ATMOBB_AVATAR_BUILDER_URL` | Optional. Links an external avatar builder from profile settings. |
 
 Rotating the Happyview session secret requires changing both environment files and restarting Happyview and atmobb. Rotating the Postgres password requires changing the database role and its environment together; editing only the env file locks Happyview out.
 

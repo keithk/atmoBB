@@ -112,19 +112,9 @@ bun run check
 
 ## 8. Run the app
 
-Core, without optional plugins:
-
 ```sh
 bun run dev
 ```
-
-To work against a trusted external plugin, point Vite at a deployment configuration. The plugin source can live anywhere, including outside this checkout:
-
-```sh
-ATMOBB_CONFIG=/absolute/path/to/atmobb.config.mjs bun run dev
-```
-
-[Plugins](plugins.md) covers configuration and the capability contracts. Generated public files land in the gitignored `static/plugins/` directory.
 
 Open **http://127.0.0.1:5173** and log in. Atproto's loopback OAuth exception means you don't have to register a client first.
 
@@ -185,8 +175,8 @@ Run both after you edit anything in `lexicons/`. The publish-only permission set
 
 | script | purpose |
 |---|---|
-| `bun run dev` | Vite development server on `127.0.0.1:5173`, with optional `ATMOBB_CONFIG` plugins |
-| `bun run build` | production adapter-node build, with optional `ATMOBB_CONFIG` plugins |
+| `bun run dev` | Vite development server on `127.0.0.1:5173` |
+| `bun run build` | production adapter-node build |
 | `bun run start` | run the built server with Node |
 | `bun run preview` | preview a production build |
 | `bun run check` | SvelteKit sync and TypeScript check, including generated code |

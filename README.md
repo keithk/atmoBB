@@ -63,7 +63,6 @@ A public reply takes a lap before anyone else sees it: app to the author's PDS, 
 - [Happyview](docs/happyview.md): the appview architecture, the image pin, setup, and backfill
 - [Hosted tenants](docs/hosted-tenants.md): running other people's forums on one shared appview
 - [Members-only boards](docs/private-boards.md): privacy boundaries and permissioned spaces
-- [Plugins](docs/plugins.md): the narrow build-time integration built for the avatar builder
 - [Forum theming](docs/theming.md): the custom CSS cascade, theme tokens, stable class hooks, and fonts
 - [Lexicons](docs/lexicons.md): record schemas and publishing a forked namespace
 
@@ -71,10 +70,10 @@ A public reply takes a lap before anyone else sees it: app to the author's PDS, 
 
 The default UI uses Trebuchet MS, IBM Plex Sans, IBM Plex Mono, and Newsreader. Admins can upload licensed WOFF/WOFF2 files and CSS from the Appearance panel. Uploaded assets live in the forum account's PDS and keep their original license terms.
 
-Profiles take image uploads and fall back to generated monograms. The built-in avatar lab crops photos into 100 × 100 old-school forum icons with skew, filters, chunky frames, and stamps; the finished image follows the member across any atmobb forum.
+Profiles take image uploads and fall back to generated monograms. The built-in avatar lab crops photos into 100 × 100 old-school forum icons with skew, filters, chunky frames, and stamps; the finished image follows the member across any atmobb forum. The avatar is an ordinary blob on the profile record, so other apps the member authorizes can set it too.
 
 ## License
 
-atmobb is [MIT licensed](LICENSE). The bundled fonts retain [their SIL Open Font License 1.1 terms](THIRD_PARTY_LICENSES.md), and plugin dependencies and assets keep their own terms.
+atmobb is [MIT licensed](LICENSE). The bundled fonts retain [their SIL Open Font License 1.1 terms](THIRD_PARTY_LICENSES.md), and uploaded assets keep their own terms.
 
 I used Claude Code and Amp Agent to write the code.

@@ -13,28 +13,17 @@ import {
 
 const is$typed = _is$typed,
   validate = _validate
-const id = 'app.atmobb.discussion.getThreadPage'
+const id = 'app.atmobb.moderation.getStanding'
 
 export type QueryParams = {
-  thread: string
   forum: string
-  limit?: number
-  cursor?: string
-  /** Return the page holding this reply instead of the cursor's page. Its chronological position comes back as replyIndex. */
-  reply?: string
-  /** The reader, for their own poll votes. */
-  viewer?: string
+  actor: string
 }
 export type InputSchema = undefined
 
 export interface OutputSchema {
-  thread?: { [_ in string]: unknown }
-  replies: { [_ in string]: unknown }[]
-  replyCount?: number
-  replyIndex?: number
-  cursor?: string
-  /** Vote counts per option, voter total, and the viewer's votes, when the thread has a poll. */
-  poll?: { [_ in string]: unknown }
+  bans: { [_ in string]: unknown }[]
+  warnings: { [_ in string]: unknown }[]
 }
 
 export interface CallOptions {

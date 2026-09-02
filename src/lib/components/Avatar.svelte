@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { AvatarProvider } from 'virtual:atmobb/plugins/avatar-client';
-  import type { PluginProfile } from '$lib/plugins/api';
   import { profileImagePath } from '$lib/avatar/profile-image';
 
-  type AvatarProfile = PluginProfile & {
+  type AvatarProfile = {
+    avatar?: unknown;
     /** A caller-resolved image URL (compatibility path). */
     avatarUrl?: string | null;
   };
@@ -47,9 +46,7 @@
   class="atm-avatar {rounded ? 'atm-avatar--rounded' : ''} {ring ? 'atm-avatar--ring' : ''}"
   style="width:{size}px;height:{size}px"
 >
-  {#if AvatarProvider}
-    <AvatarProvider {seed} {profile} src={shownSrc} {size} {alt} />
-  {:else if shownSrc}
+  {#if shownSrc}
     <img src={shownSrc} {alt} width={size} height={size} loading="lazy" />
   {:else}
     <span

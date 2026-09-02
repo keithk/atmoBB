@@ -37,7 +37,7 @@
           "avatarBuilder": {
             "type": "ref",
             "ref": "#avatarBuilder",
-            "description": "Layered avatar recipe. The source of truth; the `avatar` blob is a baked render of it for generic clients."
+            "description": "Legacy layered-avatar recipe from an earlier builder. atmobb ignores it; clients should read the `avatar` blob."
           },
           "createdAt": { "type": "string", "format": "datetime" }
         }
@@ -45,7 +45,7 @@
     },
     "avatarBuilder": {
       "type": "object",
-      "description": "A built avatar as part + colour choices. Rendered by stacking pre-positioned SVG parts (RhosGFX Vector Avatars Pro).",
+      "description": "Legacy built avatar as part + colour choices. Kept so existing records stay valid.",
       "required": ["v", "skin"],
       "properties": {
         "v": { "type": "integer", "description": "Recipe schema version.", "minimum": 1 },

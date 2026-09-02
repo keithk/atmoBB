@@ -1,11 +1,11 @@
 <script lang="ts">
-  import type { PluginProfile } from '$lib/plugins/api';
   import type { Rank } from '$lib/rank';
   import Avatar from './Avatar.svelte';
   import MemberLink from './MemberLink.svelte';
   import RankBadge from './RankBadge.svelte';
 
-  type PostProfile = PluginProfile & {
+  type PostProfile = {
+    avatar?: unknown;
     displayName?: string;
     title?: string;
     createdAt?: string;

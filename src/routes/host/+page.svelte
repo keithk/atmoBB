@@ -31,7 +31,7 @@
     <p>
       If you do continue, we'll run an atmobb forum for you on its own subdomain. It will appear
       in the shared forum index, and members can sign in with the atproto accounts they already
-      use. Hosted forums don't support plugins or members-only boards.
+      use. Hosted forums don't support members-only boards.
     </p>
     <p>
       You'll need an invite code and a separate atproto account for the forum. Create a new

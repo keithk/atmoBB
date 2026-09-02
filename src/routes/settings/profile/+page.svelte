@@ -5,7 +5,6 @@
   import Avatar from '$lib/components/Avatar.svelte';
   import ImageIcon from '$lib/components/ImageIcon.svelte';
   import RichText from '$lib/components/RichText.svelte';
-  import { settingsPlugins } from 'virtual:atmobb/plugins/metadata';
   import { profileHref } from '$lib/profile-card';
   import type { RichTextBlock } from '$lib/richtext/bbcode';
   import type { PageData } from './$types';
@@ -21,8 +20,6 @@
   let saving = $state(false);
   let avatarName = $state('');
   let avatarInput: HTMLInputElement;
-  const avatarPlugin = settingsPlugins.find((plugin) => plugin.section === 'avatar');
-  const profilePlugins = settingsPlugins.filter((plugin) => plugin.section === 'profile');
 
   const signatureBlockCount = $derived((signature.trim() ? 1 : 0) + signatureImages.length);
   const signatureImagePayloads = $derived.by(() =>
@@ -137,15 +134,14 @@
           <span class="atm-hint">
             {avatarName || 'PNG, JPEG, WebP, or GIF; up to 1 MB. Choose a file, then save changes.'}
           </span>
-          {#if !avatarPlugin}
-            <span class="atm-hint">Use the avatar builder to crop the image, adjust its shape, or add a frame.</span>
+          <span class="atm-hint">Use the avatar lab to crop the image, adjust its shape, or add a frame.</span>
+        </div>
+        <div class="avatar-row__actions">
+          <a class="atm-btn atm-btn--secondary" href="/settings/avatar">Open avatar lab</a>
+          {#if data.avatarBuilderUrl}
+            <a class="atm-btn atm-btn--secondary" href={data.avatarBuilderUrl} rel="external">Build a cartoon avatar</a>
           {/if}
         </div>
-        {#if avatarPlugin}
-          <a class="atm-btn atm-btn--secondary" href="/settings/avatar">{avatarPlugin.label}</a>
-        {:else}
-          <a class="atm-btn atm-btn--secondary" href="/settings/avatar">Open avatar builder</a>
-        {/if}
       </div>
 
       <div class="two">
@@ -244,19 +240,6 @@
       </div>
     </form>
   </Card>
-
-  {#if profilePlugins.length}
-    <Card title="Extensions">
-      <div class="extensions">
-        {#each profilePlugins as plugin}
-          <a class="extension" href={plugin.href}>
-            <b>{plugin.label}</b>
-            {#if plugin.description}<span>{plugin.description}</span>{/if}
-          </a>
-        {/each}
-      </div>
-    </Card>
-  {/if}
 </div>
 
 <style>
@@ -274,6 +257,7 @@
     border-radius: var(--radius-md);
   }
   .avatar-row__text { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+  .avatar-row__actions { display: flex; flex-direction: column; gap: var(--space-2); }
   .avatar-upload { align-self: flex-start; cursor: pointer; }
   .avatar-upload input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
@@ -321,18 +305,6 @@
   }
   .status { margin-right: auto; }
 
-  .extensions { display: grid; gap: var(--space-2); }
-  .extension {
-    display: flex; flex-direction: column; gap: 2px;
-    padding: var(--space-3);
-    color: var(--forum-ink);
-    background: var(--forum-surface-2);
-    border: var(--border-hair) solid var(--forum-line);
-    border-radius: var(--radius-md);
-    text-decoration: none;
-  }
-  .extension:hover { border-color: var(--forum-accent); text-decoration: none; }
-  .extension span { font: var(--type-meta); color: var(--forum-ink-soft); }
 
   @media (max-width: 560px) {
     .two { grid-template-columns: 1fr; }

@@ -49,7 +49,7 @@ export interface ActorProfile {
   avatar?: unknown;
   /** When the actor.profile record was first written — our best proxy for "member since". */
   createdAt?: string;
-  /** Plugin-owned profile data is passed through without core interpreting it. */
+  /** Fields written by other apps are passed through without core interpreting them. */
   [key: string]: unknown;
 }
 

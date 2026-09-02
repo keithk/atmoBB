@@ -1,4 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { env } from '$env/dynamic/private';
 import type { Actions, PageServerLoad } from './$types';
 import { getActorProfile, saveProfile } from '$lib/server/pds';
 import { blobCid, bustProfileCache } from '$lib/server/profiles';
@@ -41,6 +42,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     handle: locals.user.handle,
     did: locals.user.did,
     avatarProfile: profile,
+    avatarBuilderUrl: env.ATMOBB_AVATAR_BUILDER_URL || null,
     profile: {
       displayName: profile?.displayName ?? '',
       description: profile?.description ?? '',

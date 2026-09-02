@@ -21,6 +21,7 @@ Everything an atmobb forum does today. What I haven't built is listed at the [bo
 - **Signatures.** Up to three blocks of text and images, phpBB style, rendered under every post, with a live preview in settings.
 - **Avatars.** Upload an image (1 MB), or fall back to a generated monogram with a hue seeded from the DID. Blobs are fetched by resolving the DID's *current* PDS, so avatars survive migrations.
 - **The avatar lab.** A built-in 100 × 100 forum-icon builder: crop and zoom a photo, rotate and skew it, pick frames, filters (Flash!, Faded, B&W, Pixel…), border and background colors, a text stamp, and sparkles. The finished icon is a real avatar blob, so it works on forums that never heard of the lab.
+- **Avatars from anywhere.** The avatar is a plain blob on the profile record, so any app the member authorizes can write one. Set `ATMOBB_AVATAR_BUILDER_URL` to link a builder from profile settings.
 - **Post counts, here and everywhere.** Every post rail shows the member's count on this forum and, when it's higher, their count across every indexed atmobb forum.
 - **Rank ladders.** Each forum defines its own title-by-post-count ladder (up to 50 rungs) in its forum profile record; ranks show up in post rails, the member list, and hovercards.
 - **Member profiles.** `/members/<handle>` shows bio, recent topics (linked to their origin forum), recent Bluesky posts, signature, per-forum activity across the network, and an "Elsewhere" panel that detects other atproto apps in their repo: WhiteWind, Linkat, PinkSea, Smoke Signal, Frontpage, and friends.
@@ -75,11 +76,10 @@ Admin saves wait until the change is visible in the index before redirecting, so
 - **Graceful degradation.** If the appview is down, pages still render in a degraded mode instead of erroring.
 - **Open Graph cards.** Server-rendered PNG cards for the forum, threads, and member profiles, so every shared URL unfurls properly.
 
-## Theming and plugins
+## Theming
 
 - **Owner CSS wins without fighting.** All built-in styles sit in a low-priority cascade layer; plain unlayered CSS beats them with no `!important`. A documented token API (`--forum-*`, `--font-*`) and stable `atm-` class hooks are the contract. See [theming](theming.md).
 - **Custom fonts.** Uploaded as blobs to the forum's repo, emitted as `@font-face` rules.
-- **Plugins.** A narrow build-time integration (settings pages, avatar providers, generated assets) that I built for the avatar builder. Other trusted packages can use it too. It isn't a marketplace. A plugin runs with full server access, so [read the caveats](plugins.md).
 
 ## Not built
 

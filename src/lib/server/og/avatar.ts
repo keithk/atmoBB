@@ -1,7 +1,6 @@
 import { blobCid } from '$lib/avatar/profile-image';
 import type { ActorProfile } from '$lib/server/appview';
 import { blobUrl } from '$lib/server/profiles';
-import { avatarPluginServer } from 'virtual:atmobb/plugins/server';
 import { box, img, text, type VNode } from './render';
 import { skin } from './palette';
 
@@ -43,7 +42,8 @@ function presenceDot({ size, presence }: AvatarOptions): VNode | null {
     : null;
 }
 
-async function defaultAvatarNode(
+/** Render the profile image, or a monogram seeded from the DID when there is none. */
+export async function profileAvatarNode(
   profile: ActorProfile | null | undefined,
   did: string,
   fetchFn: Fetch,
@@ -94,25 +94,3 @@ async function defaultAvatarNode(
   );
 }
 
-/** Build the configured plugin avatar, falling back to core image/monogram rendering. */
-export async function profileAvatarNode(
-  profile: ActorProfile | null | undefined,
-  did: string,
-  fetchFn: Fetch,
-  options: AvatarOptions,
-  label = '',
-): Promise<VNode> {
-  const defaultAvatar = () => defaultAvatarNode(profile, did, fetchFn, options, label);
-  if (avatarPluginServer?.renderAvatar) {
-    const rendered = await avatarPluginServer.renderAvatar({
-      profile,
-      did,
-      label,
-      fetch: fetchFn,
-      options,
-      defaultAvatar,
-    });
-    if (rendered) return rendered;
-  }
-  return defaultAvatar();
-}

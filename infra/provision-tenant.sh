@@ -6,7 +6,7 @@
 # <site-name>    dashboard site name; the site serves https://<site-name>.atmobb.app
 # <forum-handle> the tenant's dedicated forum account (they bring their own)
 #
-# What a hosted tenant gets: a vanilla build (no plugins) of this repo,
+# What a hosted tenant gets: a vanilla build of this repo,
 # pointed at the shared appview, with no private boards (no session secret)
 # and its own Happyview client key for rate limiting. See
 # docs/hosted-tenants.md for the full runbook and the manual steps after.
@@ -102,5 +102,5 @@ Hand the tenant this checklist:
     serves the DID at /.well-known/atproto-did, so HTTP verification works.
  4. Create boards, name the forum, theme it under Admin → Appearance.
 
-Hosted tenants have no plugins and no members-only boards, by design.
+Hosted tenants have no members-only boards, by design.
 EOF

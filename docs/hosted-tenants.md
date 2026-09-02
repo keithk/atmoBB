@@ -4,9 +4,7 @@ Running someone else's forum on your infrastructure: one shared Happyview appvie
 
 A hosted tenant is a vanilla build of this repo with its own env, its own OAuth client, and its own persistent OAuth state. The shared appview needs no per-tenant configuration at all. Happyview indexes `app.atmobb.*` collections network-wide off Jetstream, so a new forum costs the instance nothing but query traffic.
 
-Tenants don't get plugins. A plugin compiles into the build and runs inside the app process, and [that process holds real credentials](plugins.md). Tenant builds never set `ATMOBB_CONFIG`.
-
-Tenants don't get members-only boards either. Space sessions are minted with Happyview's shared `SESSION_SECRET`, and any process holding it can mint a session for any DID, every private space on the instance included. So tenant apps never receive `HAPPYVIEW_SESSION_SECRET`, and the app hides and rejects the members-only option without it. A community that needs private boards should self-host.
+Tenants don't get members-only boards. Space sessions are minted with Happyview's shared `SESSION_SECRET`, and any process holding it can mint a session for any DID, every private space on the instance included. So tenant apps never receive `HAPPYVIEW_SESSION_SECRET`, and the app hides and rejects the members-only option without it. A community that needs private boards should self-host.
 
 > [!IMPORTANT]
 > Be upfront with tenants about what you can see. You run their app process, so you can read whatever it can, and the Postgres behind the shared index is yours. That asymmetry is why tenants don't get private boards: everything in a hosted forum is public to the network anyway.

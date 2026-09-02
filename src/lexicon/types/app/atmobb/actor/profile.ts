@@ -54,7 +54,7 @@ export {
   validateMain as validateRecord,
 }
 
-/** A built avatar as part + colour choices. Rendered by stacking pre-positioned SVG parts (RhosGFX Vector Avatars Pro). */
+/** Legacy built avatar as part + colour choices. Kept so existing records stay valid. */
 export interface AvatarBuilder {
   $type?: 'app.atmobb.actor.profile#avatarBuilder'
   /** Recipe schema version. */

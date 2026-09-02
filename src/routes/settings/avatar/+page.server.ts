@@ -1,6 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { settingsPlugins } from 'virtual:atmobb/plugins/metadata';
 import { profileImagePath } from '$lib/avatar/profile-image';
 import { getActorProfile, saveProfile } from '$lib/server/pds';
 import { bustProfileCache } from '$lib/server/profiles';
@@ -17,9 +16,6 @@ function isHundredPixelPng(bytes: Uint8Array): boolean {
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
-  const provider = settingsPlugins.find((plugin) => plugin.section === 'avatar');
-  if (provider) redirect(302, provider.href);
-
   if (!locals.user) redirect(302, '/login');
   const profile = await getActorProfile(locals.user.did);
   return {

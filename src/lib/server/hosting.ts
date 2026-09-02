@@ -107,8 +107,8 @@ the handle change works without any DNS setup.
 
 Boards, the forum name, and theming all live in /admin.
 
-Hosted forums have no plugins and no members-only boards. If you
-outgrow that, self-hosting is the same software:
+Hosted forums have no members-only boards. If you outgrow that,
+self-hosting is the same software:
 https://github.com/keithk/atmoBB`;
 }
 

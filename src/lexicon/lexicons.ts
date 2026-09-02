@@ -126,7 +126,7 @@ export const schemaDict = {
               type: 'ref',
               ref: 'lex:app.atmobb.actor.profile#avatarBuilder',
               description:
-                'Layered avatar recipe. The source of truth; the `avatar` blob is a baked render of it for generic clients.',
+                'Legacy layered-avatar recipe from an earlier builder. atmobb ignores it; clients should read the `avatar` blob.',
             },
             createdAt: {
               type: 'string',
@@ -138,7 +138,7 @@ export const schemaDict = {
       avatarBuilder: {
         type: 'object',
         description:
-          'A built avatar as part + colour choices. Rendered by stacking pre-positioned SVG parts (RhosGFX Vector Avatars Pro).',
+          'Legacy built avatar as part + colour choices. Kept so existing records stay valid.',
         required: ['v', 'skin'],
         properties: {
           v: {
@@ -432,6 +432,11 @@ export const schemaDict = {
               description:
                 "Return the page holding this reply instead of the cursor's page. Its chronological position comes back as replyIndex.",
             },
+            viewer: {
+              type: 'string',
+              format: 'did',
+              description: 'The reader, for their own poll votes.',
+            },
           },
         },
         output: {
@@ -457,6 +462,11 @@ export const schemaDict = {
               },
               cursor: {
                 type: 'string',
+              },
+              poll: {
+                type: 'unknown',
+                description:
+                  "Vote counts per option, voter total, and the viewer's votes, when the thread has a poll.",
               },
             },
           },
@@ -1371,6 +1381,52 @@ export const schemaDict = {
       },
     },
   },
+  AppAtmobbModerationGetStanding: {
+    lexicon: 1,
+    id: 'app.atmobb.moderation.getStanding',
+    defs: {
+      main: {
+        type: 'query',
+        description:
+          "One member's standing with a forum: the bans in force against them and the warnings they've received. Both are derived from the forum's public moderation actions.",
+        parameters: {
+          type: 'params',
+          required: ['forum', 'actor'],
+          properties: {
+            forum: {
+              type: 'string',
+              format: 'did',
+            },
+            actor: {
+              type: 'string',
+              format: 'did',
+            },
+          },
+        },
+        output: {
+          encoding: 'application/json',
+          schema: {
+            type: 'object',
+            required: ['bans', 'warnings'],
+            properties: {
+              bans: {
+                type: 'array',
+                items: {
+                  type: 'unknown',
+                },
+              },
+              warnings: {
+                type: 'array',
+                items: {
+                  type: 'unknown',
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
   AppAtmobbPollVote: {
     lexicon: 1,
     id: 'app.atmobb.poll.vote',
@@ -2076,6 +2132,7 @@ export const ids = {
   AppAtmobbForumProfile: 'app.atmobb.forum.profile',
   AppAtmobbModerationAction: 'app.atmobb.moderation.action',
   AppAtmobbModerationGetLog: 'app.atmobb.moderation.getLog',
+  AppAtmobbModerationGetStanding: 'app.atmobb.moderation.getStanding',
   AppAtmobbPollVote: 'app.atmobb.poll.vote',
   AppAtmobbRichtextBlock: 'app.atmobb.richtext.block',
   AppAtmobbRichtextFacet: 'app.atmobb.richtext.facet',

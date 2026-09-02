@@ -227,7 +227,6 @@ export async function saveProfile(did: string, edit: ProfileEdit): Promise<void>
       website: edit.website || undefined,
       ...(uploaded ? { avatar: uploaded } : {}),
     },
-    uploaded ? ['avatarBuilder'] : [],
   );
 }
 
@@ -258,14 +257,14 @@ export async function getActorProfile(did: string): Promise<ActorProfileRecord |
   }
 }
 
-/** Upload a blob to the signed-in account's repo for use by a profile or plugin. */
+/** Upload a blob to the signed-in account's repo for use by the profile. */
 export async function uploadProfileBlob(did: string, bytes: Uint8Array, mimeType: string): Promise<unknown> {
   const agent = await agentFor(did);
   const uploaded = await agent.com.atproto.repo.uploadBlob(bytes, { encoding: mimeType });
   return uploaded.data.blob;
 }
 
-/** Preserve the actor profile while applying fields owned by a trusted plugin. */
+/** Preserve the actor profile, including fields written by other apps, while applying edits. */
 export async function patchActorProfile(
   did: string,
   fields: Record<string, unknown>,
