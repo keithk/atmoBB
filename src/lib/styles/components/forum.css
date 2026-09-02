@@ -84,11 +84,23 @@ a.atm-post__permalink:hover { text-decoration: underline; }
 .atm-post__replyto a { color: inherit; }
 .atm-composer__replyto {
   display: flex;
-  gap: var(--space-2);
+  justify-content: space-between;
+  gap: var(--space-3);
   align-items: center;
   font: var(--type-meta);
   color: var(--forum-ink-soft);
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--forum-accent-soft);
+  border-left: var(--border-heavy) solid var(--forum-accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.atm-composer__replyto > span { min-width: 0; overflow-wrap: anywhere; }
+.atm-composer__replyto .atm-linkbtn {
+  flex: none;
+  color: var(--forum-ink-soft);
+  font: var(--w-semibold) var(--text-md)/1 var(--font-body);
+  text-decoration: none;
 }
 .atm-post__own { display: inline-flex; gap: var(--space-2); margin-left: var(--space-2); }
 .atm-post__own a, .atm-post__own button { font: var(--w-medium) var(--text-2xs)/1 var(--font-mono); color: var(--forum-ink-faint); }
@@ -99,10 +111,27 @@ a.atm-post__permalink:hover { text-decoration: underline; }
   margin-top: var(--space-6);
   max-width: 72ch;
 }
-.atm-composer__title { font: var(--type-thread-title); }
+.atm-composer__title { margin: 0; font: var(--type-thread-title); }
 .atm-composer__form { display: grid; gap: var(--space-3); }
 .atm-composer__identity { font: var(--type-handle); color: var(--forum-ink-soft); }
 .atm-composer__submit { margin-top: var(--space-2); }
+.atm-composer--reply { width: 100%; }
+.atm-composer__header { min-height: 48px; }
+.atm-composer__header .atm-composer__identity {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.atm-composer--reply .atm-composer__body { padding: var(--space-5); }
+.atm-composer--reply .atm-composer__form { display: block; }
+.atm-composer--reply .atm-composer__submit { min-width: 140px; margin-top: 0; }
+.atm-composer__actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: var(--space-3);
+}
 .atm-loginhint {
   margin-top: var(--space-5);
   font: var(--type-ui);
@@ -331,4 +360,8 @@ a.atm-memberrow__name:hover { color: var(--forum-link); text-decoration: none; }
     word-break: normal;
   }
   .atm-post > .atm-postmeta .atm-postmeta__stats { width: auto; flex: none; }
+}
+@media (max-width: 480px) {
+  .atm-composer--reply .atm-composer__body { padding: var(--space-3); }
+  .atm-composer__actions .atm-composer__submit { width: 100%; }
 }

@@ -235,51 +235,59 @@
   {#if data.thread.locked && !composerOpen}
     <p class="atm-notice">🔒 This thread is locked. No new replies.</p>
   {:else if composerOpen}
-    <section class="atm-composer" id="reply">
-      <h3 class="atm-composer__title">Reply</h3>
-      {#if data.thread.locked}
-        <p class="atm-hint">This thread is locked. Staff can still add a closing word.</p>
-      {/if}
-      {#if replyingTo}
-        <p class="atm-composer__replyto">
-          ↩ replying to <a href={postPath(data.threadUri, replyingTo.uri)}>@{shortName(replyingTo.author)}</a>
-          <a class="atm-linkbtn" href="{basePath}#reply" title="Reply to the thread instead">×</a>
-        </p>
-      {/if}
-      {#if form?.posted}
-        <p class="atm-ok" aria-live="polite">
-          {#if syncing}<span class="atm-spinner" aria-hidden="true"></span> Posted. Waiting for it to appear…
-          {:else}Posted ✓{/if}
-        </p>
-      {/if}
-      {#if form?.message}<p class="atm-err">{form.message}</p>{/if}
-      <form
-        method="POST"
-        action="?/reply"
-        use:enhance={() => {
-          posting = true;
-          repliesBefore = data.replyCount;
-          return async ({ result, update }) => {
-            await update({ reset: false });
-            posting = false;
-            if (result.type === 'success') {
-              composerKey++;
-              replyingTo = null;
-              composerDoc = null;
-            }
-          };
-        }}
-      >
-        <input type="hidden" name="threadCid" value={data.thread.cid ?? ''} />
-        <input type="hidden" name="parentUri" value={replyingTo?.uri ?? ''} />
-        <input type="hidden" name="parentCid" value={replyingTo?.cid ?? ''} />
-        {#key composerKey}
-          <RichTextEditor name="body" placeholder="Add to the discussion…" initial={composerDoc ?? undefined} />
-        {/key}
-        <button class="atm-btn atm-btn--primary atm-composer__submit" disabled={posting}>
-          {#if posting}<span class="atm-spinner" aria-hidden="true"></span> Posting…{:else}↩ post reply{/if}
-        </button>
-      </form>
+    <section class="atm-card atm-card--edge atm-composer atm-composer--reply" id="reply">
+      <div class="atm-card__header atm-composer__header">
+        <h3 class="atm-composer__title">Reply</h3>
+        {#if user}<span class="atm-composer__identity">posting as @{user.handle}</span>{/if}
+      </div>
+      <div class="atm-card__body atm-composer__body">
+        {#if data.thread.locked}
+          <p class="atm-hint">This thread is locked. Staff can still add a closing word.</p>
+        {/if}
+        {#if replyingTo}
+          <p class="atm-composer__replyto">
+            <span>↩ replying to <a href={postPath(data.threadUri, replyingTo.uri)}>@{shortName(replyingTo.author)}</a></span>
+            <a class="atm-linkbtn" href="{basePath}#reply" title="Reply to the thread instead" aria-label="Reply to the thread instead">×</a>
+          </p>
+        {/if}
+        {#if form?.posted}
+          <p class="atm-ok" aria-live="polite">
+            {#if syncing}<span class="atm-spinner" aria-hidden="true"></span> Posted. Waiting for it to appear…
+            {:else}Posted ✓{/if}
+          </p>
+        {/if}
+        {#if form?.message}<p class="atm-err">{form.message}</p>{/if}
+        <form
+          class="atm-composer__form"
+          method="POST"
+          action="?/reply"
+          use:enhance={() => {
+            posting = true;
+            repliesBefore = data.replyCount;
+            return async ({ result, update }) => {
+              await update({ reset: false });
+              posting = false;
+              if (result.type === 'success') {
+                composerKey++;
+                replyingTo = null;
+                composerDoc = null;
+              }
+            };
+          }}
+        >
+          <input type="hidden" name="threadCid" value={data.thread.cid ?? ''} />
+          <input type="hidden" name="parentUri" value={replyingTo?.uri ?? ''} />
+          <input type="hidden" name="parentCid" value={replyingTo?.cid ?? ''} />
+          {#key composerKey}
+            <RichTextEditor name="body" placeholder="Add to the discussion…" initial={composerDoc ?? undefined} />
+          {/key}
+          <div class="atm-composer__actions">
+            <button class="atm-btn atm-btn--primary atm-composer__submit" disabled={posting}>
+              {#if posting}<span class="atm-spinner" aria-hidden="true"></span> Posting…{:else}↩ post reply{/if}
+            </button>
+          </div>
+        </form>
+      </div>
     </section>
   {:else if !data.thread.locked}
     <ConversationLogin />
