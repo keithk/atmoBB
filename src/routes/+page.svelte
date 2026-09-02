@@ -141,13 +141,19 @@
   {/each}
 
   {#if data.groups.some((g) => g.boards.some((b) => b.value.topic))}
-    <div class="atmo__callout">
-      <span class="atm-eyebrow atm-eyebrow--accent atmo__how">⁂ how this works</span>
-      <p>
+    <div class="atmo__explainer">
+      <button
+        class="atm-eyebrow atm-eyebrow--accent atmo__how"
+        type="button"
+        aria-describedby="topic-board-explainer"
+      >
+        ⁂ how this works
+      </button>
+      <div class="atmo__tooltip" id="topic-board-explainer" role="tooltip">
         Boards marked ⁂ show threads from other forums that use the same topic.
         Threads from this board appear on those forums too. Your posts always
         stay in your account.
-      </p>
+      </div>
     </div>
   {/if}
 
@@ -250,17 +256,55 @@
   }
 
   .atmo__icon { background: var(--forum-accent-soft); color: var(--forum-link); }
-  .atmo__callout {
-    padding: var(--space-3) var(--space-4);
+  .atmo__explainer {
+    position: relative;
+    justify-self: start;
+  }
+  .atmo__how {
+    display: inline-flex;
+    align-items: center;
+    padding: 7px 10px;
     background: var(--forum-accent-soft);
     border: var(--border-hair) solid color-mix(in oklch, var(--forum-accent) 45%, var(--forum-line));
-    border-radius: var(--radius-md);
-    display: flex;
-    gap: var(--space-4);
-    align-items: baseline;
+    border-radius: var(--radius-sm);
+    cursor: help;
   }
-  .atmo__how { flex: none; }
-  .atmo__callout p { margin: 0; font: var(--type-meta); color: var(--forum-ink-soft); }
+  .atmo__how:hover,
+  .atmo__how:focus-visible {
+    color: var(--forum-link-hover);
+    border-color: var(--forum-accent);
+  }
+  .atmo__tooltip {
+    position: absolute;
+    z-index: 50;
+    top: 50%;
+    left: calc(100% + var(--space-2));
+    width: min(620px, calc(100vw - 200px));
+    padding: var(--space-3) var(--space-4);
+    color: var(--forum-ink-soft);
+    background: var(--forum-surface);
+    border: var(--border-hair) solid var(--forum-line-strong);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    font: var(--type-meta);
+    opacity: 0;
+    visibility: hidden;
+    transform: translate(-3px, -50%);
+    pointer-events: none;
+    transition:
+      opacity var(--dur-fast) var(--ease),
+      visibility var(--dur-fast) var(--ease),
+      transform var(--dur-fast) var(--ease);
+  }
+  .atmo__explainer:hover .atmo__tooltip,
+  .atmo__explainer:focus-within .atmo__tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(-50%);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atmo__tooltip { transition: none; }
+  }
 
   .panels {
     display: grid;
@@ -315,6 +359,16 @@
     .hero__grid { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
     .panels { grid-template-columns: minmax(0, 1fr); }
     .sysop__pitch { min-width: 0; }
+  }
+  @media (max-width: 720px) {
+    .atmo__tooltip {
+      top: calc(100% + var(--space-2));
+      left: 0;
+      width: min(460px, calc(100vw - var(--space-8)));
+      transform: translateY(-3px);
+    }
+    .atmo__explainer:hover .atmo__tooltip,
+    .atmo__explainer:focus-within .atmo__tooltip { transform: none; }
   }
   }
 </style>
