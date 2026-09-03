@@ -64,7 +64,7 @@ The installer will show the resolved DIDs and deployment settings before it chan
 It doesn't install operating-system packages or touch DNS. If it stops on a failed check, fix that problem and run the same command again. It keeps generated credentials instead of rotating them.
 
 > [!NOTE]
-> Happyview is pinned to `ghcr.io/gamesgamesgamesgamesgames/happyview:2.13.1`. Do not replace the pin with `latest`: upgrades can run forward-only database migrations. Back up Postgres before changing the tag.
+> Happyview is pinned to `ghcr.io/gamesgamesgamesgamesgames/happyview:2.14.0`. Do not replace the pin with `latest`: upgrades can run forward-only database migrations. Back up Postgres before changing the tag.
 
 ## 2. Connect the forum account
 

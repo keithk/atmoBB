@@ -4,7 +4,7 @@
 
 ## The pinned upstream image
 
-The Compose files pin `ghcr.io/gamesgamesgamesgamesgames/happyview:2.13.1`, the upstream release I've actually tested against. The image supports amd64 and arm64.
+The Compose files pin `ghcr.io/gamesgamesgamesgamesgames/happyview:2.14.0`, the upstream release I've actually tested against. The image supports amd64 and arm64.
 
 atmobb ignores Happyview's OAuth client and its PDS-proxy write paths. It handles login itself and writes public records straight to users' PDSes. `HAPPYVIEW_CLIENT_KEY`, if you set it, just identifies read requests for rate limiting.
 

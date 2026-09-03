@@ -20,7 +20,7 @@ services:
 
   happyview:
     # Keep this exact release aligned with infra/appview-compose*.yml.
-    image: ghcr.io/gamesgamesgamesgamesgames/happyview:2.13.1
+    image: ghcr.io/gamesgamesgamesgamesgames/happyview:2.14.0
     ports:
       - "127.0.0.1:3000:3000"
     environment:
