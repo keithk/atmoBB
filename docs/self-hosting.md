@@ -2,7 +2,7 @@
 
 The setup I support is one Linux host running Postgres, the official Happyview image, and the atmobb app. There are two ways to get there:
 
-- **The release bundle** (recommended). Download a versioned tarball, run `./atmobb install`, and everything runs as pinned container images under Docker Compose. Caddy is either the bundled overlay or your own reverse proxy. No build tools on the server.
+- **The prebuilt release** (recommended). Run the one-line installer, or download its versioned bundle by hand, and everything runs as pinned container images under Docker Compose. Caddy is either bundled or your own reverse proxy. No build tools or source checkout on the server.
 - **From source.** Clone the repository and run `infra/install-self-host.sh`, which builds the app on the server and runs it under systemd behind a host-installed Caddy. Use this if you're changing the code or want to run `main`.
 
 Both are rerunnable and keep existing secrets and the Happyview operator key. Both leave the same things on disk: Postgres data, OAuth state in `/var/lib/atmobb/oauth`, and a few env files. You can move from one to the other by pointing the new install at the same directory.
@@ -33,7 +33,27 @@ The `app.atmobb.*` lexicons are already published. You don't publish schemas or 
 
 ## 1. Install
 
-### From the release bundle
+### One-line install (recommended)
+
+On a fresh host, run this as your normal login user:
+
+```sh
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/keithk/atmoBB/main/install.sh | sh
+```
+
+The script finds the latest GitHub release, verifies the bundle against its published SHA-256 checksum, unpacks it into `/srv/atmobb`, and starts the interactive installer with the bundled Caddy HTTPS proxy. It asks for the forum hostname, your personal admin handle, and the dedicated forum handle, then shows the complete plan before changing service configuration or starting containers. Do not prefix the command with `sudo`; the installer asks for `sudo` only when it needs to create system directories or run Docker.
+
+If you prefer to inspect scripts before running them, download it first:
+
+```sh
+curl --proto '=https' --tlsv1.2 -fsSLO https://raw.githubusercontent.com/keithk/atmoBB/main/install.sh
+less install.sh
+sh install.sh
+```
+
+Use the manual bundle installation below if you already have a reverse proxy, want the files somewhere other than `/srv/atmobb`, or want to verify and unpack every artifact yourself.
+
+### Manual release install
 
 Download the latest `atmobb-X.Y.Z.tar.gz` from the [releases page](https://github.com/keithk/atmoBB/releases), check it against `SHA256SUMS`, and unpack it somewhere permanent:
 

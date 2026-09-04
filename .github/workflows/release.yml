@@ -34,6 +34,7 @@ jobs:
         with:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
+      - run: sh -n install.sh
       - run: sh infra/release/check-pins.sh
       - run: bun run check
       - run: bun run test
