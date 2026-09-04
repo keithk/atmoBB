@@ -15,6 +15,13 @@ on:
 permissions:
   contents: read
 
+# A release commit lands on main and gets tagged at the same time, which starts
+# two runs pushing to the same GHCR package at once. Queue them instead: the
+# first v0.1.0 run lost that race with "blob upload unknown to registry".
+concurrency:
+  group: release-image
+  cancel-in-progress: false
+
 env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/atmobb
 
