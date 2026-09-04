@@ -1,0 +1,12 @@
+# Used by compose.caddy.yml. Mirrors the host-Caddy sites that
+# infra/install-self-host.sh generates, addressing services by Compose name.
+
+{$APP_HOST} {
+	reverse_proxy atmobb:3001
+}
+
+{$HAPPYVIEW_HOST} {
+	@admin path /admin /admin/*
+	respond @admin 404
+	reverse_proxy happyview:3000
+}

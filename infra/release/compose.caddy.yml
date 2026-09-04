@@ -1,0 +1,33 @@
+# Optional overlay: Caddy inside the stack, terminating TLS for both hostnames.
+# Use it when nothing else on the host owns ports 80 and 443:
+#
+#   docker compose -f compose.yml -f compose.caddy.yml up -d
+#
+# or set COMPOSE_FILE=compose.yml:compose.caddy.yml in .env (`./atmobb install
+# --caddy` does this) so plain `docker compose` and `./atmobb` pick it up.
+#
+# The Caddyfile blocks Happyview's /admin from the public hostname. Operator
+# scripts reach the admin API over the Compose network instead.
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      APP_HOST: ${APP_HOST:?run ./atmobb install}
+      HAPPYVIEW_HOST: ${HAPPYVIEW_HOST:?run ./atmobb install}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - atmobb
+      - happyview
+
+volumes:
+  caddy_data:
+  caddy_config:

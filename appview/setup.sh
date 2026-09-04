@@ -3,6 +3,7 @@
 # tables, network-resolved record lexicons, local query/procedure lexicons,
 # and Lua scripts. Idempotent. Run from anywhere.
 # Deployment overrides: HV=http://127.0.0.1:3000 PG_EXEC="docker compose -f /path/to/compose.yml exec -T postgres"
+# Set PG_EXEC to the empty string to run psql directly (PGHOST/PGPASSWORD env).
 set -e
 cd "$(dirname "$0")/.."
 TOKEN=${HAPPYVIEW_API_KEY:-}
@@ -20,7 +21,7 @@ for command in curl jq; do
   fi
 done
 HV=${HV:-http://127.0.0.1:3000}
-PG_EXEC=${PG_EXEC:-"docker compose exec -T postgres"}
+PG_EXEC=${PG_EXEC-"docker compose exec -T postgres"}
 NS=app.atmobb
 
 echo "== stats tables"

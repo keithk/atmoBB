@@ -1,0 +1,386 @@
+#!/bin/sh
+# Operator commands for an atmobb release bundle. Run from the bundle
+# directory (the one holding compose.yml). Rerunnable: install keeps existing
+# secrets and the Happyview operator key.
+set -eu
+
+BUNDLE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$BUNDLE_DIR"
+ENV_FILE=$BUNDLE_DIR/.env
+PROJECT=atmobb
+
+usage() {
+  cat <<'EOF'
+Usage: ./atmobb <command> [options]
+
+  install            First-time setup, or apply a config change. Options:
+                       --app-host HOST         public forum hostname
+                       --happyview-host HOST   Happyview hostname (default hv.APP_HOST)
+                       --admin-handle HANDLE   your personal atproto account
+                       --forum-handle HANDLE   the dedicated forum account
+                       --caddy                 run the bundled Caddy for TLS
+                       --yes                   skip the confirmation prompt
+  upgrade            Pull this bundle's images and restart. Refuses to move
+                     Happyview; use upgrade-happyview for that.
+  upgrade-happyview  Back up, then move Happyview to the version this bundle
+                     pins, wait for its migrations, and reapply setup.
+  backfill           Index history from the network and rebuild counts.
+  backup [DIR]       pg_dump, OAuth state, and .env into DIR
+                     (default ./backups/<timestamp>).
+  status             Container state and the running atmobb version.
+  logs [ARGS]        docker compose logs ARGS
+  help
+
+Everything else is `docker compose` in this directory.
+EOF
+}
+
+die() {
+  echo "atmobb: $*" >&2
+  exit 1
+}
+
+need() {
+  for command in "$@"; do
+    command -v "$command" >/dev/null 2>&1 || die "$command is required"
+  done
+}
+
+need docker
+if docker info >/dev/null 2>&1; then
+  DOCKER=docker
+else
+  need sudo
+  sudo docker info >/dev/null 2>&1 || die "Docker is not running, or is unavailable to this user and through sudo"
+  DOCKER="sudo docker"
+fi
+COMPOSE_VERSION=$($DOCKER compose version --short 2>/dev/null) || die "Docker Compose v2.20 or newer is required"
+COMPOSE_VERSION=${COMPOSE_VERSION#v}
+major=${COMPOSE_VERSION%%.*}
+rest=${COMPOSE_VERSION#*.}
+minor=${rest%%.*}
+[ "$major" -gt 2 ] || { [ "$major" -eq 2 ] && [ "$minor" -ge 20 ]; } ||
+  die "Docker Compose v2.20 or newer is required (found $COMPOSE_VERSION)"
+
+compose() {
+  $DOCKER compose --project-name "$PROJECT" "$@"
+}
+
+env_value() {
+  [ -f "$ENV_FILE" ] || return 0
+  sed -n "s/^$1=//p" "$ENV_FILE" | tail -n 1
+}
+
+# Replace KEY=... in .env, or append it. Keeps the file at mode 600.
+set_env() {
+  key=$1
+  value=$2
+  tmp=$(mktemp)
+  if [ -f "$ENV_FILE" ] && grep -q "^$key=" "$ENV_FILE"; then
+    awk -v key="$key" -v value="$value" \
+      'index($0, key "=") == 1 { print key "=" value; next } { print }' "$ENV_FILE" > "$tmp"
+  else
+    [ ! -f "$ENV_FILE" ] || cat "$ENV_FILE" > "$tmp"
+    printf '%s=%s\n' "$key" "$value" >> "$tmp"
+  fi
+  install -m 600 "$tmp" "$ENV_FILE"
+  rm -f "$tmp"
+}
+
+# Image tag the bundle pins for a service, and the tag its container runs.
+pinned_image() {
+  compose config --format json | jq -er --arg s "$1" '.services[$s].image'
+}
+running_image() {
+  id=$(compose ps -q "$1" 2>/dev/null | head -n 1)
+  [ -n "$id" ] || return 0
+  $DOCKER inspect --format '{{.Config.Image}}' "$id"
+}
+
+wait_for_happyview() {
+  echo "== waiting for Happyview"
+  compose run --rm --no-deps setup sh -c '
+    attempt=0
+    until curl --fail --silent --output /dev/null http://happyview:3000/health; do
+      attempt=$((attempt + 1))
+      [ "$attempt" -lt 90 ] || { echo "Happyview did not become healthy in 3 minutes" >&2; exit 1; }
+      sleep 2
+    done
+    curl --silent -H "Host: $HAPPYVIEW_HOST" http://happyview:3000/config | jq -r "\"Happyview \" + .version"
+  '
+}
+
+confirm() {
+  [ "${ASSUME_YES:-0}" -eq 1 ] && return 0
+  printf '\n%s [y/N] ' "$1"
+  IFS= read -r answer
+  case "$answer" in
+    y|Y|yes|YES) ;;
+    *) echo "Cancelled."; exit 0 ;;
+  esac
+}
+
+valid_hostname() {
+  hostname=$1
+  case "$hostname" in
+    *[!a-z0-9.-]*|.*|*.|*..*|'') return 1 ;;
+  esac
+  [ "${#hostname}" -le 253 ] || return 1
+  old_ifs=$IFS
+  IFS=.
+  set -- $hostname
+  IFS=$old_ifs
+  [ "$#" -ge 2 ] || return 1
+  for label do
+    [ "${#label}" -le 63 ] || return 1
+    case "$label" in
+      -*|*-|'') return 1 ;;
+    esac
+  done
+}
+
+resolve_handle() {
+  did=$(curl --fail --silent --show-error --get \
+    --data-urlencode "handle=$1" \
+    https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle |
+    jq -er .did) || die "could not resolve atproto handle: $1"
+  printf '%s\n' "$did" | grep -Eq '^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$' || die "$1 resolved to an invalid DID"
+  printf '%s' "$did"
+}
+
+prompt() {
+  label=$1
+  value=$2
+  if [ -n "$value" ]; then
+    printf '%s' "$value"
+    return
+  fi
+  [ -t 0 ] || die "$label is required in non-interactive mode"
+  printf '%s: ' "$label" >&2
+  IFS= read -r value
+  [ -n "$value" ] || die "$label cannot be empty"
+  printf '%s' "$value"
+}
+
+cmd_install() {
+  need curl jq openssl sudo
+  APP_HOST=$(env_value APP_HOST)
+  HAPPYVIEW_HOST=$(env_value HAPPYVIEW_HOST)
+  ADMIN_HANDLE=
+  FORUM_HANDLE=
+  USE_CADDY=0
+  ASSUME_YES=0
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --app-host) [ "$#" -ge 2 ] || die "--app-host needs a value"; APP_HOST=$2; shift 2 ;;
+      --happyview-host) [ "$#" -ge 2 ] || die "--happyview-host needs a value"; HAPPYVIEW_HOST=$2; shift 2 ;;
+      --admin-handle) [ "$#" -ge 2 ] || die "--admin-handle needs a value"; ADMIN_HANDLE=$2; shift 2 ;;
+      --forum-handle) [ "$#" -ge 2 ] || die "--forum-handle needs a value"; FORUM_HANDLE=$2; shift 2 ;;
+      --caddy) USE_CADDY=1; shift ;;
+      --yes) ASSUME_YES=1; shift ;;
+      *) die "unknown option: $1 (try ./atmobb help)" ;;
+    esac
+  done
+
+  APP_HOST=$(prompt "Public forum hostname" "$APP_HOST")
+  HAPPYVIEW_HOST=${HAPPYVIEW_HOST:-hv.$APP_HOST}
+  valid_hostname "$APP_HOST" || die "invalid app hostname: $APP_HOST (use lowercase DNS syntax)"
+  valid_hostname "$HAPPYVIEW_HOST" || die "invalid Happyview hostname: $HAPPYVIEW_HOST"
+  [ "$APP_HOST" != "$HAPPYVIEW_HOST" ] || die "the app and Happyview need different hostnames"
+
+  existing_host=$(env_value APP_HOST)
+  if [ -n "$existing_host" ] && [ "$existing_host" != "$APP_HOST" ]; then
+    die ".env belongs to $existing_host, not $APP_HOST; move the forum deliberately or start a new bundle"
+  fi
+
+  FORUM_DID=$(env_value ATMOBB_FORUM_DID)
+  if [ -z "$FORUM_DID" ]; then
+    FORUM_HANDLE=$(prompt "Dedicated forum handle" "$FORUM_HANDLE")
+  fi
+  if [ -z "$(env_value HAPPYVIEW_API_KEY)" ]; then
+    ADMIN_HANDLE=$(prompt "Personal admin handle" "$ADMIN_HANDLE")
+  fi
+
+  echo "== resolving atproto accounts"
+  ADMIN_DID=
+  [ -z "$ADMIN_HANDLE" ] || ADMIN_DID=$(resolve_handle "$ADMIN_HANDLE")
+  if [ -z "$FORUM_DID" ]; then
+    FORUM_DID=$(resolve_handle "$FORUM_HANDLE")
+  elif [ -n "$FORUM_HANDLE" ] && [ "$(resolve_handle "$FORUM_HANDLE")" != "$FORUM_DID" ]; then
+    die ".env is configured for forum $FORUM_DID, which is not $FORUM_HANDLE"
+  fi
+  [ -z "$ADMIN_DID" ] || [ "$ADMIN_DID" != "$FORUM_DID" ] ||
+    die "the forum must use a dedicated account, not the personal admin account"
+
+  DATA_DIR=$(env_value ATMOBB_DATA_DIR)
+  DATA_DIR=${DATA_DIR:-/var/lib/atmobb/oauth}
+
+  cat <<EOF
+
+atmobb bundle:   $BUNDLE_DIR
+Forum:           https://$APP_HOST
+Happyview:       https://$HAPPYVIEW_HOST
+Forum identity:  ${FORUM_HANDLE:-$FORUM_DID} ($FORUM_DID)
+First admin:     ${ADMIN_HANDLE:-already bootstrapped}${ADMIN_DID:+ ($ADMIN_DID)}
+OAuth state:     $DATA_DIR
+TLS:             $([ "$USE_CADDY" -eq 1 ] && echo "bundled Caddy (ports 80/443)" || echo "your own reverse proxy -> 127.0.0.1:3001 and :3000")
+
+DNS for both hostnames must point here. Existing secrets are preserved.
+EOF
+  confirm "Continue?"
+
+  echo "== writing .env"
+  umask 077
+  set_env APP_HOST "$APP_HOST"
+  set_env HAPPYVIEW_HOST "$HAPPYVIEW_HOST"
+  set_env ATMOBB_FORUM_DID "$FORUM_DID"
+  set_env ATMOBB_DATA_DIR "$DATA_DIR"
+  [ -n "$(env_value POSTGRES_PASSWORD)" ] || set_env POSTGRES_PASSWORD "$(openssl rand -hex 24)"
+  [ -n "$(env_value SESSION_SECRET)" ] || set_env SESSION_SECRET "$(openssl rand -hex 32)"
+  [ -n "$(env_value TOKEN_ENCRYPTION_KEY)" ] || set_env TOKEN_ENCRYPTION_KEY "$(openssl rand -base64 32)"
+  [ -n "$(env_value ATMOBB_COOKIE_SECRET)" ] || set_env ATMOBB_COOKIE_SECRET "$(openssl rand -hex 32)"
+  if [ "$USE_CADDY" -eq 1 ]; then
+    set_env COMPOSE_FILE "compose.yml:compose.caddy.yml"
+  fi
+
+  echo "== preparing $DATA_DIR (owned by uid 10001, the container's atmobb user)"
+  sudo install -d -o 10001 -g 10001 -m 700 "$DATA_DIR"
+
+  echo "== starting Postgres and Happyview"
+  compose config --quiet
+  compose pull
+  compose up -d postgres happyview
+  wait_for_happyview
+
+  if [ -z "$(env_value HAPPYVIEW_API_KEY)" ]; then
+    echo "== creating the Happyview operator key"
+    key_output=$(compose run --rm --no-deps -e "ADMIN_DID=$ADMIN_DID" setup sh appview/bootstrap-admin.sh) ||
+      die "Happyview bootstrap failed; inspect 'docker compose logs happyview' and rerun"
+    key=$(printf '%s\n' "$key_output" | sed -n 's/^HAPPYVIEW_API_KEY=//p' | tail -n 1)
+    [ -n "$key" ] || die "bootstrap did not print an operator key"
+    set_env HAPPYVIEW_API_KEY "$key"
+  else
+    echo "== keeping the existing Happyview operator key"
+  fi
+
+  echo "== configuring Happyview and starting atmobb"
+  compose up -d
+  cmd_status
+
+  cat <<EOF
+
+Installation complete.
+
+1. Open https://$APP_HOST and log in with your personal account.
+2. Open https://$APP_HOST/admin and connect the forum account when prompted.
+3. Create the forum profile and first board in /admin.
+4. Run './atmobb backfill' to index records that already exist on the network.
+EOF
+  if [ "$USE_CADDY" -eq 1 ]; then
+    echo "Caddy may take a moment to obtain certificates after DNS reaches this host."
+  else
+    echo "Point your reverse proxy at 127.0.0.1:3001 (forum) and 127.0.0.1:3000 (Happyview),"
+    echo "and block /admin on the Happyview hostname. docs/self-hosting.md has a Caddy example."
+  fi
+}
+
+cmd_upgrade() {
+  need jq
+  [ -f "$ENV_FILE" ] || die "no .env here; run ./atmobb install first"
+  echo "== pulling images"
+  compose pull
+  pinned=$(pinned_image happyview)
+  running=$(running_image happyview)
+  if [ -n "$running" ] && [ "$running" != "$pinned" ]; then
+    cat >&2 <<EOF
+atmobb: this bundle pins $pinned but $running is running.
+
+Happyview upgrades run forward-only database migrations. Back up first, then
+run './atmobb upgrade-happyview' to move the stack together.
+EOF
+    exit 1
+  fi
+  echo "== restarting with $(pinned_image atmobb)"
+  compose up -d --remove-orphans
+  cmd_status
+}
+
+cmd_upgrade_happyview() {
+  need jq
+  ASSUME_YES=0
+  [ "${1:-}" != "--yes" ] || ASSUME_YES=1
+  [ -f "$ENV_FILE" ] || die "no .env here; run ./atmobb install first"
+  pinned=$(pinned_image happyview)
+  running=$(running_image happyview)
+  if [ "$running" = "$pinned" ]; then
+    echo "Happyview already runs $pinned; nothing to do."
+    exit 0
+  fi
+  cat <<EOF
+
+Happyview:  ${running:-not running}  ->  $pinned
+
+Startup runs forward-only migrations. Once they finish you cannot go back down
+a version. A backup is taken first.
+EOF
+  confirm "Upgrade Happyview?"
+  backup_dir=$(cmd_backup)
+  echo "== backup written to $backup_dir"
+  echo "== pulling $pinned"
+  compose pull happyview
+  echo "== recreating Happyview (migrations run now; watch: docker compose logs -f happyview)"
+  compose up -d --no-deps happyview
+  wait_for_happyview
+  echo "== reapplying atmobb setup and restarting the app"
+  compose up -d
+  cmd_status
+  cat <<EOF
+
+Done. If the release notes ask for it, run './atmobb backfill' now to rebuild
+derived tables against the new schema.
+EOF
+}
+
+cmd_backfill() {
+  [ -f "$ENV_FILE" ] || die "no .env here; run ./atmobb install first"
+  compose run --rm --no-deps setup sh appview/backfill.sh
+}
+
+cmd_backup() {
+  need sudo
+  [ -f "$ENV_FILE" ] || die "no .env here; run ./atmobb install first"
+  dir=${1:-$BUNDLE_DIR/backups/$(date -u +%Y%m%dT%H%M%SZ)}
+  data_dir=$(env_value ATMOBB_DATA_DIR)
+  data_dir=${data_dir:-/var/lib/atmobb/oauth}
+  umask 077
+  mkdir -p "$dir"
+  echo "== backing up to $dir" >&2
+  compose exec -T postgres pg_dump -Fc -U happyview -d happyview > "$dir/postgres.dump"
+  sudo tar -C "$(dirname "$data_dir")" -czf - "$(basename "$data_dir")" > "$dir/oauth.tar.gz"
+  cp "$ENV_FILE" "$dir/env"
+  ls -lh "$dir" >&2
+  echo "These files contain credentials and private data. Copy them off this host." >&2
+  printf '%s\n' "$dir"
+}
+
+cmd_status() {
+  compose ps
+  version=$(curl --silent --fail http://127.0.0.1:3001/api/version 2>/dev/null) &&
+    printf 'atmobb %s (expects Happyview %s)\n' \
+      "$(printf '%s' "$version" | jq -r .version)" "$(printf '%s' "$version" | jq -r .happyview)" ||
+    echo "atmobb is not answering on 127.0.0.1:3001 yet"
+}
+
+command=${1:-help}
+[ "$#" -eq 0 ] || shift
+case "$command" in
+  install) cmd_install "$@" ;;
+  upgrade) cmd_upgrade "$@" ;;
+  upgrade-happyview) cmd_upgrade_happyview "$@" ;;
+  backfill) cmd_backfill "$@" ;;
+  backup) cmd_backup "$@" >/dev/null ;;
+  status) cmd_status ;;
+  logs) compose logs "$@" ;;
+  help|-h|--help) usage ;;
+  *) die "unknown command: $command (try ./atmobb help)" ;;
+esac

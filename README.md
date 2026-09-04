@@ -67,7 +67,8 @@ A public reply takes a lap before anyone else sees it: app to the author's PDS, 
 
 - [Features](docs/features.md): everything the forum does, member features through operator tools
 - [Local development](docs/development.md): prerequisites, setup, verification, reset, and troubleshooting
-- [Self-hosting](docs/self-hosting.md): a full production deployment, systemd and TLS included
+- [Self-hosting](docs/self-hosting.md): a full production deployment from the release bundle or from source, TLS included
+- [Releasing](docs/releasing.md): what a version pins, what patch/minor/major mean, and how a release is cut
 - [Happyview](docs/happyview.md): the appview architecture, the image pin, setup, and backfill
 - [Hosted tenants](docs/hosted-tenants.md): running other people's forums on one shared appview
 - [Members-only boards](docs/private-boards.md): privacy boundaries and permissioned spaces

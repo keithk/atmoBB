@@ -1,0 +1,15 @@
+.git
+.github
+.amp
+.data
+.svelte-kit
+.playwright-cli
+data
+build
+node_modules
+spike
+vendor
+private
+docs
+infra/release
+.env

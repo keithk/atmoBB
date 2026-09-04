@@ -20,7 +20,7 @@ for command in curl jq; do
 done
 
 HV=${HV:-http://127.0.0.1:3000}
-PG_EXEC=${PG_EXEC:-"docker compose exec -T postgres"}
+PG_EXEC=${PG_EXEC-"docker compose exec -T postgres"}
 WAIT_SECONDS=${WAIT_SECONDS:-5}
 
 echo "== starting backfill for all registered record collections"

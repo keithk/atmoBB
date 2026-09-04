@@ -1,9 +1,12 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { dirname, join } from 'node:path';
 
 const ONLINE_MS = 5 * 60 * 1000;
 const IDLE_MS = 15 * 60 * 1000;
-const HIGH_WATER_PATH = 'data/presence-high-water.json';
+// Lives beside the OAuth stores so it survives container restarts and lands
+// in the same backup.
+const HIGH_WATER_PATH = join(process.env.DATA_DIR ?? '.data', 'presence-high-water.json');
 
 const members = new Map<string, number>(); // did → lastSeen (ms)
 const guests = new Map<string, number>(); // anonymized key → lastSeen (ms)
@@ -34,7 +37,7 @@ function noteHighWater() {
   if (count > high.count) {
     high = { count, at: new Date(now).toISOString() };
     try {
-      mkdirSync('data', { recursive: true });
+      mkdirSync(dirname(HIGH_WATER_PATH), { recursive: true });
       writeFileSync(HIGH_WATER_PATH, JSON.stringify(high));
     } catch {
       // losing the high-water mark is survivable

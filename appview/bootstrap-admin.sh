@@ -14,7 +14,7 @@ set -e
 cd "$(dirname "$0")/.."
 
 ADMIN_DID=${ADMIN_DID:?set ADMIN_DID to the atproto DID that should own this instance}
-PG_EXEC=${PG_EXEC:-"docker compose exec -T postgres"}
+PG_EXEC=${PG_EXEC-"docker compose exec -T postgres"}
 
 if ! printf '%s\n' "$ADMIN_DID" | grep -Eq '^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$'; then
   echo "ADMIN_DID must be a DID (for example, did:plc:abc123), not a handle" >&2

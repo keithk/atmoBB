@@ -1,0 +1,93 @@
+# atmobb release stack: Postgres, Happyview, the atmobb setup job, and the
+# atmobb web app. Both image tags are pinned by the release that shipped this
+# file; `./atmobb upgrade` and `./atmobb upgrade-happyview` move them together.
+#
+# Configuration comes from `.env` beside this file (`./atmobb install` writes
+# it). Only the setup job sees HAPPYVIEW_API_KEY; the web app never does.
+#
+# The web app and Happyview listen on loopback only. Either run Caddy on the
+# host (docs/self-hosting.md) or add the bundled proxy:
+#   docker compose -f compose.yml -f compose.caddy.yml up -d
+
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    # Happyview uses separate main and backfill pools that can exceed
+    # PostgreSQL's default 100-connection limit during a full backfill.
+    command: ["postgres", "-c", "max_connections=200"]
+    environment:
+      POSTGRES_USER: happyview
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run ./atmobb install}
+      POSTGRES_DB: happyview
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U happyview"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  happyview:
+    image: ghcr.io/gamesgamesgamesgamesgames/happyview:2.14.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      DATABASE_URL: postgres://happyview:${POSTGRES_PASSWORD}@postgres/happyview
+      PUBLIC_URL: https://${HAPPYVIEW_HOST:?run ./atmobb install}
+      SESSION_SECRET: ${SESSION_SECRET:?run ./atmobb install}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?run ./atmobb install}
+      RELAY_URL: https://relay1.us-east.bsky.network
+      PORT: "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Runs once per `up`: checks the Happyview version against the one this
+  # atmobb release expects, then applies lexicons, Lua, and derived tables.
+  # `./atmobb backfill` and `./atmobb install` also run one-off commands here.
+  setup:
+    image: ghcr.io/keithk/atmobb:0.1.0
+    restart: "no"
+    command: ["sh", "appview/container-setup.sh"]
+    environment:
+      HV: http://happyview:3000
+      # Happyview checks the Host header on /config against PUBLIC_URL.
+      HAPPYVIEW_HOST: ${HAPPYVIEW_HOST}
+      HAPPYVIEW_API_KEY: ${HAPPYVIEW_API_KEY:-}
+      PG_EXEC: ""
+      PGHOST: postgres
+      PGUSER: happyview
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: happyview
+    depends_on:
+      postgres:
+        condition: service_healthy
+      happyview:
+        condition: service_started
+
+  atmobb:
+    image: ghcr.io/keithk/atmobb:0.1.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3001"
+    environment:
+      ORIGIN: https://${APP_HOST:?run ./atmobb install}
+      ATMOBB_APP_URL: https://${APP_HOST}
+      HAPPYVIEW_URL: https://${HAPPYVIEW_HOST}
+      ATMOBB_FORUM_DID: ${ATMOBB_FORUM_DID:?run ./atmobb install}
+      ATMOBB_COOKIE_SECRET: ${ATMOBB_COOKIE_SECRET:?run ./atmobb install}
+      HAPPYVIEW_SESSION_SECRET: ${SESSION_SECRET}
+      HAPPYVIEW_CLIENT_KEY: ${HAPPYVIEW_CLIENT_KEY:-}
+      ATMOBB_AVATAR_BUILDER_URL: ${ATMOBB_AVATAR_BUILDER_URL:-}
+    volumes:
+      # OAuth sessions for every member and the forum account. Owned by uid
+      # 10001 on the host; back it up with Postgres (`./atmobb backup`).
+      - ${ATMOBB_DATA_DIR:-/var/lib/atmobb/oauth}:/data
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:

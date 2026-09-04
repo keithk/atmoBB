@@ -1,0 +1,125 @@
+# Builds the multi-arch atmobb image and, for version tags, publishes a GitHub
+# Release with the Compose bundle. See docs/releasing.md.
+#
+#   push to main  ->  ghcr.io/keithk/atmobb:edge
+#   tag vX.Y.Z    ->  ghcr.io/keithk/atmobb:X.Y.Z, :X.Y, :latest
+#                     + release asset atmobb-X.Y.Z.tar.gz and SHA256SUMS
+name: release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/atmobb
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - run: sh infra/release/check-pins.sh
+      - run: bun run check
+      - run: bun run test
+      - run: bun run build
+
+  image:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: hv
+        run: echo "version=$(sed -n 's/^ARG HAPPYVIEW_VERSION=//p' Dockerfile)" >> "$GITHUB_OUTPUT"
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=edge,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=atmobb
+            org.opencontainers.image.description=phpBB-style forums on the AT Protocol
+            net.atmobb.happyview=${{ steps.hv.outputs.version }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: HAPPYVIEW_VERSION=${{ steps.hv.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  bundle:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble the Compose bundle
+        env:
+          VERSION: ${{ needs.image.outputs.version }}
+        run: |
+          set -eu
+          dir="atmobb-$VERSION"
+          mkdir "$dir"
+          cp infra/release/compose.yml infra/release/compose.caddy.yml infra/release/Caddyfile \
+             infra/release/env.example infra/release/atmobb "$dir/"
+          cp docs/self-hosting.md "$dir/SELF-HOSTING.md"
+          cp LICENSE "$dir/"
+          # The pin in the repo is checked against package.json by check-pins.sh;
+          # the tarball is the artifact operators download, so make sure.
+          grep -q "ghcr.io/keithk/atmobb:$VERSION" "$dir/compose.yml"
+          tar -czf "$dir.tar.gz" "$dir"
+          sha256sum "$dir.tar.gz" > SHA256SUMS
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.image.outputs.version }}
+        run: |
+          set -eu
+          hv=$(sed -n 's/^ARG HAPPYVIEW_VERSION=//p' Dockerfile)
+          notes=$(mktemp)
+          {
+            echo "Image: \`ghcr.io/keithk/atmobb:$VERSION\` (linux/amd64, linux/arm64)"
+            echo "Happyview: \`$hv\`"
+            echo
+            # The CHANGELOG section for this version, if there is one.
+            awk -v v="$VERSION" '
+              $0 ~ "^## \\[?" v { on = 1; next }
+              on && /^## / { exit }
+              on { print }
+            ' CHANGELOG.md
+          } > "$notes"
+          gh release create "v$VERSION" \
+            --title "atmobb $VERSION" \
+            --notes-file "$notes" \
+            --verify-tag \
+            "atmobb-$VERSION.tar.gz" SHA256SUMS

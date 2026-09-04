@@ -9,7 +9,9 @@ The Compose files pin `ghcr.io/gamesgamesgamesgamesgames/happyview:2.14.0`, the 
 atmobb ignores Happyview's OAuth client and its PDS-proxy write paths. It handles login itself and writes public records straight to users' PDSes. `HAPPYVIEW_CLIENT_KEY`, if you set it, just identifies read requests for rate limiting.
 
 > [!WARNING]
-> To upgrade Happyview, change its tag in every Compose file and recreate the container. Startup can run forward-only migrations, so back up Postgres first. Once those have run, you cannot go back down a version.
+> Startup can run forward-only migrations, so back up Postgres before moving Happyview. Once those have run, you cannot go back down a version.
+
+A Happyview bump is always its own atmobb release ([Releasing](releasing.md)). The release image bakes the version it was tested against as `HAPPYVIEW_EXPECTED_VERSION`, and `appview/container-setup.sh` compares it with the running instance's `GET /config` before the app starts. Operators on the release bundle move both together with `./atmobb upgrade-happyview`, which backs up first. Maintainers change `ARG HAPPYVIEW_VERSION` in the `Dockerfile` and the tag in every Compose file; `infra/release/check-pins.sh` fails if any disagree.
 
 ## What setup.sh installs
 
