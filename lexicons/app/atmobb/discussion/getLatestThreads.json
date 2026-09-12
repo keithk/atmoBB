@@ -20,6 +20,28 @@
           },
           "cursor": {
             "type": "string"
+          },
+          "q": {
+            "type": "string",
+            "maxLength": 2000,
+            "maxGraphemes": 200,
+            "description": "Case-insensitive literal substring to match against topic titles."
+          },
+          "board": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "Limit results to this exact board URI after forum visibility rules are applied."
+          },
+          "uri": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "Return only this exact thread URI after all normal visibility rules are applied."
+          },
+          "tag": {
+            "type": "string",
+            "maxLength": 640,
+            "maxGraphemes": 64,
+            "description": "Case-insensitive exact tag match."
           }
         }
       },

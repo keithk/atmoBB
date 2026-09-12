@@ -18,6 +18,8 @@ export interface Main {
   $type: 'app.atmobb.forum.board'
   name: string
   description?: string
+  /** Optional full six-digit hex color (for example #1a73e8) used for this board's visual marker. Writers must validate the #RRGGBB format. */
+  color?: string
   /** Parent board for subforums. Must reference an app.atmobb.forum.board in the same repo. */
   parent?: string
   /** Category this board is grouped under on the index. Must reference an app.atmobb.forum.category in the same repo. */

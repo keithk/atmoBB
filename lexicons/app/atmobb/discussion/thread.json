@@ -42,6 +42,7 @@
           },
           "tags": {
             "type": "array",
+            "description": "Normalized lowercase topic labels. Clients should trim, collapse whitespace and deduplicate before writing.",
             "maxLength": 8,
             "items": {
               "type": "string",

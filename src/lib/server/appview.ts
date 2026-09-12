@@ -64,6 +64,12 @@ export interface ForumProfile {
   name: string;
   description?: string;
   ranks?: { title: string; minPosts: number }[];
+  homepage?: {
+    layout?: string;
+    sidebar?: boolean;
+    welcome?: string;
+    featuredThreads?: string[];
+  };
   favicon?: unknown;
   customCss?: string;
   customFonts?: ForumFont[];
@@ -102,6 +108,7 @@ export interface BoardIndex {
     value: {
       name: string;
       description?: string;
+      color?: string;
       parent?: string;
       category?: string;
       topic?: string;
@@ -124,20 +131,30 @@ export interface BoardIndex {
   };
 }
 
+export interface ThreadParticipant {
+  did: string;
+  profile?: ActorProfile;
+}
+
+export interface ThreadSummary {
+  uri: string;
+  board: string;
+  boardName?: string;
+  author: string;
+  authorProfile?: ActorProfile;
+  title: string;
+  tags?: string[];
+  createdAt: string;
+  replyCount: number;
+  lastActivity: string;
+  lastReplyBy?: string;
+  /** Author first, then up to four distinct recent visible participants. */
+  participants?: ThreadParticipant[];
+  origin?: Origin;
+}
+
 export interface LatestThreads {
-  threads: {
-    uri: string;
-    board: string;
-    boardName?: string;
-    author: string;
-    authorProfile?: ActorProfile;
-    title: string;
-    createdAt: string;
-    replyCount: number;
-    lastActivity: string;
-    lastReplyBy?: string;
-    origin?: Origin;
-  }[];
+  threads: ThreadSummary[];
   cursor?: string;
 }
 
@@ -184,22 +201,14 @@ export interface BoardThreads {
     threadCount: number;
     replyCount: number;
   };
-  threads: {
-    uri: string;
+  threads: (ThreadSummary & {
     cid?: string;
-    board: string;
-    author: string;
-    authorProfile?: ActorProfile;
-    title: string;
-    createdAt: string;
-    replyCount: number;
-    lastActivity: string;
-    lastReplyBy?: string;
-    origin?: Origin;
     locked: boolean;
     /** Pinned on this board: a peer board's pins don't carry into a merged stream. */
     pinned: boolean;
-  }[];
+  })[];
+  /** Number matching q/tag when filtered; board.threadCount remains the unfiltered total. */
+  filteredCount?: number;
   cursor?: string;
 }
 
@@ -233,6 +242,7 @@ export interface ThreadPage {
     value: {
       title: string;
       body?: RichTextBlock[];
+      tags?: string[];
       board: string;
       createdAt?: string;
       editedAt?: string;
@@ -326,9 +336,27 @@ export async function awaitIndexed<T>(
   }
 }
 
-export const getBoardThreads = (board: string, cursor?: string, limit = 25) =>
+export interface ThreadQueryOptions {
+  q?: string;
+  board?: string;
+  tag?: string;
+  uri?: string;
+}
+
+export const getBoardThreads = (
+  board: string,
+  cursor?: string,
+  limit = 25,
+  filters: Pick<ThreadQueryOptions, 'q' | 'tag'> = {},
+) =>
   xrpc<BoardThreads>('GET', `${NS}.discussion.getBoardThreads`, {
-    params: { board, limit: String(limit), ...(cursor ? { cursor } : {}) },
+    params: {
+      board,
+      limit: String(limit),
+      ...(cursor ? { cursor } : {}),
+      ...(filters.q ? { q: filters.q } : {}),
+      ...(filters.tag ? { tag: filters.tag } : {}),
+    },
   });
 
 export interface ThreadPageOptions {
@@ -355,9 +383,22 @@ export const getThreadPage = (thread: string, opts: ThreadPageOptions = {}) =>
 
 export const replyUri = (did: string, rkey: string) => `at://${did}/${NS}.discussion.reply/${rkey}`;
 
-export const getLatestThreads = (cursor?: string, limit = 25, forum = FORUM_DID()) =>
+export const getLatestThreads = (
+  cursor?: string,
+  limit = 25,
+  forum = FORUM_DID(),
+  filters: ThreadQueryOptions = {},
+) =>
   xrpc<LatestThreads>('GET', `${NS}.discussion.getLatestThreads`, {
-    params: { forum, limit: String(limit), ...(cursor ? { cursor } : {}) },
+    params: {
+      forum,
+      limit: String(limit),
+      ...(cursor ? { cursor } : {}),
+      ...(filters.q ? { q: filters.q } : {}),
+      ...(filters.board ? { board: filters.board } : {}),
+      ...(filters.tag ? { tag: filters.tag } : {}),
+      ...(filters.uri ? { uri: filters.uri } : {}),
+    },
   });
 
 export const getMemberActivity = (actor: string, forum = FORUM_DID()) =>

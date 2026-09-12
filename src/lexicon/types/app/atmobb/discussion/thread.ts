@@ -28,6 +28,7 @@ export interface Main {
     | { $type: string }
   )[]
   poll?: Poll
+  /** Normalized lowercase topic labels. Clients should trim, collapse whitespace and deduplicate before writing. */
   tags?: string[]
   /** When the author last edited the body (or title). Absent means never edited. */
   editedAt?: string

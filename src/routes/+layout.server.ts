@@ -41,13 +41,15 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
   let forumFontCss = '';
   let forumCustomCss = '';
   let forumFavicon: { url: string; mimeType: string } | null = null;
+  let sidebarBoards: Awaited<ReturnType<typeof getBoardIndex>>['boards'] = [];
+  let sidebarCategories: NonNullable<Awaited<ReturnType<typeof getBoardIndex>>['categories']> = [];
   let appviewDown = false;
   // 404s (route.id === null) also render this layout. Never call the appview
   // for them: if HAPPYVIEW_URL ever routes back to this app (e.g. the appview
   // domain isn't assigned yet), layout-on-404 would recurse into a request
   // loop that floods the box.
   if (!route.id) {
-    return { user: locals.user, membership: null, avatarProfile: null, admin: false, staffRole: null, bans: [], ringSize: 0, forum, forumDid: FORUM_DID(), forumFontCss, forumCustomCss, forumFavicon, appviewDown: true };
+    return { user: locals.user, membership: null, avatarProfile: null, admin: false, staffRole: null, forumUnclaimed: false, bans: [], ringSize: 0, forum, forumDid: FORUM_DID(), forumFontCss, forumCustomCss, forumFavicon, sidebarBoards, sidebarCategories, appviewDown: true };
   }
   const [membership, avatarProfile, role, ring, standing] = await Promise.all([
     locals.user ? getMembership(locals.user.did, FORUM_DID()) : null,
@@ -59,6 +61,8 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
     (async () => {
       try {
         const index = await getBoardIndex(FORUM_DID());
+        sidebarBoards = index.boards;
+        sidebarCategories = index.categories ?? [];
         if (index.forum) {
           forum = index.forum;
           forumFontCss = await customFontCss(forum);
@@ -92,6 +96,8 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
     forumFontCss,
     forumCustomCss,
     forumFavicon,
+    sidebarBoards,
+    sidebarCategories,
     appviewDown,
   };
 };

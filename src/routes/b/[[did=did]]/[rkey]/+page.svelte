@@ -6,6 +6,8 @@
   import Avatar from '$lib/components/Avatar.svelte';
   import MemberLink from '$lib/components/MemberLink.svelte';
   import RichTextEditor from '$lib/components/RichTextEditor.svelte';
+  import TopicReadStatus from '$lib/components/TopicReadStatus.svelte';
+  import { threadFilterHref } from '$lib/thread-filters';
 
   let { data, form } = $props();
 
@@ -17,12 +19,15 @@
   const name = (t: { authorProfile?: { displayName?: string }; author: string }) =>
     t.authorProfile?.displayName ?? data.handles[t.author] ?? t.author.slice(8, 20);
 
-  const totalThreads = $derived(data.board?.threadCount ?? 0);
-  const totalPosts = $derived(totalThreads + (data.board?.replyCount ?? 0));
-  const totalPages = $derived(Math.max(1, Math.ceil(totalThreads / data.limit)));
+  const filtered = $derived(!!(data.filters.q || data.filters.tag));
+  const boardThreads = $derived(data.board?.threadCount ?? 0);
+  const totalPosts = $derived(boardThreads + (data.board?.replyCount ?? 0));
+  const filteredThreads = $derived(data.filteredCount ?? boardThreads);
+  const totalPages = $derived(Math.max(1, Math.ceil(filteredThreads / data.limit)));
   const currentPage = $derived(Math.floor(data.offset / data.limit) + 1);
   const basePath = $derived(data.basePath);
-  const pageHref = (p: number) => (p <= 1 ? basePath : `${basePath}?cursor=${(p - 1) * data.limit}`);
+  const pageHref = (p: number) =>
+    `${basePath}${threadFilterHref(data.filters, p <= 1 ? undefined : String((p - 1) * data.limit))}`;
 
   const pageList = $derived.by(() => {
     if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -51,7 +56,7 @@
     </h1>
     <p class="head__desc">
       {#if data.board?.description}{data.board.description} &middot;{/if}
-      <b>{totalThreads.toLocaleString()}</b> threads &middot; <b>{totalPosts.toLocaleString()}</b> posts
+      <b>{boardThreads.toLocaleString()}</b> threads &middot; <b>{totalPosts.toLocaleString()}</b> posts
     </p>
   </div>
   {#if user && !data.locked}
@@ -84,19 +89,37 @@
     </div>
   </div>
 {:else}
+<form class="atm-topic-filters__form atm-topic-filters__form--board" method="GET">
+  <label class="atm-topic-filters__search">
+    <span class="atm-label">Search topic titles</span>
+    <input class="atm-input" type="search" name="q" value={data.filters.q ?? ''} maxlength="200" placeholder="Search titles…" />
+  </label>
+  <label>
+    <span class="atm-label">Tag</span>
+    <input class="atm-input" name="tag" value={data.filters.tag ?? ''} maxlength="640" placeholder="Any tag" />
+  </label>
+  <button class="atm-btn atm-btn--primary">Filter</button>
+  {#if filtered}<a class="atm-btn atm-btn--ghost" href={basePath}>Clear</a>{/if}
+</form>
 <div class="atm-panel">
-  <div class="atm-board-section">Threads</div>
+  <div class="atm-board-section">{filtered ? 'Matching topics' : 'Threads'}</div>
   {#each data.threads as t}
     <article class="atm-threadrow" class:atm-threadrow--pinned={t.pinned}>
       <span class="atm-threadrow__flag" aria-hidden="true">{t.pinned ? '📌' : t.locked ? '🔒' : '›'}</span>
       <div>
         <div class="atm-threadrow__title"><a href={threadPath(t.uri)}>{t.title}</a></div>
+        {#if t.tags?.length}
+          <div class="atm-topic-tags" aria-label="Tags">
+            {#each t.tags as tag}<a class="atm-topic-tag" href="{basePath}?tag={encodeURIComponent(tag)}">{tag}</a>{/each}
+          </div>
+        {/if}
         <div class="atm-threadrow__sub">
           <span>by <MemberLink did={t.author}>{name(t)}</MemberLink></span>
           {#if t.origin}
             <span>&middot; via <span class="atm-via">{t.origin.name ?? t.origin.did.slice(8, 24)}</span></span>
           {/if}
           <span>&middot; started {relTime(t.createdAt)}</span>
+          <TopicReadStatus accountDid={user?.did} forumDid={data.forumDid} threadUri={t.uri} canonicalHref={threadPath(t.uri)} createdAt={t.createdAt} lastActivity={t.lastActivity} replyCount={t.replyCount} />
           {#if staff}
             {#snippet modact(action: string, label: string, title: string)}
               <form class="atm-modact" method="POST" action="?/moderateThread">
@@ -129,16 +152,16 @@
       </div>
       <div class="atm-threadrow__nums"><b>{t.replyCount}</b> {t.replyCount === 1 ? 'reply' : 'replies'}</div>
       <div class="atm-threadrow__last">
-        <Avatar
-          seed={t.lastReplyBy ?? t.author}
-          profile={t.lastReplyBy && t.lastReplyBy !== t.author ? undefined : t.authorProfile}
-          size={40}
-        />
+        <div class="atm-topic-participants" aria-label="Participants">
+          {#each t.participants?.length ? t.participants : [{ did: t.author, profile: t.authorProfile }] as participant}
+            <Avatar seed={participant.did} profile={participant.profile} size={30} />
+          {/each}
+        </div>
         <span>{relTime(t.lastActivity)}</span>
       </div>
     </article>
   {:else}
-    <p class="atm-empty">No threads yet. Start the first one.</p>
+    <p class="atm-empty">{filtered ? 'No topics match these filters.' : 'No threads yet. Start the first one.'}</p>
   {/each}
 </div>
 
@@ -196,6 +219,10 @@
         <div class="atm-field">
           <span class="atm-label">Body</span>
           <RichTextEditor name="body" placeholder="Write your post…" allowImages={!data.private} />
+        </div>
+        <div class="atm-field">
+          <span class="atm-label">Tags <span class="atm-label__hint">optional, comma separated</span></span>
+          <input class="atm-input" name="tags" aria-label="Tags" placeholder="help, projects" />
         </div>
         {#if !data.private}
           <details class="atm-pollfields">

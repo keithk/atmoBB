@@ -8,11 +8,12 @@
   let {
     uri,
     title,
+    tags,
     doc,
     cancelHref,
     message,
     allowImages = true,
-  }: { uri: string; title?: string; doc: JSONContent; cancelHref: string; message?: string; allowImages?: boolean } =
+  }: { uri: string; title?: string; tags?: string[]; doc: JSONContent; cancelHref: string; message?: string; allowImages?: boolean } =
     $props();
   let saving = $state(false);
 </script>
@@ -32,6 +33,7 @@
   <input type="hidden" name="uri" value={uri} />
   {#if title !== undefined}
     <input class="atm-input" name="title" value={title} required maxlength="300" aria-label="Title" />
+    <input class="atm-input" name="tags" value={tags?.join(', ') ?? ''} aria-label="Tags" placeholder="Tags (comma separated)" />
   {/if}
   <RichTextEditor name="body" initial={doc} {allowImages} />
   {#if message}<p class="atm-err">{message}</p>{/if}

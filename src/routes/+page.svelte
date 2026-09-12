@@ -5,7 +5,10 @@
   import Card from '$lib/components/Card.svelte';
   import LoginForm from '$lib/components/LoginForm.svelte';
   import MemberLink from '$lib/components/MemberLink.svelte';
+  import BoardMarker from '$lib/components/BoardMarker.svelte';
+  import TopicList from '$lib/components/TopicList.svelte';
   import { relTime } from '$lib/reltime';
+  import type { LatestThreads } from '$lib/server/appview';
 
   let { data } = $props();
 
@@ -13,7 +16,12 @@
     post
       ? (post.authorProfile?.displayName ?? data.handles[post.author] ?? post.author.slice(8, 18))
       : '';
+  const activeView = $derived(data.homeView ?? (data.homepage.layout === 'latest' ? 'latest' : 'categories'));
 </script>
+
+{#snippet topicList(threads: LatestThreads['threads'], emptyMessage: string)}
+  <TopicList {threads} {emptyMessage} handles={data.handles} accountDid={data.user?.did} forumDid={data.forumDid} showBoard embedded />
+{/snippet}
 
 {#if data.appviewDown}
   <p class="atm-notice atm-notice--danger">
@@ -23,7 +31,7 @@
 {/if}
 
 <div class="stack">
-  {#if !data.user}
+  {#if !data.user && data.homepage.welcome === 'classic'}
     <section class="atm-card atm-card--edge hero">
       <div class="hero__grid">
         <h2 class="atm-headline">
@@ -37,49 +45,58 @@
         <AtmosphereExplainer />
       </div>
     </section>
-  {/if}
-
-  {#if data.hot.length}
-    <section class="atm-panel">
-      <div class="atm-board-section">Hot right now</div>
-      {#each data.hot as t}
-        <article class="atm-threadrow">
-          <span class="atm-threadrow__flag" aria-hidden="true">▤</span>
-          <div>
-            <div class="atm-threadrow__title">
-              <a href={threadPath(t.uri)}>{t.title}</a>
-            </div>
-            <div class="atm-threadrow__sub">
-              <span>by <MemberLink did={t.author}>{authorName(t)}</MemberLink></span>
-              {#if t.boardName}
-                <span>in <a href={boardPath(t.board, data.forumDid)}>{t.boardName}</a></span>
-              {/if}
-              {#if t.origin}
-                <span>· via <span class="atm-via">{t.origin.name ?? t.origin.did.slice(8, 24)}</span></span>
-              {/if}
-            </div>
-          </div>
-          <div class="atm-threadrow__nums"><b>{t.replyCount}</b> {t.replyCount === 1 ? 'reply' : 'replies'}</div>
-          <div class="atm-threadrow__last">
-            <Avatar
-              seed={t.lastReplyBy ?? t.author}
-              profile={t.lastReplyBy && t.lastReplyBy !== t.author ? undefined : t.authorProfile}
-              size={40}
-            />
-            <span>{relTime(t.lastActivity)}</span>
-          </div>
-        </article>
-      {/each}
+  {:else if !data.user && data.homepage.welcome === 'compact'}
+    <section class="atm-card atm-card--edge atm-home-welcome atm-home-welcome--compact compact-welcome">
+      <div>
+        <div class="atm-eyebrow">Welcome</div>
+        <p>Join the conversation with your atmosphere account.</p>
+      </div>
+      <a class="atm-btn atm-btn--primary" href="/login">log in</a>
     </section>
   {/if}
 
+  <nav class="atm-home-nav" aria-label="Homepage views">
+    {#each [{ value: 'categories', label: 'Categories' }, { value: 'latest', label: 'Latest' }, { value: 'hot', label: 'Hot' }] as view}
+      <a class:atm-home-nav__item--active={activeView === view.value} class="atm-home-nav__item" href="/?view={view.value}" aria-current={activeView === view.value ? 'page' : undefined}>{view.label}</a>
+    {/each}
+  </nav>
+
+  {#if data.featured.length}
+    <section class="atm-panel atm-home-featured">
+      <div class="atm-board-section">Featured topics</div>
+      {@render topicList(data.featured, '')}
+    </section>
+  {/if}
+
+  {#if data.homeView === 'hot'}
+    <section class="atm-panel atm-home-hot" id="hot">
+      <div class="atm-board-section">Hot among recent topics</div>
+      <p class="atm-home-section-note">Ranked by replies among the 100 most recently active visible topics.</p>
+      {@render topicList(data.hot, 'No recent topics have replies yet.')}
+    </section>
+  {:else if data.homeView === 'latest' || (!data.homeView && data.homepage.layout === 'latest')}
+    <section class="atm-panel atm-home-latest" id="latest">
+      <div class="atm-board-section">Latest activity</div>
+      {@render topicList(data.latest, 'No activity yet. Start the first thread.')}
+    </section>
+  {:else if !data.homeView && data.homepage.layout === 'boards' && data.hot.length}
+    <section class="atm-panel atm-home-hot" id="hot">
+      <div class="atm-board-section">Hot among recent topics</div>
+      <p class="atm-home-section-note">Most replied-to topics in the recent activity window.</p>
+      {@render topicList(data.hot.slice(0, 3), '')}
+    </section>
+  {/if}
+
+  {#if data.homeView === 'categories' || (!data.homeView && data.homepage.layout !== 'latest')}
+  <div class:atm-home-main--split={!data.homeView && data.homepage.layout === 'categories-latest'} class="atm-home-main">
+    <div class="atm-home-categories" id="categories">
   {#each data.groups as group}
     <section class="atm-panel">
       <div class="atm-board-section">{group.title}</div>
       {#each group.boards as board}
         <article class="atm-boardrow">
           <span class="atm-boardrow__icon {board.value.topic ? 'atmo__icon' : ''}" aria-hidden="true">
-            {board.value.topic ? '⁂' : '▤'}
+            {#if board.value.color}<BoardMarker color={board.value.color} />{:else}{board.value.topic ? '⁂' : '▤'}{/if}
           </span>
           <div>
             <div class="atm-boardrow__name">
@@ -139,6 +156,15 @@
       </section>
     {/if}
   {/each}
+    </div>
+    {#if !data.homeView && data.homepage.layout === 'categories-latest'}
+      <section class="atm-panel atm-home-latest" id="latest">
+        <div class="atm-board-section">Latest activity</div>
+        {@render topicList(data.latest, 'No activity yet. Start the first thread.')}
+      </section>
+    {/if}
+  </div>
+  {/if}
 
   {#if data.groups.some((g) => g.boards.some((b) => b.value.topic))}
     <div class="atmo__explainer">
@@ -254,7 +280,45 @@
     border-top: 1px dashed var(--forum-line-strong);
     padding-top: var(--space-4);
   }
+  .compact-welcome {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-5);
+  }
+  .compact-welcome p { margin: var(--space-1) 0 0; color: var(--forum-ink-soft); font: var(--type-ui); }
 
+  .atm-home-nav {
+    display: flex;
+    gap: var(--space-1);
+    border-bottom: var(--border-hair) solid var(--forum-line-strong);
+  }
+  .atm-home-nav__item {
+    padding: var(--space-2) var(--space-3);
+    color: var(--forum-ink-soft);
+    font: var(--w-semibold) var(--text-sm)/1.4 var(--font-body);
+    text-decoration: none;
+    border-bottom: 3px solid transparent;
+  }
+  .atm-home-nav__item:hover { color: var(--forum-link); text-decoration: none; }
+  .atm-home-nav__item--active { color: var(--forum-link); border-bottom-color: var(--forum-accent); }
+  .atm-home-section-note {
+    margin: 0;
+    padding: var(--space-2) var(--space-4);
+    color: var(--forum-ink-faint);
+    background: var(--forum-surface-2);
+    border-bottom: var(--border-hair) solid var(--forum-line);
+    font: var(--type-meta);
+  }
+  .atm-home-main { display: grid; gap: var(--space-5); min-width: 0; }
+  .atm-home-main--split { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .atm-home-categories { display: grid; gap: var(--space-5); min-width: 0; }
+  .atm-home-main--split .atm-boardrow {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    gap: var(--space-3);
+  }
+  .atm-home-main--split .atm-boardrow__last { display: none; }
   .atmo__icon { background: var(--forum-accent-soft); color: var(--forum-link); }
   .atmo__explainer {
     position: relative;
@@ -357,10 +421,12 @@
 
   @media (max-width: 860px) {
     .hero__grid { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+    .atm-home-main--split { grid-template-columns: minmax(0, 1fr); }
     .panels { grid-template-columns: minmax(0, 1fr); }
     .sysop__pitch { min-width: 0; }
   }
   @media (max-width: 720px) {
+    .compact-welcome { align-items: flex-start; }
     .atmo__tooltip {
       top: calc(100% + var(--space-2));
       left: 0;

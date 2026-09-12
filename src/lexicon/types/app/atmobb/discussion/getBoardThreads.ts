@@ -19,6 +19,10 @@ export type QueryParams = {
   board: string
   limit?: number
   cursor?: string
+  /** Case-insensitive literal substring to match against topic titles. */
+  q?: string
+  /** Case-insensitive exact tag match. */
+  tag?: string
 }
 export type InputSchema = undefined
 

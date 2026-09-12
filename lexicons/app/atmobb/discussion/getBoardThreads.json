@@ -11,7 +11,19 @@
         "properties": {
           "board": { "type": "string", "format": "at-uri" },
           "limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 25 },
-          "cursor": { "type": "string" }
+          "cursor": { "type": "string" },
+          "q": {
+            "type": "string",
+            "maxLength": 2000,
+            "maxGraphemes": 200,
+            "description": "Case-insensitive literal substring to match against topic titles."
+          },
+          "tag": {
+            "type": "string",
+            "maxLength": 640,
+            "maxGraphemes": 64,
+            "description": "Case-insensitive exact tag match."
+          }
         }
       },
       "output": {

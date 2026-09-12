@@ -3,6 +3,10 @@
   import { page } from '$app/state';
   import Logo from '$lib/components/Logo.svelte';
   import Avatar from '$lib/components/Avatar.svelte';
+  import ForumSidebarNav from '$lib/components/ForumSidebarNav.svelte';
+  import ForumSidebarDrawer from '$lib/components/ForumSidebarDrawer.svelte';
+  import { groupBoards } from '$lib/board-presentation';
+  import { normalizeHomepage } from '$lib/homepage';
   import { resolveMetadata, serializeStructuredData, type PageMetadata } from '$lib/seo';
 
   let { data, children } = $props();
@@ -15,6 +19,9 @@
   ];
   const isActive = (href: string) =>
     href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
+  const sidebarEnabled = $derived(normalizeHomepage(data.forum.homepage).sidebar);
+  const sidebarGroups = $derived(groupBoards(data.sidebarBoards, data.sidebarCategories));
+  let sidebarDrawer = $state<ForumSidebarDrawer>();
 
   const appearanceCss = $derived(
     data.forumFontCss + (page.url.pathname.startsWith('/admin') ? '' : `\n${data.forumCustomCss}`),
@@ -92,9 +99,33 @@
 
 {#if appearanceCss}{@html `<style id="forum-appearance">${appearanceCss}</style>`}{/if}
 
+<div class:atm-page--sidebar={sidebarEnabled} class="atm-page">
+  {#if sidebarEnabled}
+    <aside class="atm-sidebar" aria-label="Forum sidebar">
+      <div class="atm-sidebar__scroll">
+        <ForumSidebarNav
+          groups={sidebarGroups}
+          forumDid={data.forumDid}
+          pathname={page.url.pathname}
+          admin={data.admin}
+          forumUnclaimed={data.forumUnclaimed}
+        />
+      </div>
+    </aside>
+  {/if}
+
 <div class="atm-shell">
   <header class="atm-masthead">
     <div class="atm-masthead__bar">
+      {#if sidebarEnabled}
+        <button
+          class="atm-sidebar-toggle"
+          type="button"
+          aria-label="Open navigation"
+          aria-haspopup="dialog"
+          onclick={(event) => sidebarDrawer?.open(event.currentTarget)}
+        ><span aria-hidden="true">☰</span></button>
+      {/if}
       <a class="atm-masthead__brand" href="/">
         <Logo size={24} />
         <span class="atm-masthead__slash" aria-hidden="true">/</span>
@@ -174,10 +205,47 @@
     <a class="atm-colophon__badge" href="https://github.com/keithk/atmoBB">powered by atmobb</a>
   </footer>
 </div>
+</div>
+
+{#if sidebarEnabled}
+  <ForumSidebarDrawer
+    bind:this={sidebarDrawer}
+    groups={sidebarGroups}
+    forumDid={data.forumDid}
+    forumName={data.forum.name}
+    pathname={page.url.pathname}
+    admin={data.admin}
+    forumUnclaimed={data.forumUnclaimed}
+  />
+{/if}
 
 <style>
   @layer atmobb {
+  .atm-page { min-width: 0; }
+  .atm-page--sidebar {
+    display: grid;
+    grid-template-columns: 260px minmax(0, var(--page-max));
+    justify-content: center;
+    gap: var(--space-4);
+    max-width: calc(var(--page-max) + 260px + var(--space-4));
+    margin: 0 auto;
+  }
+  .atm-sidebar {
+    min-width: 0;
+    padding: var(--space-4) 0 var(--space-8) var(--space-3);
+  }
+  .atm-sidebar__scroll {
+    position: sticky;
+    top: var(--space-4);
+    max-height: calc(100vh - var(--space-8));
+    padding-right: var(--space-2);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
   .atm-shell {
+    width: 100%;
+    min-width: 0;
     max-width: var(--page-max);
     margin: 0 auto;
     padding: var(--space-4) var(--space-4) var(--space-8);
@@ -200,6 +268,20 @@
     padding: var(--space-3) var(--space-4);
     border-bottom: var(--border-hair) solid var(--forum-line);
   }
+  .atm-sidebar-toggle {
+    display: none;
+    flex: none;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: var(--border-hair) solid var(--forum-line-strong);
+    border-radius: var(--radius-md);
+    background: var(--forum-surface);
+    color: var(--forum-ink);
+    font: var(--w-bold) 20px/1 var(--font-body);
+    cursor: pointer;
+  }
+  .atm-sidebar-toggle:hover { color: var(--forum-link); background: var(--forum-surface-2); }
   .atm-masthead__brand {
     display: inline-flex;
     flex: 1;
@@ -341,6 +423,11 @@
   @media (max-width: 720px) {
     .atm-masthead__hero { padding: var(--space-4); }
     .atm-masthead__name { font: var(--w-regular) var(--text-2xl)/var(--lh-tight) var(--font-display); }
+  }
+  @media (max-width: 860px) {
+    .atm-page--sidebar { display: block; max-width: none; }
+    .atm-sidebar { display: none; }
+    .atm-sidebar-toggle { display: grid; place-items: center; }
   }
   @media (max-width: 480px) {
     .atm-mastnav { gap: 0; padding-inline: var(--space-1); }

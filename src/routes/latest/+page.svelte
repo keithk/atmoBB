@@ -1,49 +1,44 @@
 <script lang="ts">
-  import { boardPath, threadPath } from '$lib/appview-paths';
-  import Avatar from '$lib/components/Avatar.svelte';
-  import MemberLink from '$lib/components/MemberLink.svelte';
-  import { relTime } from '$lib/reltime';
+  import TopicList from '$lib/components/TopicList.svelte';
+  import { threadFilterHref } from '$lib/thread-filters';
 
   let { data } = $props();
 
-  const name = (t: { author: string; authorProfile?: { displayName?: string } }) =>
-    t.authorProfile?.displayName ?? data.handles[t.author] ?? t.author.slice(8, 18);
+  const filtered = $derived(!!(data.filters.q || data.filters.board || data.filters.tag));
 </script>
 
-<div class="atm-panel">
-  <div class="atm-board-section">Latest activity</div>
-  {#each data.threads as t}
-    <article class="atm-threadrow">
-      <span class="atm-threadrow__flag" aria-hidden="true">▤</span>
-      <div>
-        <div class="atm-threadrow__title">
-          <a href={threadPath(t.uri)}>{t.title}</a>
-        </div>
-        <div class="atm-threadrow__sub">
-          <span>by <MemberLink did={t.author}>{name(t)}</MemberLink></span>
-          {#if t.boardName}
-            <span>in <a href={boardPath(t.board, data.forumDid)}>{t.boardName}</a></span>
-          {/if}
-          {#if t.origin}
-            <span>· via <span class="atm-via">{t.origin.name ?? t.origin.did.slice(8, 24)}</span></span>
-          {/if}
-        </div>
-      </div>
-      <div class="atm-threadrow__nums"><b>{t.replyCount}</b> {t.replyCount === 1 ? 'reply' : 'replies'}</div>
-      <div class="atm-threadrow__last">
-        <Avatar
-          seed={t.lastReplyBy ?? t.author}
-          profile={t.lastReplyBy && t.lastReplyBy !== t.author ? undefined : t.authorProfile}
-          size={40}
-        />
-        <span>{relTime(t.lastActivity)}</span>
-      </div>
-    </article>
-  {:else}
-    <p class="atm-empty">No activity yet. Start the first thread.</p>
-  {/each}
+<div class="atm-topic-filters">
+  <form class="atm-topic-filters__form" method="GET">
+    <label class="atm-topic-filters__search">
+      <span class="atm-label">Search topic titles</span>
+      <input class="atm-input" type="search" name="q" value={data.filters.q ?? ''} maxlength="200" placeholder="Search titles…" />
+    </label>
+    <label>
+      <span class="atm-label">Board</span>
+      <select class="atm-input" name="board" value={data.filters.board ?? ''}>
+        <option value="">All boards</option>
+        {#each data.boards as board}<option value={board.uri}>{board.name}</option>{/each}
+      </select>
+    </label>
+    <label>
+      <span class="atm-label">Tag</span>
+      <input class="atm-input" name="tag" value={data.filters.tag ?? ''} maxlength="640" placeholder="Any tag" />
+    </label>
+    <button class="atm-btn atm-btn--primary">Filter</button>
+    {#if filtered}<a class="atm-btn atm-btn--ghost" href="/latest">Clear</a>{/if}
+  </form>
 </div>
 
+<TopicList
+  threads={data.threads}
+  handles={data.handles}
+  accountDid={data.user?.did}
+  forumDid={data.forumDid}
+  showBoard
+  sectionTitle={filtered ? 'Matching topics' : 'Latest activity'}
+  emptyMessage={filtered ? 'No topics match these filters.' : 'No activity yet. Start the first thread.'}
+/>
+
 {#if data.cursor}
-  <p class="atm-more"><a href="?cursor={data.cursor}">older activity →</a></p>
+  <p class="atm-more"><a href={threadFilterHref(data.filters, data.cursor)}>older activity →</a></p>
 {/if}

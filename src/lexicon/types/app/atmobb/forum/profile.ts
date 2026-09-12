@@ -40,6 +40,7 @@ export interface Main {
   ogImage?: BlobRef
   /** Visual preset used by the generated forum landing page social preview. */
   ogTheme?: 'classic' | 'midnight' | 'ocean' | 'forest' | 'plum' | (string & {})
+  homepage?: Homepage
   createdAt?: string
   [k: string]: unknown
 }
@@ -58,6 +59,24 @@ export {
   type Main as Record,
   isMain as isRecord,
   validateMain as validateRecord,
+}
+
+export interface Homepage {
+  $type?: 'app.atmobb.forum.profile#homepage'
+  layout?: 'boards' | 'latest' | 'categories-latest' | (string & {})
+  sidebar?: boolean
+  welcome?: 'classic' | 'compact' | 'hidden' | (string & {})
+  featuredThreads?: string[]
+}
+
+const hashHomepage = 'homepage'
+
+export function isHomepage<V>(v: V) {
+  return is$typed(v, id, hashHomepage)
+}
+
+export function validateHomepage<V>(v: V) {
+  return validate<Homepage & V>(v, id, hashHomepage)
 }
 
 export interface Rank {

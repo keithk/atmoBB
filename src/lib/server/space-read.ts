@@ -11,11 +11,13 @@ import {
   type RichTextBlock,
 } from './appview';
 import { getPublicProfile } from './profiles';
+import type { ThreadFilters } from '$lib/thread-filters';
 
 interface ThreadValue {
   board: string;
   title: string;
   body?: RichTextBlock[];
+  tags?: string[];
   createdAt?: string;
   editedAt?: string;
 }
@@ -103,37 +105,64 @@ export async function readSpaceBoardThreads(
   viewer: string,
   space: string,
   boardMeta: BoardThreads['board'],
+  options: ThreadFilters & { offset?: number; limit?: number } = {},
 ): Promise<BoardThreads> {
   const { threads, replies } = await gatherSpace(viewer, space);
   const agg = replyAggregates(replies);
-  const profiles = await profilesFor([...threads.map((t) => t.author), ...replies.map((r) => r.author)]);
-
-  const rows = threads
+  const filtered = threads.filter((t) => {
+    if (options.q && !t.value.title.toLowerCase().includes(options.q.toLowerCase())) return false;
+    if (options.tag && !(t.value.tags ?? []).some((tag) => tag.toLowerCase() === options.tag)) return false;
+    return true;
+  });
+  const offset = options.offset ?? 0;
+  // Homepage callers aggregate the entire board; only list routes opt into paging.
+  const limit = options.limit ?? filtered.length;
+  const visible = filtered
     .map((t) => {
       const a = agg.get(t.uri);
       const created = t.value.createdAt ?? '';
-      return {
+      return { t, a, created, lastActivity: a && a.last > created ? a.last : created };
+    })
+    .sort((x, y) => y.lastActivity.localeCompare(x.lastActivity) || x.t.uri.localeCompare(y.t.uri))
+    .slice(offset, offset + limit);
+  // Preserve the existing one-profile-per-visible-author behavior. Reply
+  // participant chips use Avatar's DID fallback rather than adding a second
+  // wave of per-participant PDS requests (the space API has no batch profile read).
+  const profiles = await profilesFor(visible.map(({ t }) => t.author));
+
+  const rows = visible.map(({ t, a, created, lastActivity }) => ({
         uri: t.uri,
         cid: t.cid,
         board: t.value.board,
         author: t.author,
         authorProfile: profiles[t.author],
         title: t.value.title,
+        tags: t.value.tags,
         createdAt: created,
         replyCount: a?.count ?? 0,
-        lastActivity: a && a.last > created ? a.last : created,
+        lastActivity,
         lastReplyBy: a?.lastBy,
+        participants: [
+          t.author,
+          ...replies
+            .filter((r) => r.value.thread?.uri === t.uri)
+            .sort((x, y) => (y.value.createdAt ?? '').localeCompare(x.value.createdAt ?? '') || x.author.localeCompare(y.author))
+            .map((r) => r.author),
+        ]
+          .filter((did, index, all) => all.indexOf(did) === index)
+          .slice(0, 5)
+          .map((did) => ({ did, profile: profiles[did] })),
         // Moderation flags are kept in the public index, which never sees
         // space records, so a private board has none to apply.
         locked: false,
         pinned: false,
-      };
-    })
-    .sort((x, y) => (x.lastActivity < y.lastActivity ? 1 : -1));
+      }));
 
   return {
     board: boardMeta ? { ...boardMeta, threadCount: threads.length, replyCount: replies.length } : boardMeta,
     threads: rows,
+    filteredCount: filtered.length,
+    ...(offset + rows.length < filtered.length ? { cursor: String(offset + rows.length) } : {}),
   };
 }
 
@@ -172,6 +201,7 @@ export async function readSpaceThreadPage(viewer: string, threadUri: string): Pr
       value: {
         title: head.value.title,
         body: head.value.body,
+        tags: head.value.tags,
         board: head.value.board,
         createdAt: head.value.createdAt,
         editedAt: head.value.editedAt,
