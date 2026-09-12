@@ -26,6 +26,7 @@ import { parseBBCode } from '$lib/richtext/bbcode';
 import { attachImages, resolveBodyImages } from '$lib/server/richtext';
 import { addMentionFacets } from '$lib/server/mentions';
 import { THREAD_PAGE_SIZE as LIMIT } from '$lib/appview-paths';
+import { handleNotifyVisit } from '$lib/server/notify/visit';
 
 const NS = 'app.atmobb';
 
@@ -35,7 +36,8 @@ async function handleMap(dids: string[]): Promise<Record<string, string>> {
   return Object.fromEntries(entries);
 }
 
-export const load: PageServerLoad = async ({ params, url, parent, locals }) => {
+export const load: PageServerLoad = async ({ params, url, parent, locals, isDataRequest, setHeaders }) => {
+  handleNotifyVisit({ url, isDataRequest, locals, setHeaders });
   const uri = threadUri(params.did, params.rkey);
   const cursor = url.searchParams.get('cursor') ?? undefined;
   const fresh = url.searchParams.has('fresh');

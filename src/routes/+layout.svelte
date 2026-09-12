@@ -107,6 +107,14 @@
               <button class="atm-btn atm-btn--sm">join this forum</button>
             </form>
           {/if}
+          {#if data.notifyOn}
+            <a class="atm-bell" class:atm-bell--unread={data.unread > 0} href="/notifications" aria-label="Notifications, {data.unread} unread">
+              <svg class="atm-bell__glyph" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6 9a6 6 0 0 1 12 0v5l2 3H4l2-3z" /><path d="M10 20a2 2 0 0 0 4 0" />
+              </svg>
+              {#if data.unread > 0}<span class="atm-bell__count">{data.unread}</span>{/if}
+            </a>
+          {/if}
           <a class="atm-userchip" href="/settings/profile" title="Edit your profile">
             <Avatar seed={data.user.did} profile={data.avatarProfile} size={48} />
             <span class="atm-userchip__name">@{data.user.handle}</span>
@@ -222,6 +230,18 @@
   .atm-userchip { display: inline-flex; align-items: center; gap: var(--space-2); text-decoration: none; border-radius: var(--radius-md); }
   .atm-userchip:hover .atm-userchip__name { color: var(--forum-ink); }
   .atm-userchip__name { font: var(--type-handle); color: var(--forum-ink-soft); }
+  .atm-bell {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1);
+    border-radius: var(--radius-md);
+    color: var(--forum-ink-soft);
+    text-decoration: none;
+  }
+  .atm-bell:hover { color: var(--forum-ink); text-decoration: none; }
+  .atm-bell--unread { color: var(--forum-link); }
+  .atm-bell__count { font: var(--type-handle); font-variant-numeric: tabular-nums; }
 
   .atm-masthead__hero {
     padding: var(--space-6) var(--space-5) var(--space-5);

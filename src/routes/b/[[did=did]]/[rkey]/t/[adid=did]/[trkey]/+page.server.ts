@@ -19,6 +19,7 @@ import { parseBBCode } from '$lib/richtext/bbcode';
 import { attachImages, resolveBodyImages } from '$lib/server/richtext';
 import { addMentionFacets } from '$lib/server/mentions';
 import { banMessage, bannedFrom } from '$lib/server/standing';
+import { handleNotifyVisit } from '$lib/server/notify/visit';
 
 const QUOTE = 'app.atmobb.richtext.block#quote';
 const LIMIT = 25;
@@ -31,7 +32,8 @@ function threadRef(params: { did?: string; rkey: string; adid: string; trkey: st
   return { space, uri, boardPath };
 }
 
-export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
+export const load: PageServerLoad = async ({ params, locals, parent, url, isDataRequest, setHeaders }) => {
+  handleNotifyVisit({ url, isDataRequest, locals, setHeaders });
   const { space, uri, boardPath } = threadRef(params);
   // Membership gates the whole page; non-members bounce to the locked board.
   if (!locals.user || !(await isSpaceMember(space, locals.user.did))) {
