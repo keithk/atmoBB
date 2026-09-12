@@ -16,6 +16,10 @@ const sql = postgres("postgres://happyview:happyview@127.0.0.1:5433/happyview");
 // re-running duplicates boards/threads because rkeys are fresh tids.
 if (process.env.RESET) {
   await sql`DELETE FROM happyview_record_refs WHERE source_uri LIKE 'at://did:plc:atmobbdev%'`;
+  // Watches point at dev boards but the admin's live under a real DID, so
+  // match them on the board rather than the signer.
+  await sql`DELETE FROM happyview_record_refs WHERE collection = ${NS + ".forum.watch"} AND target_uri LIKE 'at://did:plc:atmobbdev%'`;
+  await sql`DELETE FROM happyview_records WHERE collection = ${NS + ".forum.watch"} AND (record::jsonb)->>'board' LIKE 'at://did:plc:atmobbdev%'`;
   await sql`DELETE FROM happyview_records WHERE did LIKE 'did:plc:atmobbdev%' AND collection LIKE ${NS + ".%"}`;
   await sql`DELETE FROM atmobb_thread_stats`;
   await sql`DELETE FROM atmobb_post_counts`;
@@ -215,6 +219,30 @@ await insert([
     role: "moderator",
     createdAt: iso(NOW - SPAN + 9000),
   }, NOW - SPAN + 9000),
+]);
+
+// Board watches — like memberships, records in the watcher's own repo. The
+// admin watches a few boards; a synthetic member watches one while banned
+// forum-wide for ten minutes, so getWatchers can be seen hiding them and,
+// once the ban lapses, listing them again. The rebuild below derives the
+// atmobb_bans row from the ban record, as setup's trigger would have.
+const BANNED_DID = "did:plc:atmobbdevbanned";
+await insert([
+  ...boardRows.slice(0, 3).map((b, i) => makeRow(ADMIN_DID, `${NS}.forum.watch`, null, {
+    board: b.uri,
+    createdAt: iso(NOW - 5000 + i),
+  }, NOW - 5000 + i)),
+  makeRow(BANNED_DID, `${NS}.forum.watch`, null, {
+    board: boardRows[0].uri,
+    createdAt: iso(NOW - 4000),
+  }, NOW - 4000),
+  makeRow(FORUM_DID, `${NS}.moderation.action`, null, {
+    subject: { did: BANNED_DID },
+    action: "ban",
+    reason: "seeded test: banned watcher, lifts in ten minutes",
+    createdAt: iso(NOW - 3000),
+    expiresAt: iso(NOW + 10 * 60 * 1000),
+  }, NOW - 3000),
 ]);
 
 // Threads

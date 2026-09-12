@@ -5,7 +5,7 @@
     "main": {
       "type": "permission-set",
       "title": "atmobb",
-      "detail": "Post threads and replies, join forums, vote in polls, and customize your profile and signature.",
+      "detail": "Post threads and replies, join forums, watch boards, vote in polls, customize your profile and signature, and ask atmo.pub to deliver your notifications.",
       "permissions": [
         {
           "type": "permission",
@@ -15,9 +15,16 @@
             "app.atmobb.discussion.reply",
             "app.atmobb.forum.membership",
             "app.atmobb.forum.accessRequest",
+            "app.atmobb.forum.watch",
             "app.atmobb.poll.vote",
             "app.atmobb.actor.profile"
           ]
+        },
+        {
+          "type": "permission",
+          "resource": "rpc",
+          "lxm": ["pub.atmo.notify.requestPermission"],
+          "inheritAud": true
         }
       ]
     }

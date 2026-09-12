@@ -1053,6 +1053,69 @@ export const schemaDict = {
       },
     },
   },
+  AppAtmobbForumGetWatchers: {
+    lexicon: 1,
+    id: 'app.atmobb.forum.getWatchers',
+    defs: {
+      main: {
+        type: 'query',
+        description:
+          'Members watching a board, minus anyone the forum has banned. Ordered by DID.',
+        parameters: {
+          type: 'params',
+          required: ['forum', 'board'],
+          properties: {
+            forum: {
+              type: 'string',
+              format: 'did',
+            },
+            board: {
+              type: 'string',
+              format: 'at-uri',
+            },
+            limit: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 500,
+              default: 100,
+            },
+            cursor: {
+              type: 'string',
+            },
+          },
+        },
+        output: {
+          encoding: 'application/json',
+          schema: {
+            type: 'object',
+            required: ['watchers'],
+            properties: {
+              watchers: {
+                type: 'array',
+                items: {
+                  type: 'ref',
+                  ref: 'lex:app.atmobb.forum.getWatchers#watcher',
+                },
+              },
+              cursor: {
+                type: 'string',
+              },
+            },
+          },
+        },
+      },
+      watcher: {
+        type: 'object',
+        required: ['did'],
+        properties: {
+          did: {
+            type: 'string',
+            format: 'did',
+          },
+        },
+      },
+    },
+  },
   AppAtmobbForumMembership: {
     lexicon: 1,
     id: 'app.atmobb.forum.membership',
@@ -1263,6 +1326,32 @@ export const schemaDict = {
             type: 'blob',
             accept: ['font/woff', 'font/woff2'],
             maxSize: 2000000,
+          },
+        },
+      },
+    },
+  },
+  AppAtmobbForumWatch: {
+    lexicon: 1,
+    id: 'app.atmobb.forum.watch',
+    defs: {
+      main: {
+        type: 'record',
+        description:
+          "Watches a board for new threads. Lives in the member's own repo, pointing at the board's URI — watching is an act of the member, unwatching is deleting this record.",
+        key: 'tid',
+        record: {
+          type: 'object',
+          required: ['board', 'createdAt'],
+          properties: {
+            board: {
+              type: 'string',
+              format: 'at-uri',
+            },
+            createdAt: {
+              type: 'string',
+              format: 'datetime',
+            },
           },
         },
       },
@@ -2133,9 +2222,11 @@ export const ids = {
   AppAtmobbForumGetStaff: 'app.atmobb.forum.getStaff',
   AppAtmobbForumGetTopic: 'app.atmobb.forum.getTopic',
   AppAtmobbForumGetTopics: 'app.atmobb.forum.getTopics',
+  AppAtmobbForumGetWatchers: 'app.atmobb.forum.getWatchers',
   AppAtmobbForumMembership: 'app.atmobb.forum.membership',
   AppAtmobbForumModerator: 'app.atmobb.forum.moderator',
   AppAtmobbForumProfile: 'app.atmobb.forum.profile',
+  AppAtmobbForumWatch: 'app.atmobb.forum.watch',
   AppAtmobbModerationAction: 'app.atmobb.moderation.action',
   AppAtmobbModerationGetLog: 'app.atmobb.moderation.getLog',
   AppAtmobbModerationGetStanding: 'app.atmobb.moderation.getStanding',

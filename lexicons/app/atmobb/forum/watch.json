@@ -1,0 +1,19 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.forum.watch",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "Watches a board for new threads. Lives in the member's own repo, pointing at the board's URI — watching is an act of the member, unwatching is deleting this record.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["board", "createdAt"],
+        "properties": {
+          "board": { "type": "string", "format": "at-uri" },
+          "createdAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    }
+  }
+}

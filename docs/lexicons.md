@@ -12,6 +12,8 @@ If you're self-hosting, you don't publish lexicons at all. The `app.atmobb.*` sc
 
 You only publish schemas if you're maintaining your own namespace or an incompatible fork.
 
+Board watching added `app.atmobb.forum.watch` and gave `app.atmobb.authForum` two more permissions: writing watch records, and an `rpc` grant for `pub.atmo.notify.requestPermission` against `did:web:relay.atmo.pub`. I publish both from the authority account, `goat lex publish` for the new record and `goat lex publish --update` for the set. Self-hosters still publish nothing; rerunning `appview/setup.sh` resolves the new collection like the others, and PDSes pick up the changed set on their own.
+
 ## How resolution works
 
 An NSID like `app.atmobb.discussion.thread` maps to `discussion.atmobb.app`. Resolution reads the `_lexicon.discussion.atmobb.app` TXT record, which contains `did=<authority DID>`, then fetches the `com.atproto.lexicon.schema` record whose rkey is the NSID from that DID's repo.

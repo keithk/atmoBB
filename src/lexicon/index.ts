@@ -28,9 +28,11 @@ import * as AppAtmobbForumGetMembers from './types/app/atmobb/forum/getMembers.j
 import * as AppAtmobbForumGetStaff from './types/app/atmobb/forum/getStaff.js'
 import * as AppAtmobbForumGetTopic from './types/app/atmobb/forum/getTopic.js'
 import * as AppAtmobbForumGetTopics from './types/app/atmobb/forum/getTopics.js'
+import * as AppAtmobbForumGetWatchers from './types/app/atmobb/forum/getWatchers.js'
 import * as AppAtmobbForumMembership from './types/app/atmobb/forum/membership.js'
 import * as AppAtmobbForumModerator from './types/app/atmobb/forum/moderator.js'
 import * as AppAtmobbForumProfile from './types/app/atmobb/forum/profile.js'
+import * as AppAtmobbForumWatch from './types/app/atmobb/forum/watch.js'
 import * as AppAtmobbModerationAction from './types/app/atmobb/moderation/action.js'
 import * as AppAtmobbModerationGetLog from './types/app/atmobb/moderation/getLog.js'
 import * as AppAtmobbModerationGetStanding from './types/app/atmobb/moderation/getStanding.js'
@@ -64,9 +66,11 @@ export * as AppAtmobbForumGetMembers from './types/app/atmobb/forum/getMembers.j
 export * as AppAtmobbForumGetStaff from './types/app/atmobb/forum/getStaff.js'
 export * as AppAtmobbForumGetTopic from './types/app/atmobb/forum/getTopic.js'
 export * as AppAtmobbForumGetTopics from './types/app/atmobb/forum/getTopics.js'
+export * as AppAtmobbForumGetWatchers from './types/app/atmobb/forum/getWatchers.js'
 export * as AppAtmobbForumMembership from './types/app/atmobb/forum/membership.js'
 export * as AppAtmobbForumModerator from './types/app/atmobb/forum/moderator.js'
 export * as AppAtmobbForumProfile from './types/app/atmobb/forum/profile.js'
+export * as AppAtmobbForumWatch from './types/app/atmobb/forum/watch.js'
 export * as AppAtmobbModerationAction from './types/app/atmobb/moderation/action.js'
 export * as AppAtmobbModerationGetLog from './types/app/atmobb/moderation/getLog.js'
 export * as AppAtmobbModerationGetStanding from './types/app/atmobb/moderation/getStanding.js'
@@ -483,6 +487,7 @@ export class AppAtmobbForumNS {
   membership: AppAtmobbForumMembershipRecord
   moderator: AppAtmobbForumModeratorRecord
   profile: AppAtmobbForumProfileRecord
+  watch: AppAtmobbForumWatchRecord
 
   constructor(client: XrpcClient) {
     this._client = client
@@ -492,6 +497,7 @@ export class AppAtmobbForumNS {
     this.membership = new AppAtmobbForumMembershipRecord(client)
     this.moderator = new AppAtmobbForumModeratorRecord(client)
     this.profile = new AppAtmobbForumProfileRecord(client)
+    this.watch = new AppAtmobbForumWatchRecord(client)
   }
 
   getAccessRequests(
@@ -572,6 +578,18 @@ export class AppAtmobbForumNS {
   ): Promise<AppAtmobbForumGetTopics.Response> {
     return this._client.call(
       'app.atmobb.forum.getTopics',
+      params,
+      undefined,
+      opts,
+    )
+  }
+
+  getWatchers(
+    params?: AppAtmobbForumGetWatchers.QueryParams,
+    opts?: AppAtmobbForumGetWatchers.CallOptions,
+  ): Promise<AppAtmobbForumGetWatchers.Response> {
+    return this._client.call(
+      'app.atmobb.forum.getWatchers',
       params,
       undefined,
       opts,
@@ -1073,6 +1091,85 @@ export class AppAtmobbForumProfileRecord {
       'com.atproto.repo.deleteRecord',
       undefined,
       { collection: 'app.atmobb.forum.profile', ...params },
+      { headers },
+    )
+  }
+}
+
+export class AppAtmobbForumWatchRecord {
+  _client: XrpcClient
+
+  constructor(client: XrpcClient) {
+    this._client = client
+  }
+
+  async list(
+    params: OmitKey<ComAtprotoRepoListRecords.QueryParams, 'collection'>,
+  ): Promise<{
+    cursor?: string
+    records: { uri: string; value: AppAtmobbForumWatch.Record }[]
+  }> {
+    const res = await this._client.call('com.atproto.repo.listRecords', {
+      collection: 'app.atmobb.forum.watch',
+      ...params,
+    })
+    return res.data
+  }
+
+  async get(
+    params: OmitKey<ComAtprotoRepoGetRecord.QueryParams, 'collection'>,
+  ): Promise<{ uri: string; cid: string; value: AppAtmobbForumWatch.Record }> {
+    const res = await this._client.call('com.atproto.repo.getRecord', {
+      collection: 'app.atmobb.forum.watch',
+      ...params,
+    })
+    return res.data
+  }
+
+  async create(
+    params: OmitKey<
+      ComAtprotoRepoCreateRecord.InputSchema,
+      'collection' | 'record'
+    >,
+    record: Un$Typed<AppAtmobbForumWatch.Record>,
+    headers?: Record<string, string>,
+  ): Promise<{ uri: string; cid: string }> {
+    const collection = 'app.atmobb.forum.watch'
+    const res = await this._client.call(
+      'com.atproto.repo.createRecord',
+      undefined,
+      { collection, ...params, record: { ...record, $type: collection } },
+      { encoding: 'application/json', headers },
+    )
+    return res.data
+  }
+
+  async put(
+    params: OmitKey<
+      ComAtprotoRepoPutRecord.InputSchema,
+      'collection' | 'record'
+    >,
+    record: Un$Typed<AppAtmobbForumWatch.Record>,
+    headers?: Record<string, string>,
+  ): Promise<{ uri: string; cid: string }> {
+    const collection = 'app.atmobb.forum.watch'
+    const res = await this._client.call(
+      'com.atproto.repo.putRecord',
+      undefined,
+      { collection, ...params, record: { ...record, $type: collection } },
+      { encoding: 'application/json', headers },
+    )
+    return res.data
+  }
+
+  async delete(
+    params: OmitKey<ComAtprotoRepoDeleteRecord.InputSchema, 'collection'>,
+    headers?: Record<string, string>,
+  ): Promise<void> {
+    await this._client.call(
+      'com.atproto.repo.deleteRecord',
+      undefined,
+      { collection: 'app.atmobb.forum.watch', ...params },
       { headers },
     )
   }
