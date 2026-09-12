@@ -104,7 +104,7 @@ function handle()
            s.reply_count, s.last_activity, s.last_reply_did, s.board_uri,
            s.locked, (s.pinned AND s.board_uri = $1) AS pinned,
            tr.cid AS thread_cid,
-           (tr.record::jsonb)->'tags' AS tags,
+           ((tr.record::jsonb)->'tags')::text AS tags,
            (opf.record::jsonb)->>'name' AS origin_forum_name,
            ap.record AS author_profile,
            pa.participants
@@ -117,7 +117,7 @@ function handle()
       ON ap.did = s.author_did AND ap.collection = $8 AND ap.rkey = 'self'
     LEFT JOIN LATERAL (
       SELECT jsonb_agg(jsonb_build_object('did', picked.did, 'profile', picked.profile)
-                       ORDER BY picked.priority, picked.last_at DESC, picked.did) AS participants
+                       ORDER BY picked.priority, picked.last_at DESC, picked.did)::text AS participants
       FROM (
         SELECT did, profile, priority, last_at
         FROM (

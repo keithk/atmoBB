@@ -43,7 +43,7 @@ function handle()
            (b.record::jsonb)->>'name' AS board_name,
            (opf.record::jsonb)->>'name' AS origin_forum_name,
            ap.record AS author_profile,
-           (tr.record::jsonb)->'tags' AS tags,
+           ((tr.record::jsonb)->'tags')::text AS tags,
            pa.participants
     FROM atmobb_thread_stats s
     LEFT JOIN happyview_records b ON b.uri = s.board_uri
@@ -54,7 +54,7 @@ function handle()
       ON ap.did = s.author_did AND ap.collection = $1 AND ap.rkey = 'self'
     LEFT JOIN LATERAL (
       SELECT jsonb_agg(jsonb_build_object('did', picked.did, 'profile', picked.profile)
-                       ORDER BY picked.priority, picked.last_at DESC, picked.did) AS participants
+                       ORDER BY picked.priority, picked.last_at DESC, picked.did)::text AS participants
       FROM (
         SELECT did, profile, priority, last_at
         FROM (
