@@ -459,6 +459,25 @@ export interface Directory {
 
 export const getDirectory = () => xrpc<Directory>('GET', `${NS}.forum.getDirectory`);
 
+interface Watchers {
+  watchers: { did: string }[];
+  cursor?: string;
+}
+
+/** Every watcher of a board, paged through to the end; banned members are already left out. */
+export async function getWatchers(forum: string, board: string): Promise<string[]> {
+  const out: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page: Watchers = await xrpc<Watchers>('GET', `${NS}.forum.getWatchers`, {
+      params: { forum, board, limit: '100', ...(cursor ? { cursor } : {}) },
+    });
+    out.push(...(page.watchers ?? []).map((w) => w.did));
+    cursor = page.cursor;
+  } while (cursor);
+  return out;
+}
+
 export const getMembers = (cursor?: string, limit = 50, forum = FORUM_DID()) =>
   xrpc<Members>('GET', `${NS}.forum.getMembers`, {
     params: { forum, limit: String(limit), ...(cursor ? { cursor } : {}) },

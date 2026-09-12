@@ -1,6 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { getBoardThreads, getThreadPage, threadUri, resolveHandle, FORUM_DID } from '$lib/server/appview';
+import { getBoardThreads, getThreadPage, threadUri, resolveHandle, FORUM_DID, type ThreadPage } from '$lib/server/appview';
 import { castVote, createReply, deletePost, retractVote, updatePost } from '$lib/server/pds';
 import { pollClosed } from '$lib/poll';
 import { banMessage, bannedFrom } from '$lib/server/standing';
@@ -28,8 +28,45 @@ import { addMentionFacets } from '$lib/server/mentions';
 import { THREAD_PAGE_SIZE as LIMIT } from '$lib/appview-paths';
 import { handleNotifyVisit } from '$lib/server/notify/visit';
 import { readMember } from '$lib/server/notify/store';
+import { notifyForPost } from '$lib/server/notify/dispatch';
 
 const NS = 'app.atmobb';
+
+// Runs after the reply is written and never awaited by the action, so the
+// index reads here add nothing to the post; notifyForPost logs its own failures.
+async function notifyReply(
+  record: Parameters<typeof createReply>[1],
+  replyUri: string,
+  thread: ThreadPage['thread'],
+  user: { did: string; handle: string },
+) {
+  const threadRef = record.thread.uri;
+  // A parent (or quote subject) proves it is in this thread only by showing
+  // up on the thread's page that holds it: one index read, the cheapest check
+  // that lists it. Subjects on other pages stay unconfirmed and are ignored.
+  const target = record.parent?.uri ?? record.body.find((b) => b.subject)?.subject?.uri;
+  let threadPostUris: string[] = [];
+  if (target && target !== threadRef) {
+    try {
+      const page = await getThreadPage(threadRef, { reply: target });
+      threadPostUris = [threadRef, ...page.replies.map((r) => r.uri)];
+    } catch (err) {
+      console.error(`[notify] could not confirm ${target} is in ${threadRef}:`, err);
+    }
+  }
+  await notifyForPost({
+    record,
+    uri: replyUri,
+    threadUri: threadRef,
+    // Not indexed yet: nothing confirms the starter, so only mentions go out.
+    threadTitle: thread?.value.title ?? 'a thread',
+    boardUri: thread?.value.board,
+    authorDid: user.did,
+    authorHandle: user.handle,
+    threadPostUris,
+    skipThreadStarter: !thread,
+  });
+}
 
 async function handleMap(dids: string[]): Promise<Record<string, string>> {
   const unique = [...new Set(dids)];
@@ -192,11 +229,13 @@ export const actions: Actions = {
     if (ban) return fail(403, { message: banMessage(ban) });
 
     try {
-      await createReply(locals.user.did, {
+      const record = {
         thread: { uri, cid: threadCid },
         ...(parentUri && parentCid && parentUri !== uri ? { parent: { uri: parentUri, cid: parentCid } } : {}),
         body: await addMentionFacets(attachImages(parseBBCode(body), images)),
-      });
+      };
+      const { uri: replyUri } = await createReply(locals.user.did, record);
+      void notifyReply(record, replyUri, thread, locals.user);
       return { posted: true };
     } catch (e) {
       return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t post your reply. Try again.' });

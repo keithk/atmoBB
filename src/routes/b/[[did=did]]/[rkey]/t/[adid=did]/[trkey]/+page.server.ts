@@ -8,6 +8,7 @@ import {
   isSpaceMember,
   THREAD_NSID,
   resolveHandle,
+  type ThreadPage,
 } from '$lib/server/appview';
 import { readSpaceThreadPage } from '$lib/server/space-read';
 import { createReply, deletePost, updatePost } from '$lib/server/pds';
@@ -21,6 +22,7 @@ import { addMentionFacets } from '$lib/server/mentions';
 import { banMessage, bannedFrom } from '$lib/server/standing';
 import { handleNotifyVisit } from '$lib/server/notify/visit';
 import { readMember } from '$lib/server/notify/store';
+import { notifyForPost } from '$lib/server/notify/dispatch';
 
 const QUOTE = 'app.atmobb.richtext.block#quote';
 const LIMIT = 25;
@@ -31,6 +33,31 @@ function threadRef(params: { did?: string; rkey: string; adid: string; trkey: st
   const uri = `${space}/${params.adid}/${THREAD_NSID}/${params.trkey}`;
   const boardPath = `/b/${params.did ? `${params.did}/` : ''}${params.rkey}`;
   return { space, uri, boardPath };
+}
+
+// Runs after the reply is written and never awaited by the action. The whole
+// space thread is read as the member (heavier than the head record alone),
+// because its reply list is the only thing that proves a parent or quote
+// subject belongs to this thread; space threads don't paginate, so it is
+// complete. notifyForPost logs its own failures.
+async function notifyReply(record: Parameters<typeof createReply>[1], replyUri: string, user: { did: string; handle: string }) {
+  const threadRef = record.thread.uri;
+  let page: ThreadPage | undefined;
+  try {
+    page = await readSpaceThreadPage(user.did, threadRef);
+  } catch (err) {
+    console.error(`[notify] could not read ${threadRef} for notifications:`, err);
+  }
+  await notifyForPost({
+    record,
+    uri: replyUri,
+    threadUri: threadRef,
+    threadTitle: page?.thread?.value.title ?? 'a thread',
+    authorDid: user.did,
+    authorHandle: user.handle,
+    threadPostUris: page ? [threadRef, ...page.replies.map((r) => r.uri)] : [],
+    skipThreadStarter: !page?.thread,
+  });
 }
 
 export const load: PageServerLoad = async ({ params, locals, parent, url, isDataRequest, setHeaders }) => {
@@ -141,11 +168,13 @@ export const actions: Actions = {
     const parentCid = String(form.get('parentCid') ?? '');
     if (!body) return fail(400, { message: 'Write a reply before posting.' });
     try {
-      await createReply(locals.user.did, {
+      const record = {
         thread: { uri, cid: threadCid },
         ...(parentUri && parentCid && parentUri !== uri ? { parent: { uri: parentUri, cid: parentCid } } : {}),
         body: await addMentionFacets(attachImages(parseBBCode(body), images)),
-      });
+      };
+      const { uri: replyUri } = await createReply(locals.user.did, record);
+      void notifyReply(record, replyUri, locals.user);
       return { posted: true };
     } catch (e) {
       return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t post your reply. Try again.' });

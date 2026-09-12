@@ -11,6 +11,7 @@ import {
   spaceOfBoard,
   isSpaceMember,
   getBoardAccess,
+  getBoardIndex,
 } from '$lib/server/appview';
 import { readSpaceBoardThreads } from '$lib/server/space-read';
 import {
@@ -25,12 +26,13 @@ import {
 } from '$lib/server/pds';
 import { boardModerator, canModerate } from '$lib/server/admin';
 import { createForumRecord } from '$lib/server/forum-repo';
-import { parseBBCode } from '$lib/richtext/bbcode';
+import { parseBBCode, type RichTextBlock } from '$lib/richtext/bbcode';
 import { attachImages } from '$lib/server/richtext';
 import { addMentionFacets } from '$lib/server/mentions';
 import { isThreadAction } from '$lib/moderation';
 import { parsePoll } from '$lib/poll';
 import { banMessage, bannedFrom } from '$lib/server/standing';
+import { notifyForPost } from '$lib/server/notify/dispatch';
 
 const NS = 'app.atmobb';
 const LIMIT = 25;
@@ -97,6 +99,31 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
     ...page,
   };
 };
+
+// Runs after the thread is written and never awaited by the action. The
+// board's name comes from the index; when it can't be had, the rkey stands in
+// rather than holding anything up. notifyForPost logs its own failures.
+async function notifyThread(
+  record: { board: string; title: string; body: RichTextBlock[] },
+  uri: string,
+  rkey: string,
+  user: { did: string; handle: string },
+) {
+  const boardName = await getBoardIndex(FORUM_DID()).then(
+    (index) => index.boards.find((b) => b.uri === record.board)?.value.name,
+    () => undefined,
+  );
+  await notifyForPost({
+    record: { body: record.body },
+    uri,
+    threadUri: uri,
+    threadTitle: record.title,
+    boardUri: record.board,
+    boardName: boardName ?? rkey,
+    authorDid: user.did,
+    authorHandle: user.handle,
+  });
+}
 
 // Watching and unwatching share the posting refusals: log in, not banned.
 async function toggleWatch(
@@ -177,6 +204,7 @@ export const actions: Actions = {
     } catch (e) {
       return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t post your thread. Try again.' });
     }
+    void notifyThread({ board, title, body: blocks }, uri, params.rkey, locals.user);
     redirect(303, `${threadPath(uri)}?fresh=1`);
   },
 

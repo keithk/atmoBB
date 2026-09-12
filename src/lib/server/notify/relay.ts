@@ -44,7 +44,8 @@ export interface SendInput {
   category?: string;
   categoryDescription?: string;
   threadKey?: string;
-  actors?: string[];
+  // pub.atmo.notify.send#actor: the people behind the alert, for the avatar stack.
+  actors?: { did: string; handle?: string }[];
 }
 
 export interface SendResult {
