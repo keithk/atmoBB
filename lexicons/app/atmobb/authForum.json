@@ -5,7 +5,7 @@
     "main": {
       "type": "permission-set",
       "title": "atmobb",
-      "detail": "Post threads and replies, join forums, watch boards, vote in polls, customize your profile and signature, and ask atmo.pub to deliver your notifications.",
+      "detail": "Post threads and replies, join forums, watch boards, vote in polls, and customize your profile and signature.",
       "permissions": [
         {
           "type": "permission",
@@ -19,12 +19,6 @@
             "app.atmobb.poll.vote",
             "app.atmobb.actor.profile"
           ]
-        },
-        {
-          "type": "permission",
-          "resource": "rpc",
-          "lxm": ["pub.atmo.notify.requestPermission"],
-          "inheritAud": true
         }
       ]
     }

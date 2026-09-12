@@ -86,8 +86,8 @@ export async function enableNotifications({
     token = await deps.getServiceAuth(did);
   } catch (err) {
     await deps.store.setStatus(did, 'off');
-    if (isConsentRefusal(err)) return { outcome: 'reconsent' };
     console.warn('[notify] getServiceAuth failed:', err instanceof Error ? err.message : err);
+    if (isConsentRefusal(err)) return { outcome: 'reconsent' };
     return { outcome: 'pds-error', message: "Couldn't reach your account's server. Try again." };
   }
   const result = await deps.requestPermission(token, permissionInput(deps.senderDid, details));

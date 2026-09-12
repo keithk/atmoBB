@@ -17,12 +17,14 @@ import { join } from 'node:path';
 // categories, mounts, staff, moderation) when a sysop connects it. Client
 // metadata must carry the union; each authorize request asks for its subset.
 //
-// authForum's rpc permission (asking atmo.pub to deliver notifications) has
-// no audience of its own: a permission set may not name a DID, so the relay
-// is supplied here on the include, percent-encoded fragment and all.
+// Asking atmo.pub to deliver notifications is an rpc grant for a method
+// outside app.atmobb, and a permission set may only carry methods under its
+// own authority (the PDS drops the rest when it expands the include), so it
+// is requested as a granular scope of its own, relay audience and all.
 export const NOTIFY_RELAY_DID = 'did:web:relay.atmo.pub';
 export const NOTIFY_RELAY_AUD = `${NOTIFY_RELAY_DID}#notif_relay`;
-const MEMBER_SET = `include:app.atmobb.authForum?aud=${encodeURIComponent(NOTIFY_RELAY_AUD)}`;
+const NOTIFY_SCOPE = `rpc:pub.atmo.notify.requestPermission?aud=${encodeURIComponent(NOTIFY_RELAY_AUD)}`;
+const MEMBER_SET = `include:app.atmobb.authForum ${NOTIFY_SCOPE}`;
 export const MEMBER_SCOPE = `atproto ${MEMBER_SET} blob:image/*`;
 export const SYSOP_SCOPE = 'atproto include:app.atmobb.authSysop blob:image/* blob:font/*';
 export const OAUTH_SCOPE =

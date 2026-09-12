@@ -138,14 +138,12 @@
               <button class="atm-btn atm-btn--sm">join this forum</button>
             </form>
           {/if}
-          {#if data.notifyOn}
-            <a class="atm-bell" class:atm-bell--unread={data.unread > 0} href="/notifications" aria-label="Notifications, {data.unread} unread">
+          <a class="atm-bell" class:atm-bell--unread={data.unread > 0} href="/notifications" aria-label="Notifications, {data.unread} unread">
               <svg class="atm-bell__glyph" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M6 9a6 6 0 0 1 12 0v5l2 3H4l2-3z" /><path d="M10 20a2 2 0 0 0 4 0" />
               </svg>
               {#if data.unread > 0}<span class="atm-bell__count">{data.unread}</span>{/if}
             </a>
-          {/if}
           <a class="atm-userchip" href="/settings/profile" title="Edit your profile">
             <Avatar seed={data.user.did} profile={data.avatarProfile} size={48} />
             <span class="atm-userchip__name">@{data.user.handle}</span>

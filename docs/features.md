@@ -16,7 +16,7 @@ Everything an atmobb forum does today. What I haven't built is listed at the [bo
 
 ## Members and identity
 
-- **atproto login, no local accounts.** Members sign in with any atproto account over OAuth. The consent screen requests a published permission set (`app.atmobb.authForum`) scoped to exactly the six collections atmobb writes.
+- **atproto login, no local accounts.** Members sign in with any atproto account over OAuth. The consent screen requests a published permission set (`app.atmobb.authForum`) scoped to exactly the seven collections atmobb writes, plus a separate `rpc` scope that lets the forum ask atmo.pub to deliver notifications.
 - **One profile, every forum.** Display name, bio, avatar, signature, user title, pronouns, and website live in a single `app.atmobb.actor.profile` record in the member's own repo, so the same profile follows them to every atmobb forum.
 - **Signatures.** Up to three blocks of text and images, phpBB style, rendered under every post, with a live preview in settings.
 - **Avatars.** Upload an image (1 MB), or fall back to a generated monogram with a hue seeded from the DID. Blobs are fetched by resolving the DID's *current* PDS, so avatars survive migrations.
