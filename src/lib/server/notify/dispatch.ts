@@ -113,10 +113,8 @@ async function dispatch(input: NotifyForPostInput, deps: DispatchDeps) {
     recipients = recipients.filter((r) => members.has(r.did));
   }
 
-  const on: Recipient[] = [];
-  for (const r of recipients) {
-    if ((await deps.store.readMember(r.did))?.status === 'on') on.push(r);
-  }
+  const states = await Promise.all(recipients.map((r) => deps.store.readMember(r.did)));
+  const on = recipients.filter((_, i) => states[i]?.status === 'on');
   if (!on.length) return;
 
   const sender = deps.senderDid();
@@ -131,8 +129,11 @@ async function dispatch(input: NotifyForPostInput, deps: DispatchDeps) {
     permalink: `${appUrl}${postPath(input.threadUri, input.uri)}`,
   };
   const at = new Date(deps.now()).toISOString();
+  let written = 0;
 
-  for (const r of on) {
+  // Each recipient has its own state file and its own relay call, so they
+  // proceed together; a slow relay costs one timeout, not one per recipient.
+  const notifyOne = async (r: Recipient) => {
     try {
       // The bell is inside the forum, so the local entry keeps the real words
       // and link even when the relay payload must not.
@@ -140,6 +141,7 @@ async function dispatch(input: NotifyForPostInput, deps: DispatchDeps) {
       const key = `${input.authorDid}|${r.did}`;
       const last = lastSend.get(key);
       const cooling = last !== undefined && deps.now() - last < COOLDOWN_MS;
+      if (last !== undefined && !cooling) lastSend.delete(key);
       const delivery: NotifyDelivery = !sender || cooling ? 'skipped' : 'pending';
       const entry = await deps.store.appendEntry(r.did, {
         at,
@@ -150,8 +152,8 @@ async function dispatch(input: NotifyForPostInput, deps: DispatchDeps) {
         read: false,
         delivery,
       });
-      await deps.store.bumpStats('sent');
-      if (delivery === 'skipped') continue;
+      written += 1;
+      if (delivery === 'skipped') return;
 
       lastSend.set(key, deps.now());
       const payload = space
@@ -172,5 +174,8 @@ async function dispatch(input: NotifyForPostInput, deps: DispatchDeps) {
     } catch (err) {
       console.error(`[notify] could not notify ${r.did} about ${input.uri}:`, err);
     }
-  }
+  };
+
+  await Promise.all(on.map(notifyOne));
+  if (written) await deps.store.bumpStats('sent', written);
 }

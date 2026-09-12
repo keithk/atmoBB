@@ -21,7 +21,7 @@ import { attachImages, resolveBodyImages } from '$lib/server/richtext';
 import { addMentionFacets } from '$lib/server/mentions';
 import { banMessage, bannedFrom } from '$lib/server/standing';
 import { handleNotifyVisit } from '$lib/server/notify/visit';
-import { readMember } from '$lib/server/notify/store';
+import { neverAskedAboutNotifications } from '$lib/server/notify/store';
 import { notifyForPost } from '$lib/server/notify/dispatch';
 
 const QUOTE = 'app.atmobb.richtext.block#quote';
@@ -41,21 +41,21 @@ function threadRef(params: { did?: string; rkey: string; adid: string; trkey: st
 // subject belongs to this thread; space threads don't paginate, so it is
 // complete. notifyForPost logs its own failures.
 async function notifyReply(record: Parameters<typeof createReply>[1], replyUri: string, user: { did: string; handle: string }) {
-  const threadRef = record.thread.uri;
+  const threadUri = record.thread.uri;
   let page: ThreadPage | undefined;
   try {
-    page = await readSpaceThreadPage(user.did, threadRef);
+    page = await readSpaceThreadPage(user.did, threadUri);
   } catch (err) {
-    console.error(`[notify] could not read ${threadRef} for notifications:`, err);
+    console.error(`[notify] could not read ${threadUri} for notifications:`, err);
   }
   await notifyForPost({
     record,
     uri: replyUri,
-    threadUri: threadRef,
+    threadUri,
     threadTitle: page?.thread?.value.title ?? 'a thread',
     authorDid: user.did,
     authorHandle: user.handle,
-    threadPostUris: page ? [threadRef, ...page.replies.map((r) => r.uri)] : [],
+    threadPostUris: page ? [threadUri, ...page.replies.map((r) => r.uri)] : [],
     skipThreadStarter: !page?.thread,
   });
 }
@@ -134,7 +134,7 @@ export const load: PageServerLoad = async ({ params, locals, parent, url, isData
     boardName,
     // KTD11: the first-post prompt keys on "no notification state file yet".
     // A store error just means no prompt; it never breaks the page.
-    offerNotifications: await readMember(locals.user.did).then((m) => m === null, () => false),
+    offerNotifications: await neverAskedAboutNotifications(locals.user.did),
     handles,
     presence,
     ranks: forum?.ranks ?? [],

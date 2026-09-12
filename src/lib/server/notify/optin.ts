@@ -56,11 +56,6 @@ export function canRetryTurnOn(member: MemberNotifyState | null, nowMs: number):
   return nowMs - Date.parse(member.changedAt) >= RETRY_COOLDOWN_MS;
 }
 
-// KTD11: the first-post prompt keys on "no state file yet".
-export function shouldOfferPrompt({ member, fresh, posted }: { member: MemberNotifyState | null; fresh: boolean; posted: boolean }): boolean {
-  return member === null && (fresh || posted);
-}
-
 // A refusal to mint the token means the session's consent predates the
 // permission set; anything else is the PDS being unreachable.
 function isConsentRefusal(err: unknown): boolean {

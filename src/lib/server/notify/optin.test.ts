@@ -4,7 +4,6 @@ import {
   enableNotifications,
   recheckPending,
   resetOptInForTests,
-  shouldOfferPrompt,
   type OptInDeps,
 } from './optin';
 import type { MemberNotifyState } from './store';
@@ -50,15 +49,6 @@ describe('canRetryTurnOn', () => {
   it('blocks a pending member for ten minutes after changedAt', () => {
     expect(canRetryTurnOn(member('pending', minutesAgo(5)), NOW)).toBe(false);
     expect(canRetryTurnOn(member('pending', minutesAgo(11)), NOW)).toBe(true);
-  });
-});
-
-describe('shouldOfferPrompt', () => {
-  it('shows only with no file and a fresh or just-posted page', () => {
-    expect(shouldOfferPrompt({ member: null, fresh: true, posted: false })).toBe(true);
-    expect(shouldOfferPrompt({ member: null, fresh: false, posted: true })).toBe(true);
-    expect(shouldOfferPrompt({ member: null, fresh: false, posted: false })).toBe(false);
-    expect(shouldOfferPrompt({ member: member('off'), fresh: true, posted: true })).toBe(false);
   });
 });
 

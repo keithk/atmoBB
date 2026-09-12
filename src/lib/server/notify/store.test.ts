@@ -13,7 +13,7 @@ import {
   resetStoreForTests,
   setPromptDismissed,
   setStatus,
-  unreadCount,
+  countUnread,
   updateEntry,
   type NotifyEntry,
 } from './store';
@@ -138,15 +138,15 @@ describe('entries', () => {
   });
 
   it('markRead all zeroes the unread count and a single id decrements by one', async () => {
-    expect(await unreadCount(did)).toBe(0);
+    expect(countUnread((await readMember(did))?.entries ?? [])).toBe(0);
     const a = await appendEntry(did, entry(1));
     await appendEntry(did, entry(2));
     await appendEntry(did, entry(3));
-    expect(await unreadCount(did)).toBe(3);
+    expect(countUnread((await readMember(did))?.entries ?? [])).toBe(3);
     await markRead(did, [a.id]);
-    expect(await unreadCount(did)).toBe(2);
+    expect(countUnread((await readMember(did))?.entries ?? [])).toBe(2);
     await markRead(did, 'all');
-    expect(await unreadCount(did)).toBe(0);
+    expect(countUnread((await readMember(did))?.entries ?? [])).toBe(0);
   });
 });
 
@@ -155,7 +155,7 @@ describe('concurrency', () => {
     await Promise.all(Array.from({ length: 20 }, (_, n) => appendEntry(did, entry(n))));
     const raw = JSON.parse(await readFile(memberFile(did), 'utf8'));
     expect(raw.entries).toHaveLength(20);
-    expect(await unreadCount(did)).toBe(20);
+    expect(countUnread((await readMember(did))?.entries ?? [])).toBe(20);
   });
 
   it('lands concurrent writes to two members without one waiting on the other', async () => {
@@ -168,8 +168,8 @@ describe('concurrency', () => {
     );
     await Promise.all([a, b]);
     expect(order).toHaveLength(2);
-    expect(await unreadCount(did)).toBe(10);
-    expect(await unreadCount(other)).toBe(10);
+    expect(countUnread((await readMember(did))?.entries ?? [])).toBe(10);
+    expect(countUnread((await readMember(other))?.entries ?? [])).toBe(10);
     // Both files exist independently; neither chain touched the other's file.
     const rawA = JSON.parse(await readFile(memberFile(did), 'utf8'));
     const rawB = JSON.parse(await readFile(memberFile(other), 'utf8'));

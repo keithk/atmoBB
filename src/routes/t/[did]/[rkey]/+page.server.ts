@@ -27,7 +27,7 @@ import { attachImages, resolveBodyImages } from '$lib/server/richtext';
 import { addMentionFacets } from '$lib/server/mentions';
 import { THREAD_PAGE_SIZE as LIMIT } from '$lib/appview-paths';
 import { handleNotifyVisit } from '$lib/server/notify/visit';
-import { readMember } from '$lib/server/notify/store';
+import { neverAskedAboutNotifications } from '$lib/server/notify/store';
 import { notifyForPost } from '$lib/server/notify/dispatch';
 
 const NS = 'app.atmobb';
@@ -194,7 +194,7 @@ export const load: PageServerLoad = async ({ params, url, parent, locals, isData
     waiting,
     // KTD11: the first-post prompt keys on "no notification state file yet".
     // A store error just means no prompt; it never breaks the page.
-    offerNotifications: locals.user ? await readMember(locals.user.did).then((m) => m === null, () => false) : false,
+    offerNotifications: locals.user ? await neverAskedAboutNotifications(locals.user.did) : false,
     boardName,
     canModerate: page.thread ? await canModerate(locals.user?.did, page.thread.value.board) : false,
     handles,

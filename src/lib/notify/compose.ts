@@ -79,9 +79,9 @@ const cut = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)
 
 /** `via=notify` as a query parameter, kept ahead of any fragment. */
 function withMarker(url: string): string {
-  const [base, fragment] = url.split('#', 2);
-  const marked = `${base}${base.includes('?') ? '&' : '?'}via=notify`;
-  return fragment === undefined ? marked : `${marked}#${fragment}`;
+  const marked = new URL(url);
+  marked.searchParams.set('via', 'notify');
+  return marked.href;
 }
 
 export function composeNotification(input: ComposeInput): NotificationBody {

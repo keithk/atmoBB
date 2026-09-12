@@ -14,8 +14,10 @@ const SETTINGS_PATH = '/settings/notifications';
 
 // What atmo.pub shows the member when asked to approve this forum. Looked up
 // here rather than taken from the layout because actions have no parent().
-async function permissionDetails() {
-  const { forum } = await getBoardIndex(FORUM_DID());
+type BoardIndex = Awaited<ReturnType<typeof getBoardIndex>>;
+
+async function permissionDetails(index?: BoardIndex) {
+  const { forum } = index ?? (await getBoardIndex(FORUM_DID()));
   const cid = blobCid(forum?.favicon);
   const iconUrl = cid ? await blobUrl(FORUM_DID(), cid) : null;
   return forumPermissionDetails(forum?.name ?? 'atmoBB', iconUrl);
@@ -25,19 +27,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   if (!locals.user) redirect(302, '/login');
   const did = locals.user.did;
   const deps = optInDeps(agentFor);
+  const [watches, index] = await Promise.all([getWatches(did, FORUM_DID()), getBoardIndex(FORUM_DID())]);
   // KTD14: a member who approved in atmo.pub since their last visit flips to
   // on here, since the relay does not call this forum back yet.
-  if (deps) await recheckPending({ did, deps, ...(await permissionDetails()) });
-  const [member, watches, index] = await Promise.all([
-    readMember(did).catch(() => null),
-    getWatches(did, FORUM_DID()),
-    getBoardIndex(FORUM_DID()),
-  ]);
+  if (deps) await recheckPending({ did, deps, ...(await permissionDetails(index)) });
+  const member = await readMember(did).catch(() => null);
   const names = new Map(index.boards.map((b) => [b.uri, b.value.name]));
   return {
-    did,
     status: member?.status ?? 'off',
-    changedAt: member?.changedAt ?? null,
     canSend: deps !== null,
     canRetry: canRetryTurnOn(member, Date.now()),
     dashboardUrl: DASHBOARD_URL,
@@ -85,8 +82,9 @@ export const actions: Actions = {
       }
       redirect(303, `/login?next=${encodeURIComponent(`${SETTINGS_PATH}?reconsented=1`)}`);
     }
-    if (result.outcome === 'pds-error') return fail(502, { message: result.message });
-    if (result.outcome === 'relay-error') return fail(502, { message: result.message });
+    if (result.outcome === 'pds-error' || result.outcome === 'relay-error') {
+      return fail(502, { message: result.message });
+    }
     // The prompt on thread pages posts here too, so land on a clean GET of
     // this page rather than a POST result.
     redirect(303, SETTINGS_PATH);

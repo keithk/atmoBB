@@ -5,7 +5,7 @@ import { forumUnclaimed, staffRole } from '$lib/server/admin';
 import { getStanding } from '$lib/server/appview';
 import { ringForums } from '$lib/server/webring';
 import { blobCid, blobUrl } from '$lib/server/profiles';
-import { readMember } from '$lib/server/notify/store';
+import { countUnread, readMember } from '$lib/server/notify/store';
 
 const FONT_FAMILY = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,63}$/u;
 const cssString = (value: string) => JSON.stringify(value).replaceAll('<', '\\3c ');
@@ -83,7 +83,7 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
   return {
     user: locals.user,
     notifyOn,
-    unread: notifyOn ? notify.entries.filter((e) => !e.read).length : 0,
+    unread: notifyOn ? countUnread(notify.entries) : 0,
     membership,
     avatarProfile,
     admin: role === 'admin',

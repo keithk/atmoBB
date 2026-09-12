@@ -81,6 +81,14 @@ const freshMember = (): MemberNotifyState => ({
   entries: [],
 });
 
+/**
+ * KTD11: the first-post prompt keys on a member having no state file yet. A
+ * store error reads as "don't prompt" so a bad disk never breaks a page.
+ */
+export function neverAskedAboutNotifications(did: string): Promise<boolean> {
+  return readMember(did).then((m) => m === null, () => false);
+}
+
 export async function readMember(did: string): Promise<MemberNotifyState | null> {
   return ((await readJson(memberPath(did))) as MemberNotifyState | undefined) ?? null;
 }
@@ -163,9 +171,8 @@ export function markRead(did: string, ids: string[] | 'all'): Promise<void> {
   });
 }
 
-export async function unreadCount(did: string): Promise<number> {
-  const member = await readMember(did);
-  return member ? member.entries.filter((e) => !e.read).length : 0;
+export function countUnread(entries: NotifyEntry[]): number {
+  return entries.filter((e) => !e.read).length;
 }
 
 const zeroStats = (): NotifyStats => ({ sent: 0, visited: 0 });

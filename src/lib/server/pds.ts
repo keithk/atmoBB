@@ -18,8 +18,28 @@ const ACTOR_PROFILE = `${NS}.actor.profile`;
 const ACCESS_REQUEST = `${NS}.forum.accessRequest`;
 const WATCH = `${NS}.forum.watch`;
 
-// Membership is read from the member's own PDS (authoritative, no index lag)
-// and cached briefly so the layout doesn't hit the PDS on every page load.
+// Membership and watches are read from the member's own PDS (authoritative,
+// no index lag) and cached briefly so the layout doesn't hit the PDS on every
+// page load. A failed read is not cached and reads as null.
+const CACHE_MS = 5 * 60 * 1000;
+
+async function cached<T>(
+  cache: Map<string, { value: T; at: number }>,
+  key: string,
+  load: () => Promise<T>,
+): Promise<T | null> {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.value;
+  try {
+    const value = await load();
+    cache.set(key, { value, at: Date.now() });
+    return value;
+  } catch {
+    // PDS unreachable or session dead — pages render without this state
+    return null;
+  }
+}
+
 const membershipCache = new Map<string, { value: Membership; at: number }>();
 
 export interface Membership {
@@ -28,9 +48,7 @@ export interface Membership {
 }
 
 export async function getMembership(did: string, forum: string): Promise<Membership | null> {
-  const hit = membershipCache.get(did);
-  if (hit && Date.now() - hit.at < 5 * 60 * 1000) return hit.value;
-  try {
+  return cached(membershipCache, did, async () => {
     const agent = await agentFor(did);
     const res = await agent.com.atproto.repo.listRecords({
       repo: did,
@@ -38,13 +56,8 @@ export async function getMembership(did: string, forum: string): Promise<Members
       limit: 100,
     });
     const rec = res.data.records.find((r) => (r.value as { forum?: string }).forum === forum);
-    const value = { joined: !!rec, uri: rec?.uri };
-    membershipCache.set(did, { value, at: Date.now() });
-    return value;
-  } catch {
-    // PDS unreachable or session dead — pages render without the join state
-    return null;
-  }
+    return { joined: !!rec, uri: rec?.uri };
+  });
 }
 
 export async function joinForum(did: string, forum: string): Promise<void> {
@@ -112,16 +125,7 @@ async function listWatches(did: string, forumDid: string): Promise<Watch[]> {
 }
 
 async function cachedWatches(did: string, forumDid: string): Promise<Watch[] | null> {
-  const hit = watchCache.get(did);
-  if (hit && Date.now() - hit.at < 5 * 60 * 1000) return hit.value;
-  try {
-    const value = await listWatches(did, forumDid);
-    watchCache.set(did, { value, at: Date.now() });
-    return value;
-  } catch {
-    // PDS unreachable or session dead — treat as nothing watched for display
-    return null;
-  }
+  return cached(watchCache, did, () => listWatches(did, forumDid));
 }
 
 /** The boards on this forum the member watches, or [] when the PDS can't be read. */
