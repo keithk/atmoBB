@@ -292,6 +292,30 @@ a.atm-post__permalink:hover { text-decoration: underline; }
 .atm-threadrow__nums { text-align: right; font: var(--type-meta); color: var(--forum-ink-soft); }
 .atm-threadrow__nums b { color: var(--forum-ink); font-weight: var(--w-semibold); }
 .atm-threadrow__last { display: flex; align-items: center; gap: var(--space-2); font: var(--type-meta); color: var(--forum-ink-soft); }
+.atm-topic-filters { margin-bottom: var(--space-4); }
+.atm-topic-filters__form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(150px, 240px) minmax(130px, 200px) auto auto;
+  align-items: end;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.atm-topic-filters__form--board { grid-template-columns: minmax(220px, 1fr) minmax(150px, 240px) auto auto; }
+.atm-topic-filters__form label { display: grid; gap: 5px; }
+.atm-topic-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.atm-topic-tags--thread { margin: calc(-1 * var(--space-2)) 0 var(--space-4); }
+.atm-topic-tag {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--forum-accent-soft);
+  color: var(--forum-link);
+  font: var(--type-meta);
+  text-decoration: none;
+}
+.atm-topic-tag:hover { background: var(--forum-surface-2); color: var(--forum-link-hover); text-decoration: none; }
+.atm-topic-participants { display: flex; flex-direction: row-reverse; justify-content: flex-end; padding-left: 8px; }
+.atm-topic-participants .atm-avatar { margin-left: -8px; border: 2px solid var(--forum-surface); border-radius: 50%; }
+.atm-topic-participants .atm-avatar:last-child { margin-left: 0; }
 
 /* ---- MemberRow (member directory) ---- */
 .atm-memberrow {
@@ -330,6 +354,8 @@ a.atm-memberrow__name:hover { color: var(--forum-link); text-decoration: none; }
 
 /* ---- responsive (local addition): rows compose down to icon + text ---- */
 @media (max-width: 720px) {
+  .atm-topic-filters__form, .atm-topic-filters__form--board { grid-template-columns: 1fr 1fr; }
+  .atm-topic-filters__search { grid-column: 1 / -1; }
   .atm-boardrow { grid-template-columns: 34px minmax(0, 1fr); }
   .atm-boardrow__counts, .atm-boardrow__last { display: none; }
   .atm-threadrow { grid-template-columns: 26px minmax(0, 1fr); }

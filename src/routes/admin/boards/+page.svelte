@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import BoardMarker from '$lib/components/BoardMarker.svelte';
 
   let { data, form } = $props();
 
@@ -62,6 +63,7 @@
               <summary>
                 <span class="atm-adminrow__name">
                   {#if board.value.parent}<span class="row__sub">↳</span>{/if}
+                  <BoardMarker color={board.value.color} />
                   {board.value.name}
                 </span>
                 <span class="atm-adminrow__meta">
@@ -79,6 +81,19 @@
                 <div class="atm-field">
                   <span class="atm-label">Description</span>
                   <input class="atm-input" name="description" maxlength="1000" value={board.value.description ?? ''} />
+                </div>
+                <div class="atm-field">
+                  <span class="atm-label">Color</span>
+                  <input
+                    class="atm-input"
+                    name="color"
+                    value={board.value.color ?? ''}
+                    pattern="#[0-9A-Fa-f]{6}"
+                    maxlength="7"
+                    placeholder="#1a73e8 (optional)"
+                    aria-describedby="board-color-help-{i}"
+                  />
+                  <span class="field-help" id="board-color-help-{i}">Full six-digit hex color used for this board's marker.</span>
                 </div>
                 <div class="atm-field">
                   <span class="atm-label">Category</span>
@@ -158,6 +173,18 @@
           <div class="atm-field">
             <span class="atm-label">Description</span>
             <input class="atm-input" name="description" maxlength="1000" placeholder="What belongs here" />
+          </div>
+          <div class="atm-field">
+            <span class="atm-label">Color</span>
+            <input
+              class="atm-input"
+              name="color"
+              pattern="#[0-9A-Fa-f]{6}"
+              maxlength="7"
+              placeholder="#1a73e8 (optional)"
+              aria-describedby="new-board-color-help"
+            />
+            <span class="field-help" id="new-board-color-help">Full six-digit hex color used for this board's marker.</span>
           </div>
           <div class="atm-editform__row">
             <div class="atm-field">
@@ -260,6 +287,8 @@
   .orow__btn:hover:not(:disabled) { color: var(--forum-ink); background: var(--forum-surface-1); }
   .orow__btn:disabled { opacity: 0.35; cursor: default; }
   .row__sub { color: var(--forum-ink-faint); }
+  .atm-adminrow__name { display: inline-flex; align-items: center; gap: var(--space-2); }
+  .field-help { font: var(--type-meta); color: var(--forum-ink-faint); }
   .row__private {
     color: var(--forum-ink-faint);
     text-transform: uppercase;

@@ -13,6 +13,7 @@ import { readSpaceBoardThreads } from '$lib/server/space-read';
 import { getMembership, joinForum, leaveForum } from '$lib/server/pds';
 import { getPublicProfile } from '$lib/server/profiles';
 import { presenceSnapshot } from '$lib/server/presence';
+import { normalizeHomepage, rankHotThreads, selectFeaturedThreads } from '$lib/homepage';
 
 // Real profiles for the who's-online members (cached in getPublicProfile).
 async function presenceProfiles(dids: string[]): Promise<Record<string, ActorProfile | null>> {
@@ -32,14 +33,29 @@ export const load: PageServerLoad = async ({ url, locals }) => {
   const presence = presenceSnapshot();
   const avatarProfiles = await presenceProfiles(presence.members.map((m) => m.did));
   try {
-    const [index, latest] = await Promise.all([
+    const [index, feed] = await Promise.all([
       getBoardIndex(FORUM_DID()),
-      // Hot threads are a bonus section; a hiccup here shouldn't take down the index
-      getLatestThreads(undefined, 8).catch((): LatestThreads => ({ threads: [] })),
+      // Homepage feeds are a bonus; a hiccup here shouldn't take down the board index.
+      // This forum-scoped endpoint applies moderation, access, and federation filters.
+      getLatestThreads(undefined, 100).catch((): LatestThreads => ({ threads: [] })),
     ]);
+    const homepage = normalizeHomepage(index.forum?.homepage);
+    const requestedView = url.searchParams.get('view');
+    const homeView = requestedView === 'categories' || requestedView === 'latest' || requestedView === 'hot'
+      ? requestedView
+      : null;
     const top = index.boards.filter((b) => !b.value.parent);
     const childrenOf = (uri: string) => index.boards.filter((b) => b.value.parent === uri);
-    const hot = latest.threads.filter((t) => t.replyCount > 0).slice(0, 3);
+    const latest = feed.threads.slice(0, 15);
+    // Honest bounded ranking: most replies among the 100 most recently active
+    // visible topics, with recent activity as the tie-breaker.
+    const hot = rankHotThreads(feed.threads).slice(0, 12);
+    // Use the same visibility-filtered endpoint for older featured topics too:
+    // selection must not silently disappear when a topic leaves the recent window.
+    const featuredPages = await Promise.all(homepage.featuredThreads.map((uri) =>
+      getLatestThreads(undefined, 1, FORUM_DID(), { uri }).catch((): LatestThreads => ({ threads: [] })),
+    ));
+    const featured = selectFeaturedThreads(featuredPages.flatMap((page) => page.threads), homepage.featuredThreads);
 
     // Authors in last-post columns without an atmobb profile get their handle
     const needsHandle = [
@@ -47,7 +63,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
         ...index.boards
           .filter((b) => b.latest && !b.latest.authorProfile?.displayName)
           .map((b) => b.latest!.author),
-        ...hot.filter((t) => !t.authorProfile?.displayName).map((t) => t.author),
+        ...[...latest, ...hot, ...featured]
+          .filter((t) => !t.authorProfile?.displayName)
+          .map((t) => t.author),
         ...(index.stats?.newestMember ? [index.stats.newestMember.did] : []),
         ...presence.members.map((m) => m.did),
       ]),
@@ -102,6 +120,10 @@ export const load: PageServerLoad = async ({ url, locals }) => {
       groups,
       presence,
       avatarProfiles,
+      homepage,
+      homeView,
+      featured,
+      latest,
       hot,
       stats: index.stats ?? { threads: 0, posts: 0, members: 0 },
       handles,
@@ -113,6 +135,10 @@ export const load: PageServerLoad = async ({ url, locals }) => {
       groups: [] as { title: string; boards: never[] }[],
       presence,
       avatarProfiles,
+      homepage: normalizeHomepage(undefined),
+      homeView: null as 'categories' | 'latest' | 'hot' | null,
+      featured: [] as LatestThreads['threads'],
+      latest: [] as LatestThreads['threads'],
       hot: [] as LatestThreads['threads'],
       stats: { threads: 0, posts: 0, members: 0 },
       handles: {} as Record<string, string>,

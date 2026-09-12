@@ -19,6 +19,14 @@ export type QueryParams = {
   forum?: string
   limit?: number
   cursor?: string
+  /** Case-insensitive literal substring to match against topic titles. */
+  q?: string
+  /** Limit results to this exact board URI after forum visibility rules are applied. */
+  board?: string
+  /** Return only this exact thread URI after all normal visibility rules are applied. */
+  uri?: string
+  /** Case-insensitive exact tag match. */
+  tag?: string
 }
 export type InputSchema = undefined
 

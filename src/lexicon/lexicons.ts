@@ -324,6 +324,19 @@ export const schemaDict = {
             cursor: {
               type: 'string',
             },
+            q: {
+              type: 'string',
+              maxLength: 2000,
+              maxGraphemes: 200,
+              description:
+                'Case-insensitive literal substring to match against topic titles.',
+            },
+            tag: {
+              type: 'string',
+              maxLength: 640,
+              maxGraphemes: 64,
+              description: 'Case-insensitive exact tag match.',
+            },
           },
         },
         output: {
@@ -373,6 +386,31 @@ export const schemaDict = {
             },
             cursor: {
               type: 'string',
+            },
+            q: {
+              type: 'string',
+              maxLength: 2000,
+              maxGraphemes: 200,
+              description:
+                'Case-insensitive literal substring to match against topic titles.',
+            },
+            board: {
+              type: 'string',
+              format: 'at-uri',
+              description:
+                'Limit results to this exact board URI after forum visibility rules are applied.',
+            },
+            uri: {
+              type: 'string',
+              format: 'at-uri',
+              description:
+                'Return only this exact thread URI after all normal visibility rules are applied.',
+            },
+            tag: {
+              type: 'string',
+              maxLength: 640,
+              maxGraphemes: 64,
+              description: 'Case-insensitive exact tag match.',
             },
           },
         },
@@ -569,6 +607,8 @@ export const schemaDict = {
             },
             tags: {
               type: 'array',
+              description:
+                'Normalized lowercase topic labels. Clients should trim, collapse whitespace and deduplicate before writing.',
               maxLength: 8,
               items: {
                 type: 'string',
@@ -678,6 +718,12 @@ export const schemaDict = {
               type: 'string',
               maxLength: 10000,
               maxGraphemes: 1000,
+            },
+            color: {
+              type: 'string',
+              maxLength: 7,
+              description:
+                "Optional full six-digit hex color (for example #1a73e8) used for this board's visual marker. Writers must validate the #RRGGBB format.",
             },
             parent: {
               type: 'string',
@@ -1281,9 +1327,41 @@ export const schemaDict = {
               knownValues: ['classic', 'midnight', 'ocean', 'forest', 'plum'],
               maxLength: 32,
             },
+            homepage: {
+              type: 'ref',
+              ref: 'lex:app.atmobb.forum.profile#homepage',
+              description:
+                'Optional forum homepage presentation. Absent values retain the classic board index.',
+            },
             createdAt: {
               type: 'string',
               format: 'datetime',
+            },
+          },
+        },
+      },
+      homepage: {
+        type: 'object',
+        properties: {
+          layout: {
+            type: 'string',
+            knownValues: ['boards', 'latest', 'categories-latest'],
+            maxLength: 32,
+          },
+          sidebar: {
+            type: 'boolean',
+          },
+          welcome: {
+            type: 'string',
+            knownValues: ['classic', 'compact', 'hidden'],
+            maxLength: 32,
+          },
+          featuredThreads: {
+            type: 'array',
+            maxLength: 3,
+            items: {
+              type: 'string',
+              format: 'at-uri',
             },
           },
         },

@@ -62,7 +62,33 @@
             "knownValues": ["classic", "midnight", "ocean", "forest", "plum"],
             "maxLength": 32
           },
+          "homepage": {
+            "type": "ref",
+            "ref": "#homepage",
+            "description": "Optional forum homepage presentation. Absent values retain the classic board index."
+          },
           "createdAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    },
+    "homepage": {
+      "type": "object",
+      "properties": {
+        "layout": {
+          "type": "string",
+          "knownValues": ["boards", "latest", "categories-latest"],
+          "maxLength": 32
+        },
+        "sidebar": { "type": "boolean" },
+        "welcome": {
+          "type": "string",
+          "knownValues": ["classic", "compact", "hidden"],
+          "maxLength": 32
+        },
+        "featuredThreads": {
+          "type": "array",
+          "maxLength": 3,
+          "items": { "type": "string", "format": "at-uri" }
         }
       }
     },

@@ -19,6 +19,7 @@ import { privateBoardsEnabled } from '$lib/server/happyview-session';
 import { createForumRecord, deleteForumRecord, putForumRecord } from '$lib/server/forum-repo';
 import { savedRedirect } from '$lib/server/saved-redirect';
 import { parseAtUri } from '$lib/appview-paths';
+import { parseBoardColor, withBoardColor } from '$lib/board-presentation';
 
 const NS = 'app.atmobb';
 const SPACE_ACCESS = `${NS}.forum.board#space`;
@@ -112,19 +113,21 @@ export const actions: Actions = {
     const form = await request.formData();
     const name = String(form.get('name') ?? '').trim();
     if (!name) return fail(400, { message: 'Enter a name for the board.' });
+    const parsedColor = parseBoardColor(form.get('color'));
+    if (!parsedColor.valid) return fail(400, { message: 'Board color must be a full hex color such as #1a73e8.' });
     if (form.get('private') === 'on' && !privateBoardsEnabled()) {
       return fail(400, { message: 'Members-only boards aren\'t available on this deployment.' });
     }
     const index = await getBoardIndex(FORUM_DID());
     const maxOrder = Math.max(-1, ...index.boards.map((b) => b.value.order ?? -1));
-    const value: Record<string, unknown> = {
+    const value = withBoardColor<Record<string, unknown>>({
       name,
       description: optional(form.get('description')),
       category: optional(form.get('category')),
       parent: optional(form.get('parent')),
       order: maxOrder + 1,
       createdAt: new Date().toISOString(),
-    };
+    }, parsedColor.color);
     let created: { uri: string };
     try {
       created = await createForumRecord(`${NS}.forum.board`, value);
@@ -175,12 +178,14 @@ export const actions: Actions = {
     if (!p || !board) return fail(404, { message: 'Board not found.' });
     const name = String(form.get('name') ?? '').trim();
     if (!name) return fail(400, { message: 'Enter a name for the board.' });
-    const record = {
+    const parsedColor = parseBoardColor(form.get('color'));
+    if (!parsedColor.valid) return fail(400, { message: 'Board color must be a full hex color such as #1a73e8.' });
+    const record = withBoardColor({
       ...board.value,
       name,
       description: optional(form.get('description')),
       category: optional(form.get('category')),
-    };
+    }, parsedColor.color);
     if (!record.description) delete record.description;
     if (!record.category) delete record.category;
 
@@ -246,6 +251,7 @@ export const actions: Actions = {
         b.value.name === record.name &&
         (b.value.description ?? undefined) === record.description &&
         (b.value.category ?? undefined) === record.category &&
+        (b.value.color ?? undefined) === record.color &&
         spaceOfBoard(b.value.access) === spaceOfBoard(record.access)
       );
     });

@@ -23,6 +23,7 @@ import { banMessage, bannedFrom } from '$lib/server/standing';
 import { handleNotifyVisit } from '$lib/server/notify/visit';
 import { neverAskedAboutNotifications } from '$lib/server/notify/store';
 import { notifyForPost } from '$lib/server/notify/dispatch';
+import { parseThreadTags } from '$lib/thread-tags';
 
 const QUOTE = 'app.atmobb.richtext.block#quote';
 const LIMIT = 25;
@@ -109,10 +110,10 @@ export const load: PageServerLoad = async ({ params, locals, parent, url, isData
 
   // ?edit=<rkey> reopens one of the viewer's own posts in place.
   const editRkey = url.searchParams.get('edit');
-  let editing: { uri: string; title?: string; doc: ReturnType<typeof blocksToDoc> } | null = null;
+  let editing: { uri: string; title?: string; tags?: string[]; doc: ReturnType<typeof blocksToDoc> } | null = null;
   if (editRkey) {
     if (editRkey === params.trkey && page.thread.author === locals.user.did) {
-      editing = { uri, title: page.thread.value.title, doc: blocksToDoc(page.thread.value.body) };
+      editing = { uri, title: page.thread.value.title, tags: page.thread.value.tags, doc: blocksToDoc(page.thread.value.body) };
     } else {
       const reply = page.replies.find((r) => r.uri.endsWith(`/${editRkey}`) && r.author === locals.user!.did);
       if (reply) editing = { uri: reply.uri, doc: blocksToDoc(reply.value.body) };
@@ -190,11 +191,14 @@ export const actions: Actions = {
     const title = form.has('title') ? String(form.get('title') ?? '').trim() : undefined;
     const body = String(form.get('body') ?? '').trim();
     const images = String(form.get('body__images') ?? '');
+    const parsedTags = title !== undefined && form.has('tags') ? parseThreadTags(String(form.get('tags') ?? '')) : undefined;
     if (title !== undefined && !title) return fail(400, { message: 'Enter a title for your thread.' });
+    if (parsedTags?.error) return fail(400, { message: parsedTags.error });
     if (title === undefined && !body) return fail(400, { message: 'Write something, or delete the post instead.' });
     try {
       await updatePost(locals.user.did, target, {
         title,
+        ...(parsedTags ? { tags: parsedTags.tags } : {}),
         body: await addMentionFacets(attachImages(parseBBCode(body), images)),
       });
     } catch (e) {

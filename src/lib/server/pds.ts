@@ -188,13 +188,14 @@ export function assertNoImages(body: RichTextBlock[]): void {
 
 export async function createThread(
   did: string,
-  input: { board: string; title: string; body: RichTextBlock[]; poll?: Poll; via?: string },
+  input: { board: string; title: string; body: RichTextBlock[]; tags?: string[]; poll?: Poll; via?: string },
 ): Promise<{ uri: string; cid: string }> {
   const record = {
     $type: `${NS}.discussion.thread`,
     board: input.board,
     title: input.title,
     body: input.body,
+    ...(input.tags?.length ? { tags: input.tags } : {}),
     ...(input.poll ? { poll: input.poll } : {}),
     ...(input.via ? { via: input.via } : {}),
     createdAt: new Date().toISOString(),
@@ -421,7 +422,7 @@ async function currentPost(did: string, ref: PostRef): Promise<Record<string, un
 export async function updatePost(
   did: string,
   uri: string,
-  patch: { title?: string; body: RichTextBlock[] },
+  patch: { title?: string; body: RichTextBlock[]; tags?: string[] },
 ): Promise<{ editedAt: string }> {
   const ref = ownPost(did, uri);
   if (ref.space) assertNoImages(patch.body);
@@ -430,6 +431,7 @@ export async function updatePost(
   const record = {
     ...current,
     ...(patch.title !== undefined ? { title: patch.title } : {}),
+    ...(patch.tags !== undefined ? { tags: patch.tags } : {}),
     body: patch.body,
     editedAt,
   };

@@ -9,6 +9,7 @@
   import Poll from '$lib/components/Poll.svelte';
   import ConversationLogin from '$lib/components/ConversationLogin.svelte';
   import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
+  import ThreadReadingTracker from '$lib/components/ThreadReadingTracker.svelte';
   import { page } from '$app/state';
   let { data, form } = $props();
   const user = $derived(page.data.user);
@@ -112,6 +113,11 @@
     {#if data.thread.pinned}<span class="atm-chip" title="pinned to the top of its board">📌 pinned</span>{/if}
     {#if data.thread.locked}<span class="atm-chip" title="no new replies">🔒 locked</span>{/if}
   </nav>
+  {#if data.thread.value.tags?.length}
+    <div class="atm-topic-tags atm-topic-tags--thread" aria-label="Tags">
+      {#each data.thread.value.tags as tag}<a class="atm-topic-tag" href="/latest?tag={encodeURIComponent(tag)}">{tag}</a>{/each}
+    </div>
+  {/if}
 
   {#if data.thread.hidden}
     <p class="atm-notice">This thread is hidden. Only staff can see it.</p>
@@ -160,7 +166,12 @@
     <div class="atm-pager-row">{@render pager()}</div>
   {/if}
 
-  <article class="atm-card atm-card--edge atm-post atm-post--op" id={postAnchor(data.thread.uri)}>
+  <article
+    class="atm-card atm-card--edge atm-post atm-post--op"
+    id={postAnchor(data.thread.uri)}
+    data-atm-post-position="0"
+    data-atm-post-at={data.thread.value.createdAt ?? ''}
+  >
     <PostMeta
       did={data.thread.author}
       handle={data.handles[data.thread.author]}
@@ -178,7 +189,7 @@
         {@render respond(data.thread.uri)}
       </div>
       {#if data.editing?.uri === data.thread.uri}
-        <PostEditor uri={data.thread.uri} title={data.thread.value.title} doc={data.editing.doc} cancelHref="{basePath}#{postAnchor(data.thread.uri)}" message={form?.message} />
+        <PostEditor uri={data.thread.uri} title={data.thread.value.title} tags={data.editing.tags} doc={data.editing.doc} cancelHref="{basePath}#{postAnchor(data.thread.uri)}" message={form?.message} />
       {:else}
         <RichText body={data.thread.value.body} threadUri={data.threadUri} handles={data.handles} />
       {/if}
@@ -195,8 +206,13 @@
     </div>
   </article>
 
-  {#each data.replies as reply}
-    <article class="atm-card atm-card--edge atm-post" id={postAnchor(reply.uri)}>
+  {#each data.replies as reply, i}
+    <article
+      class="atm-card atm-card--edge atm-post"
+      id={postAnchor(reply.uri)}
+      data-atm-post-position={data.offset + i + 1}
+      data-atm-post-at={reply.value.createdAt ?? reply.indexedAt ?? ''}
+    >
       <PostMeta
         did={reply.author}
         handle={data.handles[reply.author]}
@@ -296,6 +312,9 @@
   {:else if !data.thread.locked}
     <ConversationLogin />
   {/if}
+  {#key `${data.threadUri}:${data.offset}:${user?.did ?? ''}:${data.forumDid}:${data.replies.map((reply) => reply.uri).join(',')}`}
+    <ThreadReadingTracker accountDid={user?.did} forumDid={data.forumDid} threadUri={data.threadUri} />
+  {/key}
 {/if}
 
 {#snippet respond(uri: string)}

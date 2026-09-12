@@ -9,6 +9,7 @@
   import PostEditor from '$lib/components/PostEditor.svelte';
   import ConversationLogin from '$lib/components/ConversationLogin.svelte';
   import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
+  import ThreadReadingTracker from '$lib/components/ThreadReadingTracker.svelte';
   // Simplified sibling of /t/[did]/[rkey]: private threads live in a space, so
   // reads are immediate (no firehose lag) — no waiting/polling states needed.
   let { data, form } = $props();
@@ -44,6 +45,11 @@
     <span class="atm-crumbs__current">{data.thread.value.title}</span>
     <span class="atm-chip" title="members-only board">🔒 members-only</span>
   </nav>
+  {#if data.thread.value.tags?.length}
+    <div class="atm-topic-tags atm-topic-tags--thread" aria-label="Tags">
+      {#each data.thread.value.tags as tag}<a class="atm-topic-tag" href="{data.boardPath}?tag={encodeURIComponent(tag)}">{tag}</a>{/each}
+    </div>
+  {/if}
 
   {#if saved}
     <p class="atm-ok">Saved.</p>
@@ -55,7 +61,12 @@
     <NotifyPrompt next={page.url.pathname} />
   {/if}
 
-  <article class="atm-card atm-card--edge atm-post atm-post--op" id={postAnchor(data.thread.uri)}>
+  <article
+    class="atm-card atm-card--edge atm-post atm-post--op"
+    id={postAnchor(data.thread.uri)}
+    data-atm-post-position="0"
+    data-atm-post-at={data.thread.value.createdAt ?? ''}
+  >
     <PostMeta
       did={data.thread.author}
       handle={data.handles[data.thread.author]}
@@ -72,7 +83,7 @@
         {@render respond(data.thread.uri)}
       </div>
       {#if data.editing?.uri === data.thread.uri}
-        <PostEditor uri={data.thread.uri} title={data.thread.value.title} doc={data.editing.doc} cancelHref="{page.url.pathname}#{postAnchor(data.thread.uri)}" message={form?.message} allowImages={false} />
+        <PostEditor uri={data.thread.uri} title={data.thread.value.title} tags={data.editing.tags} doc={data.editing.doc} cancelHref="{page.url.pathname}#{postAnchor(data.thread.uri)}" message={form?.message} allowImages={false} />
       {:else}
         <RichText body={data.thread.value.body} threadUri={data.threadUri} handles={data.handles} />
       {/if}
@@ -82,8 +93,13 @@
     </div>
   </article>
 
-  {#each data.replies as reply}
-    <article class="atm-card atm-card--edge atm-post" id={postAnchor(reply.uri)}>
+  {#each data.replies as reply, i}
+    <article
+      class="atm-card atm-card--edge atm-post"
+      id={postAnchor(reply.uri)}
+      data-atm-post-position={i + 1}
+      data-atm-post-at={reply.value.createdAt ?? reply.indexedAt ?? ''}
+    >
       <PostMeta
         did={reply.author}
         handle={data.handles[reply.author]}
@@ -165,6 +181,9 @@
   {:else}
     <ConversationLogin />
   {/if}
+  {#key `${data.threadUri}:${user?.did ?? ''}:${data.forumDid}:${data.replies.map((reply) => reply.uri).join(',')}`}
+    <ThreadReadingTracker accountDid={user?.did} forumDid={data.forumDid} threadUri={data.threadUri} />
+  {/key}
 {:else}
   <p class="atm-notice">Thread not found.</p>
 {/if}

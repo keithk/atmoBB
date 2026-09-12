@@ -33,6 +33,8 @@ import { isThreadAction } from '$lib/moderation';
 import { parsePoll } from '$lib/poll';
 import { banMessage, bannedFrom } from '$lib/server/standing';
 import { notifyForPost } from '$lib/server/notify/dispatch';
+import { threadFilters } from '$lib/thread-filters';
+import { parseThreadTags } from '$lib/thread-tags';
 
 const NS = 'app.atmobb';
 const LIMIT = 25;
@@ -41,7 +43,10 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
   const uri = boardUri(params.rkey, params.did);
   const basePath = `/b/${params.did ? `${params.did}/` : ''}${params.rkey}`;
   const cursor = url.searchParams.get('cursor') ?? undefined;
-  let page = await getBoardThreads(uri, cursor, LIMIT);
+  const filters = threadFilters(url.searchParams);
+  // A board page's board is fixed by its route; only title/tag filters apply.
+  const boardFilters = { q: filters.q, tag: filters.tag };
+  let page = await getBoardThreads(uri, cursor, LIMIT, boardFilters);
   if (!page.board) error(404, 'Board not found.');
 
   // Members-only board: content lives in the board's permissioned space. Only
@@ -53,7 +58,11 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
   if (space) {
     member = locals.user ? await isSpaceMember(space, locals.user.did) : false;
     if (member) {
-      page = await readSpaceBoardThreads(locals.user!.did, space, page.board);
+      page = await readSpaceBoardThreads(locals.user!.did, space, page.board, {
+        ...boardFilters,
+        offset: Number(cursor ?? 0),
+        limit: LIMIT,
+      });
     } else {
       locked = true;
       requested = locals.user ? !!(await getAccessRequest(locals.user.did, uri)) : false;
@@ -87,6 +96,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
     },
     boardUri: uri,
     basePath,
+    filters: boardFilters,
     handles,
     limit: LIMIT,
     offset: Number(cursor ?? 0),
@@ -154,7 +164,9 @@ export const actions: Actions = {
     const title = String(form.get('title') ?? '').trim();
     const body = String(form.get('body') ?? '').trim();
     const images = String(form.get('body__images') ?? '');
+    const parsedTags = parseThreadTags(String(form.get('tags') ?? ''));
     if (!title) return fail(400, { message: 'Enter a title for your thread.' });
+    if (parsedTags.error) return fail(400, { message: parsedTags.error });
     const parsed = parsePoll({
       question: String(form.get('pollQuestion') ?? ''),
       options: String(form.get('pollOptions') ?? ''),
@@ -198,6 +210,7 @@ export const actions: Actions = {
         board,
         title,
         body: blocks,
+        tags: parsedTags.tags,
         ...(parsed ? { poll: parsed.poll } : {}),
       });
       uri = res.uri;
