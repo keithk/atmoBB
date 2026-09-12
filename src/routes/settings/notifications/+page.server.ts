@@ -85,17 +85,19 @@ export const actions: Actions = {
     if (result.outcome === 'pds-error' || result.outcome === 'relay-error') {
       return fail(502, { message: result.message });
     }
-    // The prompt on thread pages posts here too, so land on a clean GET of
-    // this page rather than a POST result.
-    redirect(303, SETTINGS_PATH);
+    // The prompt and the notifications page post here too, so land on a
+    // clean GET of wherever the member was rather than a POST result.
+    redirect(303, safeReturnPath(form.get('next')) ?? SETTINGS_PATH);
   },
-  disable: async ({ locals }) => {
+  disable: async ({ request, locals }) => {
     if (!locals.user) return fail(401, { message: 'Log in to change your notifications.' });
+    const next = safeReturnPath((await request.formData()).get('next')) ?? SETTINGS_PATH;
     try {
       await setStatus(locals.user.did, 'off');
     } catch {
       return fail(500, { message: "Couldn't save your notification settings. Try again in a moment." });
     }
+    redirect(303, next);
   },
   dismissPrompt: async ({ request, locals }) => {
     if (!locals.user) return fail(401, { message: 'Log in to change your notifications.' });

@@ -6,6 +6,7 @@
   import LoginForm from '$lib/components/LoginForm.svelte';
   import MemberLink from '$lib/components/MemberLink.svelte';
   import BoardMarker from '$lib/components/BoardMarker.svelte';
+  import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
   import TopicList from '$lib/components/TopicList.svelte';
   import { relTime } from '$lib/reltime';
   import type { LatestThreads } from '$lib/server/appview';
@@ -53,6 +54,10 @@
       </div>
       <a class="atm-btn atm-btn--primary" href="/login">log in</a>
     </section>
+  {/if}
+
+  {#if data.user && data.offerNotifications}
+    <NotifyPrompt next="/" />
   {/if}
 
   <nav class="atm-home-nav" aria-label="Homepage views">

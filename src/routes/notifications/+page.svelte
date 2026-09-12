@@ -1,6 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import Card from '$lib/components/Card.svelte';
+  import NotifyDelivery from '$lib/components/NotifyDelivery.svelte';
   import { relTime } from '$lib/reltime';
   import type { PageData } from './$types';
 
@@ -24,9 +25,14 @@
       </form>
     {/if}
   </header>
-  {#if data.status !== 'on'}
-    <p class="lede">Notifications are {data.status === 'pending' ? 'waiting for your approval' : 'off'}. <a href="/settings/notifications">Settings</a></p>
-  {/if}
+  <NotifyDelivery
+    status={data.status}
+    canSend={data.canSend}
+    canRetry={data.canRetry}
+    dashboardUrl={data.dashboardUrl}
+    action="/settings/notifications"
+    next="/notifications"
+  />
 
   <Card title="Recent">
     {#if form?.message}<p class="atm-err">{form.message}</p>{/if}
@@ -59,10 +65,9 @@
 
 <style>
   @layer atmobb {
-  .wrap { max-width: 780px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--space-4); }
+  .wrap { display: flex; flex-direction: column; gap: var(--space-4); }
   .head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
   .title { font: var(--type-page-title); color: var(--forum-ink); margin: 0; }
-  .lede { margin: 0; font: var(--type-meta); color: var(--forum-ink-soft); }
   .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
   .atm-notification {
     display: flex;

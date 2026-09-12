@@ -1,8 +1,10 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { agentFor } from '$lib/server/atproto-oauth';
-import { forumPermissionDetails, optInDeps, recheckPending } from '$lib/server/notify/optin';
+import { canRetryTurnOn, forumPermissionDetails, optInDeps, recheckPending } from '$lib/server/notify/optin';
 import { markRead, readMember } from '$lib/server/notify/store';
+
+const DASHBOARD_URL = 'https://atmo.pub';
 
 export const load: PageServerLoad = async ({ locals, parent, url }) => {
   if (!locals.user) redirect(302, `/login?next=${encodeURIComponent(url.pathname + url.search)}`);
@@ -16,6 +18,9 @@ export const load: PageServerLoad = async ({ locals, parent, url }) => {
   const member = await readMember(locals.user.did);
   return {
     status: member?.status ?? 'off',
+    canSend: deps !== null,
+    canRetry: canRetryTurnOn(member, Date.now()),
+    dashboardUrl: DASHBOARD_URL,
     // The store keeps entries newest first.
     entries: (member?.entries ?? []).map(({ id, kind, title, body, url, at, read, delivery }) => ({
       id,

@@ -46,8 +46,8 @@ Everything an atmobb forum does today. What I haven't built is listed at the [bo
 
 - **Delivered by atmo.pub.** Members turn notifications on from settings, approve the forum once at [atmo.pub](https://atmo.pub), and pick their channels there: web push, email, Telegram, Bluesky DM, or a webhook. The forum sends; atmo.pub delivers. I didn't build any of the channels myself.
 - **What pings you.** A reply in a thread you started, a reply or quote aimed at one of your posts, an @mention, and a new thread in a board you watch. One alert per post, even when several apply. Only posts written through this forum's site trigger them; replies that arrive through topic federation or another client don't, yet.
-- **The prompt.** After your first post here, the thread page asks once whether you want to hear back. Say no and it never asks again; the switch stays in settings.
-- **The bell.** Opted-in members get an unread count in the masthead and a page listing recent alerts, fed by the forum's own record of what it sent. Reading one on atmo.pub doesn't clear it here, and vice versa.
+- **The prompt.** The home page and the thread page after your first post ask once whether you want to hear back. Say no and it never asks again; the switch stays in settings.
+- **The bell.** Opted-in members get an unread count in the masthead and a page listing recent alerts, fed by the forum's own record of what it sent. Reading one on atmo.pub doesn't clear it here, and vice versa. That page also carries the atmo.pub panel, so a member who lands there with notifications off can read what the relay is and connect from the spot.
 - **Watching boards.** Watch and unwatch from the board page. A watch is an `app.atmobb.forum.watch` record in your own repo, so it follows you like a membership does.
 - **Each forum is its own sender.** A forum shows up in atmo.pub under its own name, with a key it generates on first boot. A member on three atmobb forums approves three apps.
 - **Members-only boards stay quiet.** An alert about a private board says only that something happened and links to it. No title, no text, no name, and nothing goes to anyone who can't read the board.
