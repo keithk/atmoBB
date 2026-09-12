@@ -19,6 +19,10 @@ export interface RichTextBlock {
   text?: string;
   lang?: string;
   facets?: Facet[];
+  /** Text-block presentation. List items are separated by newlines. */
+  heading?: number;
+  list?: 'bullet' | 'ordered';
+  start?: number;
   /** #image — the uploaded blob (BlobRef on the wire; JSON in transit). */
   image?: unknown;
   alt?: string;
@@ -50,7 +54,7 @@ const INLINE_TAGS = new Set(['b', 'i', 'u', 's', 'spoiler', 'url']);
 const INLINE_TAG_RE = /\[(\/?)(b|i|u|s|spoiler|url)(?:=([^\]]*))?\]/gi;
 // Block-level constructs, scanned in document order: paired [quote]/[code], or a
 // self-closing [img=<cid>] whose blob rides the composer's images side-channel.
-const BLOCK_RE = /\[(quote|code)(?:=([^\]]*))?\]([\s\S]*?)\[\/\1\]|\[img=([^\]\s]+)\]/gi;
+const BLOCK_RE = /\[(quote|code|h1|h2|h3|list)(?:=([^\]]*))?\]([\s\S]*?)\[\/\1\]|\[img=([^\]\s]+)\]/gi;
 
 function featureFor(tag: string, arg?: string): FacetFeature {
   switch (tag) {
@@ -135,7 +139,18 @@ export function parseBBCode(raw: string): RichTextBlock[] {
     }
     const kind = m[1].toLowerCase();
     const inner = m[3];
-    if (kind === 'code') {
+    if (kind === 'list' || /^h[123]$/.test(kind)) {
+      const { text: content, facets } = parseInline(inner.trim());
+      const start = Number(m[2]);
+      if (content) blocks.push({
+        $type: `${NS}.block#text`, text: content,
+        ...(facets ? { facets } : {}),
+        ...(kind === 'list'
+          ? { list: m[2] ? 'ordered' as const : 'bullet' as const,
+              ...(m[2] ? { start: Number.isSafeInteger(start) && start >= 1 ? start : 1 } : {}) }
+          : { heading: Number(kind.slice(1)) }),
+      });
+    } else if (kind === 'code') {
       const trimmed = inner.replace(/^\n/, '').replace(/\n$/, '');
       if (trimmed.trim()) blocks.push({ $type: `${NS}.block#code`, text: trimmed, ...(m[2] ? { lang: m[2] } : {}) });
     } else {
@@ -153,4 +168,19 @@ export function parseBBCode(raw: string): RichTextBlock[] {
   }
   pushParagraphs(blocks, text.slice(last));
   return blocks;
+}
+
+/** Rebase UTF-8 facets for each line of a list's text. */
+export function listItems(block: RichTextBlock): RichTextBlock[] {
+  let offset = 0;
+  return (block.text ?? '').split('\n').map((text) => {
+    const end = offset + byteLength(text);
+    const facets = (block.facets ?? []).filter((f) => f.index.byteStart < end && f.index.byteEnd > offset)
+      .map((f) => ({ ...f, index: {
+        byteStart: Math.max(f.index.byteStart, offset) - offset,
+        byteEnd: Math.min(f.index.byteEnd, end) - offset,
+      } }));
+    offset = end + 1;
+    return { $type: `${NS}.block#text`, text, ...(facets.length ? { facets } : {}) };
+  });
 }

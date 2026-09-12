@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import { Editor, type JSONContent } from '@tiptap/core';
   import StarterKit from '@tiptap/starter-kit';
+  import { ListItem } from '@tiptap/extension-list';
   import { Placeholder } from '@tiptap/extensions';
   import { Spoiler } from '$lib/richtext/spoiler-mark';
   import { ForumImage } from '$lib/richtext/image-node';
@@ -52,17 +53,16 @@
       element,
       extensions: [
         StarterKit.configure({
-          heading: false,
-          bulletList: false,
-          orderedList: false,
+          heading: { levels: [1, 2, 3] },
           listItem: false,
-          listKeymap: false,
           horizontalRule: false,
           hardBreak: false,
           blockquote: false,
           link: { openOnClick: false },
         }),
-        Quote,
+        // The wire format supports single-paragraph, non-nested list items.
+        ListItem.extend({ content: 'paragraph' }),
+        Quote.extend({ content: 'paragraph+' }),
         Spoiler,
         ForumImage,
         Placeholder.configure({ placeholder }),
@@ -160,6 +160,24 @@
     aria-label="Formatting"
     onmousedown={(e) => e.preventDefault()}
   >
+    {#each [1, 2, 3] as level}
+      <button type="button" class="atm-toolbar__btn"
+        class:atm-toolbar__btn--active={isActive('heading', { level })}
+        aria-pressed={isActive('heading', { level })}
+        onclick={() => editor?.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 }).run()}
+        title="Heading {level}">H{level}</button>
+    {/each}
+    <button type="button" class="atm-toolbar__btn"
+      class:atm-toolbar__btn--active={isActive('bulletList')}
+      aria-pressed={isActive('bulletList')}
+      onclick={() => editor?.chain().focus().toggleBulletList().run()}
+      title="Bulleted list">• list</button>
+    <button type="button" class="atm-toolbar__btn"
+      class:atm-toolbar__btn--active={isActive('orderedList')}
+      aria-pressed={isActive('orderedList')}
+      onclick={() => editor?.chain().focus().toggleOrderedList().run()}
+      title="Numbered list">1. list</button>
+    <span class="atm-toolbar__sep"></span>
     <button
       type="button"
       class="atm-toolbar__btn"

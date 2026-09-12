@@ -20,6 +20,12 @@ const id = 'app.atmobb.richtext.block'
 export interface Text {
   $type?: 'app.atmobb.richtext.block#text'
   text: string
+  /** Heading level, absent for paragraphs and lists. */
+  heading?: number
+  /** List style. Each newline in text separates an item; facets index the entire text. Mutually exclusive with heading. */
+  list?: 'bullet' | 'ordered'
+  /** First item number for ordered lists; defaults to 1. */
+  start?: number
   facets?: AppAtmobbRichtextFacet.Main[]
 }
 

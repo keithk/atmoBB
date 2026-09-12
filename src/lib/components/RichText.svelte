@@ -2,6 +2,7 @@
   import SpoilerSpan from './SpoilerSpan.svelte';
   import MemberLink from './MemberLink.svelte';
   import type { Facet, FacetFeature, RichTextBlock } from '$lib/richtext/bbcode';
+  import { listItems } from '$lib/richtext/bbcode';
   import { postAuthor, postPath } from '$lib/appview-paths';
 
   let {
@@ -100,6 +101,16 @@
       {#if block.url}
         <img class="rt-image" src={block.url} alt={block.alt ?? ''} loading="lazy" />
       {/if}
+    {:else if block.list === 'bullet' || block.list === 'ordered'}
+      <svelte:element this={block.list === 'ordered' ? 'ol' : 'ul'} start={block.list === 'ordered' ? block.start ?? 1 : undefined}>
+        {#each listItems(block) as item}
+          <li>{#each segment(item.text ?? '', item.facets) as seg}{@render run(seg)}{/each}</li>
+        {/each}
+      </svelte:element>
+    {:else if block.heading && [1, 2, 3].includes(block.heading)}
+      <svelte:element this={`h${block.heading}`}>
+        {#each segment(block.text ?? '', block.facets) as seg}{@render run(seg)}{/each}
+      </svelte:element>
     {:else}
       <p class="rt-p">
         {#each segment(block.text ?? '', block.facets) as seg}{@render run(seg)}{/each}

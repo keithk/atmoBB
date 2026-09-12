@@ -59,6 +59,13 @@ function serializeBlock(node: JSONContent): string {
   switch (node.type) {
     case 'paragraph':
       return serializeInline(node.content);
+    case 'heading':
+      return `[h${node.attrs?.level}]${serializeInline(node.content)}[/h${node.attrs?.level}]`;
+    case 'bulletList':
+    case 'orderedList': {
+      const text = (node.content ?? []).map((item) => serializeInline(item.content?.[0]?.content)).join('\n');
+      return `[list${node.type === 'orderedList' ? `=${node.attrs?.start ?? 1}` : ''}]\n${text}\n[/list]`;
+    }
     case 'blockquote': {
       const inner = (node.content ?? []).map((p) => serializeInline(p.content)).join('\n\n');
       const uri = typeof node.attrs?.subjectUri === 'string' ? node.attrs.subjectUri : '';

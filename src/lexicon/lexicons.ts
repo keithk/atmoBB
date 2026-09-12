@@ -1647,6 +1647,23 @@ export const schemaDict = {
             maxLength: 100000,
             maxGraphemes: 10000,
           },
+          heading: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 3,
+            description: 'Heading level, absent for paragraphs and lists.',
+          },
+          list: {
+            type: 'string',
+            enum: ['bullet', 'ordered'],
+            description:
+              'List style. Each newline in text separates an item; facets index the entire text. Mutually exclusive with heading.',
+          },
+          start: {
+            type: 'integer',
+            minimum: 1,
+            description: 'First item number for ordered lists; defaults to 1.',
+          },
           facets: {
             type: 'array',
             items: {

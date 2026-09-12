@@ -1,5 +1,6 @@
 import type { JSONContent } from '@tiptap/core';
 import type { Facet, FacetFeature, RichTextBlock } from './bbcode';
+import { listItems } from './bbcode';
 
 type Mark = NonNullable<JSONContent['marks']>[number];
 
@@ -76,7 +77,19 @@ export function blocksToDoc(blocks: RichTextBlock[] = []): JSONContent {
   for (const block of blocks) {
     switch (block.$type.split('#')[1]) {
       case 'text':
-        content.push({ type: 'paragraph', content: runs(block.text ?? '', block.facets) });
+        if (block.list) {
+          content.push({
+            type: block.list === 'ordered' ? 'orderedList' : 'bulletList',
+            ...(block.list === 'ordered' ? { attrs: { start: block.start ?? 1 } } : {}),
+            content: listItems(block).map((item) => ({ type: 'listItem', content: [
+              { type: 'paragraph', content: runs(item.text ?? '', item.facets) },
+            ] })),
+          });
+        } else {
+          content.push({ type: block.heading ? 'heading' : 'paragraph',
+            ...(block.heading ? { attrs: { level: block.heading } } : {}),
+            content: runs(block.text ?? '', block.facets) });
+        }
         break;
       case 'quote':
         content.push({

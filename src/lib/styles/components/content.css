@@ -220,6 +220,25 @@
 .atm-usertitle { font: var(--type-meta); color: var(--forum-rank); font-style: italic; }
 
 /* ---- Rich text blocks (shared by the renderer and the composer) ---- */
+:is(.atm-richtext, .atm-prose) :is(h1, h2, h3) {
+  margin: var(--space-5) 0 var(--space-3);
+  font-family: var(--font-body);
+  font-weight: var(--w-bold);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+:is(.atm-richtext, .atm-prose) h1 { font-size: 1.6em; }
+:is(.atm-richtext, .atm-prose) h2 { font-size: 1.3em; }
+:is(.atm-richtext, .atm-prose) h3 { font-size: 1.1em; }
+:is(.atm-richtext, .atm-prose) :is(h1, h2, h3):first-child { margin-top: 0; }
+:is(.atm-richtext, .atm-prose) :is(ul, ol) {
+  margin: 0 0 var(--space-3);
+  padding-left: 1.75em;
+}
+:is(.atm-richtext, .atm-prose) ul { list-style: disc; }
+:is(.atm-richtext, .atm-prose) ol { list-style: decimal; }
+:is(.atm-richtext, .atm-prose) li { margin: var(--space-1) 0; overflow-wrap: anywhere; }
+.atm-prose li p { margin: 0; }
 .atm-richtext blockquote,
 .atm-prose blockquote {
   margin: 0 0 var(--space-3);
