@@ -8,6 +8,7 @@
   import PostEditor from '$lib/components/PostEditor.svelte';
   import Poll from '$lib/components/Poll.svelte';
   import ConversationLogin from '$lib/components/ConversationLogin.svelte';
+  import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
   import ThreadReadingTracker from '$lib/components/ThreadReadingTracker.svelte';
   import { page } from '$app/state';
   let { data, form } = $props();
@@ -129,6 +130,9 @@
     <p class="atm-ok">Deleted.</p>
   {/if}
   {#if form?.message && !form?.posted && !data.editing}<p class="atm-err">{form.message}</p>{/if}
+  {#if data.offerNotifications && (data.fresh || form?.posted)}
+    <NotifyPrompt next={page.url.pathname} />
+  {/if}
   {#if data.canModerate}
     <div class="atm-modbar">
       <span>staff:</span>

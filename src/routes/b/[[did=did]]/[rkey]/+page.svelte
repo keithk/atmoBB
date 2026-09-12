@@ -59,10 +59,20 @@
       <b>{boardThreads.toLocaleString()}</b> threads &middot; <b>{totalPosts.toLocaleString()}</b> posts
     </p>
   </div>
-  {#if user && !data.locked}
-    <a class="atm-btn atm-btn--primary" href="#composer">✎ new thread</a>
+  {#if user}
+    <div class="head__actions">
+      {#if data.watching !== null}
+        <form method="POST" action={data.watching ? '?/unwatch' : '?/watch'} use:enhance>
+          <button class="atm-btn atm-btn--secondary">{data.watching ? 'Unwatch' : 'Watch this board'}</button>
+        </form>
+      {/if}
+      {#if !data.locked}
+        <a class="atm-btn atm-btn--primary" href="#composer">✎ new thread</a>
+      {/if}
+    </div>
   {/if}
 </div>
+{#if form?.watch && form.message}<p class="atm-err">{form.message}</p>{/if}
 
 {#if data.locked}
   <div class="atm-card locked">
@@ -75,7 +85,7 @@
       {:else if page.url.searchParams.has('requested')}
         <p class="locked__msg">Request received. A moderator will review it.</p>
       {:else}
-        {#if form?.message}<p class="atm-err">{form.message}</p>{/if}
+        {#if form?.message && !form.watch}<p class="atm-err">{form.message}</p>{/if}
         {#if data.requested}
           <p class="locked__msg">You've asked for access before. If it was turned down or removed, you can ask again.</p>
         {:else}
@@ -199,7 +209,7 @@
       <span class="atm-composer__identity">posting as @{user.handle}</span>
     </div>
     <div class="atm-card__body">
-      {#if form?.message}<p class="atm-err">{form.message}</p>{/if}
+      {#if form?.message && !form.watch}<p class="atm-err">{form.message}</p>{/if}
       <form
         class="atm-composer__form"
         method="POST"
@@ -259,6 +269,7 @@
   .head__title { font: var(--type-page-title); color: var(--forum-ink); margin: 0; }
   .head__desc { font: var(--type-meta); color: var(--forum-ink-soft); margin: 5px 0 0; }
   .head__desc b { color: var(--forum-ink); }
+  .head__actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 
   .locked { margin-top: var(--space-4); }
   .locked__body { text-align: center; display: grid; justify-items: center; gap: var(--space-3); padding: var(--space-8) var(--space-4); }

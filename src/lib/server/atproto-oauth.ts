@@ -16,10 +16,17 @@ import { join } from 'node:path';
 // joining, profile); the forum account itself consents to authSysop (boards,
 // categories, mounts, staff, moderation) when a sysop connects it. Client
 // metadata must carry the union; each authorize request asks for its subset.
-export const MEMBER_SCOPE = 'atproto include:app.atmobb.authForum blob:image/*';
+//
+// authForum's rpc permission (asking atmo.pub to deliver notifications) has
+// no audience of its own: a permission set may not name a DID, so the relay
+// is supplied here on the include, percent-encoded fragment and all.
+export const NOTIFY_RELAY_DID = 'did:web:relay.atmo.pub';
+export const NOTIFY_RELAY_AUD = `${NOTIFY_RELAY_DID}#notif_relay`;
+const MEMBER_SET = `include:app.atmobb.authForum?aud=${encodeURIComponent(NOTIFY_RELAY_AUD)}`;
+export const MEMBER_SCOPE = `atproto ${MEMBER_SET} blob:image/*`;
 export const SYSOP_SCOPE = 'atproto include:app.atmobb.authSysop blob:image/* blob:font/*';
 export const OAUTH_SCOPE =
-  'atproto include:app.atmobb.authForum include:app.atmobb.authSysop blob:image/* blob:font/*';
+  `atproto ${MEMBER_SET} include:app.atmobb.authSysop blob:image/* blob:font/*`;
 
 const appUrl = () => env.ATMOBB_APP_URL ?? 'http://127.0.0.1:5173';
 

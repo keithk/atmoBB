@@ -5,6 +5,7 @@ import { forumUnclaimed, staffRole } from '$lib/server/admin';
 import { getStanding } from '$lib/server/appview';
 import { ringForums } from '$lib/server/webring';
 import { blobCid, blobUrl } from '$lib/server/profiles';
+import { countUnread, readMember } from '$lib/server/notify/store';
 
 const FONT_FAMILY = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,63}$/u;
 const cssString = (value: string) => JSON.stringify(value).replaceAll('<', '\\3c ');
@@ -49,15 +50,17 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
   // domain isn't assigned yet), layout-on-404 would recurse into a request
   // loop that floods the box.
   if (!route.id) {
-    return { user: locals.user, membership: null, avatarProfile: null, admin: false, staffRole: null, forumUnclaimed: false, bans: [], ringSize: 0, forum, forumDid: FORUM_DID(), forumFontCss, forumCustomCss, forumFavicon, sidebarBoards, sidebarCategories, appviewDown: true };
+    return { user: locals.user, membership: null, avatarProfile: null, admin: false, staffRole: null, forumUnclaimed: false, bans: [], ringSize: 0, forum, forumDid: FORUM_DID(), forumFontCss, forumCustomCss, forumFavicon, sidebarBoards, sidebarCategories, appviewDown: true, notifyOn: false, unread: 0 };
   }
-  const [membership, avatarProfile, role, ring, standing] = await Promise.all([
+  const [membership, avatarProfile, role, ring, standing, notify] = await Promise.all([
     locals.user ? getMembership(locals.user.did, FORUM_DID()) : null,
     locals.user ? getOwnAvatarProfile(locals.user.did).catch(() => null) : null,
     staffRole(locals.user?.did),
     ringForums(),
     // A banned member is told so on every page.
     locals.user ? getStanding(locals.user.did, FORUM_DID()).catch(() => null) : null,
+    // The bell is a local read (R16): no relay call, and a bad file hides it.
+    locals.user ? readMember(locals.user.did).catch(() => null) : null,
     (async () => {
       try {
         const index = await getBoardIndex(FORUM_DID());
@@ -80,8 +83,11 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
       }
     })(),
   ]);
+  const notifyOn = notify?.status === 'on';
   return {
     user: locals.user,
+    notifyOn,
+    unread: notifyOn ? countUnread(notify.entries) : 0,
     membership,
     avatarProfile,
     admin: role === 'admin',

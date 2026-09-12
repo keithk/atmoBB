@@ -14,6 +14,7 @@ import { getMembership, joinForum, leaveForum } from '$lib/server/pds';
 import { getPublicProfile } from '$lib/server/profiles';
 import { presenceSnapshot } from '$lib/server/presence';
 import { normalizeHomepage, rankHotThreads, selectFeaturedThreads } from '$lib/homepage';
+import { neverAskedAboutNotifications } from '$lib/server/notify/store';
 
 // Real profiles for the who's-online members (cached in getPublicProfile).
 async function presenceProfiles(dids: string[]): Promise<Record<string, ActorProfile | null>> {
@@ -32,6 +33,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
   };
   const presence = presenceSnapshot();
   const avatarProfiles = await presenceProfiles(presence.members.map((m) => m.did));
+  // The same one-time offer the thread page makes after a first post, so a
+  // member who never posts still finds it.
+  const offerNotifications = locals.user ? await neverAskedAboutNotifications(locals.user.did) : false;
   try {
     const [index, feed] = await Promise.all([
       getBoardIndex(FORUM_DID()),
@@ -127,6 +131,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
       hot,
       stats: index.stats ?? { threads: 0, posts: 0, members: 0 },
       handles,
+      offerNotifications,
       appviewDown: false,
     };
   } catch {
@@ -142,6 +147,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
       hot: [] as LatestThreads['threads'],
       stats: { threads: 0, posts: 0, members: 0 },
       handles: {} as Record<string, string>,
+      offerNotifications,
       appviewDown: true,
     };
   }

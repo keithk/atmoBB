@@ -1,0 +1,38 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.forum.getWatchers",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Members watching a board, minus anyone the forum has banned. Ordered by DID.",
+      "parameters": {
+        "type": "params",
+        "required": ["forum", "board"],
+        "properties": {
+          "forum": { "type": "string", "format": "did" },
+          "board": { "type": "string", "format": "at-uri" },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 500, "default": 100 },
+          "cursor": { "type": "string" }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["watchers"],
+          "properties": {
+            "watchers": { "type": "array", "items": { "type": "ref", "ref": "#watcher" } },
+            "cursor": { "type": "string" }
+          }
+        }
+      }
+    },
+    "watcher": {
+      "type": "object",
+      "required": ["did"],
+      "properties": {
+        "did": { "type": "string", "format": "did" }
+      }
+    }
+  }
+}

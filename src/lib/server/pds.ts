@@ -1,6 +1,7 @@
 import { jsonToLex } from '@atproto/api';
 import { agentFor } from './atproto-oauth';
 import { parseAtUri } from '$lib/appview-paths';
+import { planUnwatch, planWatch, watchesForForum, type Watch } from '$lib/watch';
 import type { Poll, RichTextBlock } from './appview';
 import {
   createSpaceRecord,
@@ -15,9 +16,30 @@ const NS = 'app.atmobb';
 const MEMBERSHIP = `${NS}.forum.membership`;
 const ACTOR_PROFILE = `${NS}.actor.profile`;
 const ACCESS_REQUEST = `${NS}.forum.accessRequest`;
+const WATCH = `${NS}.forum.watch`;
 
-// Membership is read from the member's own PDS (authoritative, no index lag)
-// and cached briefly so the layout doesn't hit the PDS on every page load.
+// Membership and watches are read from the member's own PDS (authoritative,
+// no index lag) and cached briefly so the layout doesn't hit the PDS on every
+// page load. A failed read is not cached and reads as null.
+const CACHE_MS = 5 * 60 * 1000;
+
+async function cached<T>(
+  cache: Map<string, { value: T; at: number }>,
+  key: string,
+  load: () => Promise<T>,
+): Promise<T | null> {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.value;
+  try {
+    const value = await load();
+    cache.set(key, { value, at: Date.now() });
+    return value;
+  } catch {
+    // PDS unreachable or session dead — pages render without this state
+    return null;
+  }
+}
+
 const membershipCache = new Map<string, { value: Membership; at: number }>();
 
 export interface Membership {
@@ -26,9 +48,7 @@ export interface Membership {
 }
 
 export async function getMembership(did: string, forum: string): Promise<Membership | null> {
-  const hit = membershipCache.get(did);
-  if (hit && Date.now() - hit.at < 5 * 60 * 1000) return hit.value;
-  try {
+  return cached(membershipCache, did, async () => {
     const agent = await agentFor(did);
     const res = await agent.com.atproto.repo.listRecords({
       repo: did,
@@ -36,13 +56,8 @@ export async function getMembership(did: string, forum: string): Promise<Members
       limit: 100,
     });
     const rec = res.data.records.find((r) => (r.value as { forum?: string }).forum === forum);
-    const value = { joined: !!rec, uri: rec?.uri };
-    membershipCache.set(did, { value, at: Date.now() });
-    return value;
-  } catch {
-    // PDS unreachable or session dead — pages render without the join state
-    return null;
-  }
+    return { joined: !!rec, uri: rec?.uri };
+  });
 }
 
 export async function joinForum(did: string, forum: string): Promise<void> {
@@ -97,6 +112,66 @@ export async function leaveForum(did: string, membershipUri: string): Promise<vo
   const agent = await agentFor(did);
   await agent.com.atproto.repo.deleteRecord({ repo: did, collection: p.collection, rkey: p.rkey });
   membershipCache.delete(did);
+}
+
+// Board watches mirror membership: read from the member's own PDS, cached
+// briefly for display, and read live again before any write.
+const watchCache = new Map<string, { value: Watch[]; at: number }>();
+
+async function listWatches(did: string, forumDid: string): Promise<Watch[]> {
+  const agent = await agentFor(did);
+  const res = await agent.com.atproto.repo.listRecords({ repo: did, collection: WATCH, limit: 100 });
+  return watchesForForum(res.data.records, forumDid);
+}
+
+async function cachedWatches(did: string, forumDid: string): Promise<Watch[] | null> {
+  return cached(watchCache, did, () => listWatches(did, forumDid));
+}
+
+/** The boards on this forum the member watches, or [] when the PDS can't be read. */
+export async function getWatches(did: string, forumDid: string): Promise<Watch[]> {
+  return (await cachedWatches(did, forumDid)) ?? [];
+}
+
+/** Whether the member watches the board, or null when the PDS can't be read. */
+export async function isWatching(did: string, forumDid: string, boardUri: string): Promise<boolean | null> {
+  const watches = await cachedWatches(did, forumDid);
+  return watches && watches.some((w) => w.board === boardUri);
+}
+
+export async function watchBoard(did: string, forumDid: string, boardUri: string): Promise<void> {
+  const agent = await agentFor(did);
+  if (planWatch(await listWatches(did, forumDid), boardUri).create) {
+    await agent.com.atproto.repo.createRecord({
+      repo: did,
+      collection: WATCH,
+      record: { $type: WATCH, board: boardUri, createdAt: new Date().toISOString() },
+    });
+  }
+  watchCache.delete(did);
+}
+
+export async function unwatchBoard(did: string, forumDid: string, boardUri: string): Promise<void> {
+  const agent = await agentFor(did);
+  for (const uri of planUnwatch(await listWatches(did, forumDid), boardUri)) {
+    const p = parseAtUri(uri);
+    if (p) await agent.com.atproto.repo.deleteRecord({ repo: did, collection: p.collection, rkey: p.rkey });
+  }
+  watchCache.delete(did);
+}
+
+/**
+ * A watch write the PDS refused. A scope or permission refusal means the
+ * forum's permission set hasn't reached this account yet, so say so instead
+ * of a generic failure; opt-in shows the same line.
+ */
+export function watchFailureMessage(e: unknown): string {
+  const msg = e instanceof Error ? e.message.toLowerCase() : '';
+  const status = (e as { status?: number } | null)?.status;
+  if (status === 403 || msg.includes('scope') || msg.includes('permission')) {
+    return "The forum's permissions are still propagating on your account. Try again in a bit.";
+  }
+  return "Couldn't save that. Try again.";
 }
 
 /**

@@ -25,6 +25,10 @@ Two things I left out of members-only boards:
 - **Images.** The composer stores images as blobs on the author's PDS, and a PDS only serves a blob while a record in that repo references it. A space record isn't in the repo, so the image would be either public or gone. The composer hides the image button on these boards and the server refuses image blocks in space posts (`assertNoImages` in `src/lib/server/pds.ts`).
 - **Polls.** Votes are public records that name the thread they belong to.
 
+## Notifications
+
+A members-only post still notifies the people it touches, but the alert that leaves the forum is bare: which kind of event happened, that it was on a members-only board, and a link through the forum's own notifications page. No title, no text, no author, no board name, and no DID anywhere in the payload, because atmo.pub forwards alerts to email and chat apps I don't control. Only current members of the space get one at all. If the appview can't confirm membership when a post lands, nobody is alerted for that post. The bell inside the forum shows the full title and text as usual.
+
 ## Reading and writing
 
 Space content bypasses the public index entirely. `src/lib/server/space-read.ts` assembles a private board by listing member repos and fetching their thread and reply records as the viewer. Author profiles still come from the public index. Post counts on a private board only count that board, because the public counters can't see space records.

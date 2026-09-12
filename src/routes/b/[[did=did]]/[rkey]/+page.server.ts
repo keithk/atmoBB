@@ -11,17 +11,28 @@ import {
   spaceOfBoard,
   isSpaceMember,
   getBoardAccess,
+  getBoardIndex,
 } from '$lib/server/appview';
 import { readSpaceBoardThreads } from '$lib/server/space-read';
-import { assertNoImages, createThread, getAccessRequest, requestAccess } from '$lib/server/pds';
+import {
+  assertNoImages,
+  createThread,
+  getAccessRequest,
+  isWatching,
+  requestAccess,
+  unwatchBoard,
+  watchBoard,
+  watchFailureMessage,
+} from '$lib/server/pds';
 import { boardModerator, canModerate } from '$lib/server/admin';
 import { createForumRecord } from '$lib/server/forum-repo';
-import { parseBBCode } from '$lib/richtext/bbcode';
+import { parseBBCode, type RichTextBlock } from '$lib/richtext/bbcode';
 import { attachImages } from '$lib/server/richtext';
 import { addMentionFacets } from '$lib/server/mentions';
 import { isThreadAction } from '$lib/moderation';
 import { parsePoll } from '$lib/poll';
 import { banMessage, bannedFrom } from '$lib/server/standing';
+import { notifyForPost } from '$lib/server/notify/dispatch';
 import { threadFilters } from '$lib/thread-filters';
 import { parseThreadTags } from '$lib/thread-tags';
 
@@ -65,6 +76,9 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
   );
   const board = page.board;
   if (!board) error(404, 'Board not found.');
+  // Watch state comes from the member's own PDS; null when logged out or the
+  // PDS can't be read, and the page hides the toggle rather than guess.
+  const watching = locals.user ? await isWatching(locals.user.did, FORUM_DID(), uri) : null;
   return {
     metadata: {
       title: board.name,
@@ -91,9 +105,56 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
     locked,
     member,
     requested,
+    watching,
     ...page,
   };
 };
+
+// Runs after the thread is written and never awaited by the action. The
+// board's name comes from the index; when it can't be had, the rkey stands in
+// rather than holding anything up. notifyForPost logs its own failures.
+async function notifyThread(
+  record: { board: string; title: string; body: RichTextBlock[] },
+  uri: string,
+  rkey: string,
+  user: { did: string; handle: string },
+) {
+  const boardName = await getBoardIndex(FORUM_DID()).then(
+    (index) => index.boards.find((b) => b.uri === record.board)?.value.name,
+    () => undefined,
+  );
+  await notifyForPost({
+    record: { body: record.body },
+    uri,
+    threadUri: uri,
+    threadTitle: record.title,
+    boardUri: record.board,
+    boardName: boardName ?? rkey,
+    authorDid: user.did,
+    authorHandle: user.handle,
+  });
+}
+
+// Watching and unwatching share the posting refusals: log in, not banned.
+async function toggleWatch(
+  locals: App.Locals,
+  board: string,
+  write: (did: string, forum: string, board: string) => Promise<void>,
+) {
+  if (!locals.user) return fail(401, { watch: true, message: 'Log in to watch boards.' });
+  let ban;
+  try {
+    ban = await bannedFrom(locals.user.did, board);
+  } catch {
+    return fail(502, { watch: true, message: "We couldn't check your standing. Try again." });
+  }
+  if (ban) return fail(403, { watch: true, message: banMessage(ban) });
+  try {
+    await write(locals.user.did, FORUM_DID(), board);
+  } catch (e) {
+    return fail(502, { watch: true, message: watchFailureMessage(e) });
+  }
+}
 
 export const actions: Actions = {
   newThread: async ({ params, request, locals }) => {
@@ -156,8 +217,12 @@ export const actions: Actions = {
     } catch (e) {
       return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t post your thread. Try again.' });
     }
+    void notifyThread({ board, title, body: blocks }, uri, params.rkey, locals.user);
     redirect(303, `${threadPath(uri)}?fresh=1`);
   },
+
+  watch: async ({ params, locals }) => toggleWatch(locals, boardUri(params.rkey, params.did), watchBoard),
+  unwatch: async ({ params, locals }) => toggleWatch(locals, boardUri(params.rkey, params.did), unwatchBoard),
 
   // Ask a members-only board's moderators for access. Writes an accessRequest
   // record into the requester's repo; a sysop resolves it from the mod queue.

@@ -42,6 +42,16 @@ Everything an atmobb forum does today. What I haven't built is listed at the [bo
 - **Domain-verified forum identity.** Every deployment serves its forum DID at `/.well-known/atproto-did`, so the forum account can claim the site's domain as its handle with no DNS fiddling. Handle-as-domain is what makes cross-forum links and the webring work: `https://<forum-handle>` is the forum.
 - **Cross-forum profiles and counts.** A member's profile page breaks their activity down per forum across the network, and atmosphere-wide post counts sum across every indexed forum.
 
+## Notifications
+
+- **Delivered by atmo.pub.** Members turn notifications on from settings, approve the forum once at [atmo.pub](https://atmo.pub), and pick their channels there: web push, email, Telegram, Bluesky DM, or a webhook. The forum sends; atmo.pub delivers. I didn't build any of the channels myself.
+- **What pings you.** A reply in a thread you started, a reply or quote aimed at one of your posts, an @mention, and a new thread in a board you watch. One alert per post, even when several apply. Only posts written through this forum's site trigger them; replies that arrive through topic federation or another client don't, yet.
+- **The prompt.** The home page and the thread page after your first post ask once whether you want to hear back. Say no and it never asks again; the switch stays in settings.
+- **The bell.** Opted-in members get an unread count in the masthead and a page listing recent alerts, fed by the forum's own record of what it sent. Reading one on atmo.pub doesn't clear it here, and vice versa. That page also carries the atmo.pub panel, so a member who lands there with notifications off can read what the relay is and connect from the spot.
+- **Watching boards.** Watch and unwatch from the board page. A watch is an `app.atmobb.forum.watch` record in your own repo, so it follows you like a membership does.
+- **Each forum is its own sender.** A forum shows up in atmo.pub under its own name, with a key it generates on first boot. A member on three atmobb forums approves three apps.
+- **Members-only boards stay quiet.** An alert about a private board says only that something happened and links to it. No title, no text, no name, and nothing goes to anyone who can't read the board.
+
 ## Moderation and staff
 
 - **Staff grants.** Admins and moderators are `app.atmobb.forum.moderator` records in the forum's repo, managed by handle from the admin panel. A moderator can be limited to certain boards; admins always cover the whole forum. The last admin can't remove themselves.
@@ -83,4 +93,4 @@ Admin saves wait until the change is visible in the index before redirecting, so
 
 ## Not built
 
-I haven't built search, notifications, RSS, private messages, or reactions, and there's no schema for any of them either. Polls on members-only boards aren't built either, since votes are public records the space can't see.
+I haven't built search, RSS, private messages, or reactions, and there's no schema for any of them either. Polls on members-only boards aren't built either, since votes are public records the space can't see. Notifications don't yet cover replies from federated peers or other clients, watching a single thread, or moderation notices.

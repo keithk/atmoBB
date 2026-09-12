@@ -5,6 +5,7 @@ import { oauthClient } from '$lib/server/atproto-oauth';
 import { setSessionCookie } from '$lib/server/session';
 import { FORUM_DID } from '$lib/server/appview';
 import { invalidateForumSession, invalidateStaff } from '$lib/server/admin';
+import { safeReturnPath } from '$lib/server/notify/return-path';
 
 const NS = 'app.atmobb';
 
@@ -53,5 +54,8 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
   }
 
   setSessionCookie(cookies, session.did);
-  redirect(303, '/');
+  // A login started with a return path (the notifications re-consent flow)
+  // goes back there; the state is re-validated, never trusted as-is.
+  const next = state?.startsWith('next:') ? safeReturnPath(state.slice('next:'.length)) : null;
+  redirect(303, next ?? '/');
 };
