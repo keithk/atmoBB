@@ -1,7 +1,7 @@
 import { chmodSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { P256Keypair } from '@atproto/crypto';
+import { mintServiceJwt } from './service-jwt';
 
 // Each forum is its own atmo.pub sender: a did:web on the app host, backed by
 // a P-256 key kept beside the OAuth stores so the existing backup covers it.
@@ -92,26 +92,6 @@ export async function publicKeyMultibase(): Promise<string> {
   return keypair.did().replace(/^did:key:/, '');
 }
 
-export interface ServiceJwtClaims {
-  iss: string;
-  aud: string;
-  lxm: string;
-  iat: number;
-  exp: number;
-  jti: string;
-}
-
-const b64url = (bytes: Uint8Array | string) => Buffer.from(bytes).toString('base64url');
-
-// ES256 over the compact JWT form. P256Keypair.sign returns the raw 64-byte
-// r||s that ES256 expects, so no DER conversion is needed.
-export async function signServiceJwt(keypair: P256Keypair, claims: ServiceJwtClaims): Promise<string> {
-  const header = b64url(JSON.stringify({ typ: 'JWT', alg: 'ES256' }));
-  const payload = b64url(JSON.stringify(claims));
-  const signature = await keypair.sign(new TextEncoder().encode(`${header}.${payload}`));
-  return `${header}.${payload}.${b64url(signature)}`;
-}
-
 export async function mintSenderJwt(
   lxm: string,
   { aud, expiresInSeconds = 60 }: { aud: string; expiresInSeconds?: number },
@@ -119,15 +99,7 @@ export async function mintSenderJwt(
   const iss = senderDid();
   if (!iss) throw new Error('No sender identity: ATMOBB_APP_URL must be an https URL without a port');
   const keypair = await senderKeypair();
-  const iat = Math.floor(Date.now() / 1000);
-  return signServiceJwt(keypair, {
-    iss,
-    aud,
-    lxm,
-    iat,
-    exp: iat + expiresInSeconds,
-    jti: randomBytes(16).toString('hex'),
-  });
+  return mintServiceJwt(keypair, { iss, aud, lxm, expiresInSeconds });
 }
 
 // The relay does not read the service entry yet; it is published so callbacks
