@@ -6,6 +6,14 @@ means. Every entry names the Happyview release it was tested against.
 
 ## Unreleased
 
+- Built-in color themes: Classic, Sky, Bubblegum, Midnight (dark), and Forest, chosen from Admin → Appearance → Theme with a live preview. The choice is stored as an optional `theme` on `app.atmobb.forum.profile`; custom CSS still loads afterwards and overrides it. Publish the updated profile schema before deploying.
+- Admin → Appearance is split into Theme, Homepage, Branding (favicon and social preview), and Custom CSS (stylesheet and fonts) sub-tabs.
+- Homepage settings on Admin → Appearance: a Boards, Latest, or Categories + Latest layout; a classic, compact, or hidden welcome panel for signed-out visitors; up to three featured topics; and a Categories / Latest / Hot switcher on the home page. Stored as an optional `homepage` object on `app.atmobb.forum.profile`; absent values keep the classic board index.
+- An optional forum sidebar with board navigation, grouped by category, that collapses into a drawer on small screens. Turned on from the same Homepage settings.
+- Boards get an optional `color` (`#RRGGBB`) on `app.atmobb.forum.board`, edited on Admin → Boards and shown as a marker on the home board index.
+- Topic tags: up to eight normalized lowercase `tags` on `app.atmobb.discussion.thread`, entered from the composer. Board and latest listings filter by `tag`, search titles with `q`, and the latest query also accepts `board` and `uri`; both queries return each topic's recent participants. Rerun `appview/setup.sh` for the updated Lua scripts and query lexicons.
+- Unread and read-position markers on topic lists, tracked per account and forum in the browser's local storage so nothing about reading habits leaves the device.
+- Rich text posts support headings and bulleted and numbered lists, in both the editor and BBCode.
 - Notifications through atmo.pub: replies, quotes, mentions, and new threads in boards you watch. Members opt in once from settings or the prompt after their first post; each forum is its own atmo.pub sender with a key generated on first boot. A bell in the masthead and a notifications page read the forum's own send log. Members-only boards send bare alerts and only to current members.
 - Board watching, as `app.atmobb.forum.watch` records in the member's repo, with a watchers query on the appview.
 - `app.atmobb.authForum` gains the watch collection, and the login scope asks for atmo.pub's permission request as a granular `rpc` scope, so members re-consent at their next login. Publish the watch schema and the updated set before deploying; `setup.sh` needs the record schema on the network.

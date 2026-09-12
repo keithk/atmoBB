@@ -1,6 +1,23 @@
 # Forum theming
 
-Forum owners can add CSS and WOFF/WOFF2 fonts from **Admin → Appearance**. Custom CSS loads after atmobb's own styles on every non-admin page. Admin pages keep the built-in styles no matter what, so a theme that breaks everything is still repairable.
+Forum owners pick a built-in color theme, and can add CSS and WOFF/WOFF2 fonts, from **Admin → Appearance**. Custom CSS loads after atmobb's own styles and the chosen theme on every non-admin page. Admin pages keep the built-in styles (and the chosen theme) no matter what, so a stylesheet that breaks everything is still repairable.
+
+## Built-in themes
+
+**Admin → Appearance → Theme** offers five presets: Classic (the greige-and-coral default), Sky (white and blue), Bubblegum (pink and teal), Midnight (dark navy and amber), and Forest (sage and moss). A preview on that page shows the masthead, a category bar, topic rows, and buttons in the selected colors before you save.
+
+A theme is nothing more than a full set of `--forum-*` values written to `:root` ahead of your custom CSS. It lives in `src/lib/themes.ts` and is stored on the forum profile as `theme`; an absent value means Classic. Because your CSS comes later in the same style tag, you can start from a preset and override just the tokens you care about:
+
+```css
+/* Midnight, but with the classic coral accent */
+:root {
+  --forum-accent: #f79b7a;
+  --forum-accent-ink: #4a2a1c;
+  --forum-link: #ffb39a;
+}
+```
+
+Midnight also re-tunes the shared status hues (`--ok-*`, `--warn-*`, `--danger-*`, `--info-*`) and shadows, since their light tints glare on dark panels, and sets `color-scheme: dark` so native form controls match.
 
 ## Cascade contract
 

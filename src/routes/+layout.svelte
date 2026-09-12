@@ -8,6 +8,7 @@
   import { groupBoards } from '$lib/board-presentation';
   import { normalizeHomepage } from '$lib/homepage';
   import { resolveMetadata, serializeStructuredData, type PageMetadata } from '$lib/seo';
+  import { themeColor, themeCss } from '$lib/themes';
 
   let { data, children } = $props();
 
@@ -23,8 +24,15 @@
   const sidebarGroups = $derived(groupBoards(data.sidebarBoards, data.sidebarCategories));
   let sidebarDrawer = $state<ForumSidebarDrawer>();
 
+  // Built-in theme first, then fonts, then owner CSS. The theme preset is
+  // curated and cannot break the admin, so it applies everywhere; owner CSS
+  // stays off admin pages so a broken stylesheet is always repairable.
   const appearanceCss = $derived(
-    data.forumFontCss + (page.url.pathname.startsWith('/admin') ? '' : `\n${data.forumCustomCss}`),
+    [
+      themeCss(data.forumTheme),
+      data.forumFontCss,
+      page.url.pathname.startsWith('/admin') ? '' : data.forumCustomCss,
+    ].filter(Boolean).join('\n'),
   );
 
   // One document-level source of truth keeps search, Open Graph, Twitter, and
@@ -48,6 +56,7 @@
   <meta name="description" content={metadata.description} />
   <meta name="robots" content={metadata.robots} />
   <meta name="googlebot" content={metadata.robots} />
+  <meta name="theme-color" content={themeColor(data.forumTheme)} />
   <meta name="application-name" content={data.forum.name} />
   <meta name="apple-mobile-web-app-title" content={data.forum.name} />
   <link rel="canonical" href={metadata.canonical} />

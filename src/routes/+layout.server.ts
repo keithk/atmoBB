@@ -6,6 +6,7 @@ import { getStanding } from '$lib/server/appview';
 import { ringForums } from '$lib/server/webring';
 import { blobCid, blobUrl } from '$lib/server/profiles';
 import { countUnread, readMember } from '$lib/server/notify/store';
+import { DEFAULT_THEME, normalizeTheme, type ForumTheme } from '$lib/themes';
 
 const FONT_FAMILY = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,63}$/u;
 const cssString = (value: string) => JSON.stringify(value).replaceAll('<', '\\3c ');
@@ -39,6 +40,7 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
   // The app must render (degraded) even when the appview is unreachable —
   // health checks hit `/`, and a reads-down forum should still say so politely.
   let forum: ForumProfile = { name: 'atmoBB' };
+  let forumTheme: ForumTheme = DEFAULT_THEME;
   let forumFontCss = '';
   let forumCustomCss = '';
   let forumFavicon: { url: string; mimeType: string } | null = null;
@@ -50,7 +52,7 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
   // domain isn't assigned yet), layout-on-404 would recurse into a request
   // loop that floods the box.
   if (!route.id) {
-    return { user: locals.user, membership: null, avatarProfile: null, admin: false, staffRole: null, forumUnclaimed: false, bans: [], ringSize: 0, forum, forumDid: FORUM_DID(), forumFontCss, forumCustomCss, forumFavicon, sidebarBoards, sidebarCategories, appviewDown: true, notifyOn: false, unread: 0 };
+    return { user: locals.user, membership: null, avatarProfile: null, admin: false, staffRole: null, forumUnclaimed: false, bans: [], ringSize: 0, forum, forumDid: FORUM_DID(), forumTheme, forumFontCss, forumCustomCss, forumFavicon, sidebarBoards, sidebarCategories, appviewDown: true, notifyOn: false, unread: 0 };
   }
   const [membership, avatarProfile, role, ring, standing, notify] = await Promise.all([
     locals.user ? getMembership(locals.user.did, FORUM_DID()) : null,
@@ -68,6 +70,7 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
         sidebarCategories = index.categories ?? [];
         if (index.forum) {
           forum = index.forum;
+          forumTheme = normalizeTheme(forum.theme);
           forumFontCss = await customFontCss(forum);
           forumCustomCss = safeCustomCss(forum.customCss);
           const cid = blobCid(forum.favicon);
@@ -99,6 +102,7 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
     ringSize: ring.length,
     forum,
     forumDid: FORUM_DID(),
+    forumTheme,
     forumFontCss,
     forumCustomCss,
     forumFavicon,

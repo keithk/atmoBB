@@ -32,6 +32,9 @@ export interface Main {
   /** Post-count rank ladder, ordered ascending by minPosts. Ranks are computed by appviews from indexed post counts. */
   ranks?: Rank[]
   links?: string[]
+  /** Built-in color theme preset. Absent means the classic atmobb skin. Custom CSS loads after the preset and may override it. */
+  theme?:
+    'classic' | 'sky' | 'bubblegum' | 'midnight' | 'forest' | (string & {})
   /** Forum-owned CSS applied to public pages. Admin pages deliberately ignore it so a broken stylesheet can always be repaired. */
   customCss?: string
   /** Forum-owned webfont faces available to customCss. */

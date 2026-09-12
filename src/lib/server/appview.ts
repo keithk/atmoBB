@@ -71,6 +71,7 @@ export interface ForumProfile {
     featuredThreads?: string[];
   };
   favicon?: unknown;
+  theme?: string;
   customCss?: string;
   customFonts?: ForumFont[];
   ogImage?: unknown;

@@ -1298,6 +1298,19 @@ export const schemaDict = {
                 format: 'uri',
               },
             },
+            theme: {
+              type: 'string',
+              description:
+                'Built-in color theme preset. Absent means the classic atmobb skin. Custom CSS loads after the preset and may override it.',
+              knownValues: [
+                'classic',
+                'sky',
+                'bubblegum',
+                'midnight',
+                'forest',
+              ],
+              maxLength: 32,
+            },
             customCss: {
               type: 'string',
               description:

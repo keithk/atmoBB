@@ -1,306 +1,81 @@
 <script lang="ts">
-  import { page } from '$app/state';
+  import { THEME_PRESETS, themeInlineStyle, type ForumTheme } from '$lib/themes';
 
   let { data, form } = $props();
 
-  const saved = $derived(page.url.searchParams.get('saved'));
-  const pending = $derived(page.url.searchParams.has('pending'));
-  const fontSize = (bytes?: number) => bytes ? `${Math.ceil(bytes / 1024)} KB` : '';
-  let faviconName = $state('');
-  let ogImageName = $state('');
-  let selectedOgTheme = $state<string>();
-  const ogTheme = $derived(selectedOgTheme ?? data.ogTheme);
-  const ogThemes = [
-    { value: 'classic', label: 'Classic', colors: ['#eceae7', '#f79b7a', '#2b2a2e'] },
-    { value: 'midnight', label: 'Midnight', colors: ['#171821', '#ffb454', '#f5f1ff'] },
-    { value: 'ocean', label: 'Ocean', colors: ['#dcecf1', '#35b6d4', '#14313d'] },
-    { value: 'forest', label: 'Forest', colors: ['#e4eadf', '#79a85a', '#243326'] },
-    { value: 'plum', label: 'Plum', colors: ['#eee4ed', '#d56aaf', '#382636'] },
-  ];
+  let selected = $state<ForumTheme>();
+  const theme = $derived(selected ?? data.theme);
+  const previewStyle = $derived(themeInlineStyle(theme));
+  const preset = $derived(THEME_PRESETS.find((p) => p.value === theme) ?? THEME_PRESETS[0]);
 </script>
 
-{#if saved}
-  <p class="atm-ok">
-    {saved === 'removed'
-      ? 'Font removed.'
-      : saved === 'font'
-        ? 'Font uploaded.'
-        : saved === 'favicon'
-          ? 'Favicon saved.'
-          : saved === 'favicon-removed'
-            ? 'Default favicon restored.'
-            : saved === 'og'
-              ? 'Social preview saved.'
-              : saved === 'og-theme'
-                ? 'Social preview style saved.'
-                : saved === 'homepage'
-                  ? 'Homepage settings saved.'
-                : saved === 'og-removed'
-                  ? 'Default social preview restored.'
-                  : 'CSS saved.'}
-    {#if pending} The change is taking a few extra seconds to show up here — refresh to see it.{/if}
-  </p>
-{/if}
 {#if form?.message}<p class="atm-err">{form.message}</p>{/if}
 
-<div class="atm-card panel atm-home-settings">
-  <div class="atm-card__header"><span>Homepage</span></div>
+<div class="atm-card panel">
+  <div class="atm-card__header"><span>Theme</span></div>
   <div class="atm-card__body">
     <p class="lede">
-      Choose what visitors see first. Featured topics are ordered independently from pinned topics;
-      inaccessible or removed topics are safely skipped.
+      Pick a built-in color theme for every public page. Themes only change the
+      <code>--forum-*</code> tokens, so custom CSS still loads afterwards and can fine-tune anything.
     </p>
-    <form class="appearance" method="POST" action="?/saveHomepage">
-      <div class="homepage-grid">
-        <label class="atm-field">
-          <span class="atm-label">Layout</span>
-          <select class="atm-select" name="layout">
-            <option value="boards" selected={data.homepage.layout === 'boards'}>Boards</option>
-            <option value="latest" selected={data.homepage.layout === 'latest'}>Latest</option>
-            <option value="categories-latest" selected={data.homepage.layout === 'categories-latest'}>Categories + Latest</option>
-          </select>
-          <span class="atm-hint">The default keeps the classic board index.</span>
-        </label>
-        <label class="atm-field">
-          <span class="atm-label">Welcome panel</span>
-          <select class="atm-select" name="welcome">
-            <option value="classic" selected={data.homepage.welcome === 'classic'}>Classic</option>
-            <option value="compact" selected={data.homepage.welcome === 'compact'}>Compact</option>
-            <option value="hidden" selected={data.homepage.welcome === 'hidden'}>Hidden</option>
-          </select>
-          <span class="atm-hint">Shown only to visitors who are signed out.</span>
-        </label>
-      </div>
-      <label class="homepage-check">
-        <input type="checkbox" name="sidebar" checked={data.homepage.sidebar} />
-        <span>
-          <b>Show the forum sidebar</b>
-          <small>Keep forum navigation and board links close at hand.</small>
-        </span>
-      </label>
-      <fieldset class="featured-fields">
-        <legend class="atm-label">Featured topics (optional, in order)</legend>
-        {#each [0, 1, 2] as index}
-          <label class="atm-field featured-field">
-            <span class="featured-field__number">{index + 1}</span>
-            <input
-              class="atm-input"
-              name="featuredThread"
-              value={data.homepage.featuredThreads[index] ?? ''}
-              list="recent-topics"
-              placeholder="at://did:…/app.atmobb.discussion.thread/…"
-              autocapitalize="none"
-              autocorrect="off"
-              spellcheck="false"
-            />
-          </label>
-        {/each}
-        <datalist id="recent-topics">
-          {#each data.recentThreads as thread}
-            <option value={thread.uri}>{thread.title}</option>
-          {/each}
-        </datalist>
-        <span class="atm-hint">Paste a thread at-URI or choose a recent topic. Clear all three to hide the section.</span>
-      </fieldset>
-      <button class="atm-btn atm-btn--primary">save homepage</button>
-    </form>
-  </div>
-</div>
 
-<div class="atm-card panel">
-  <div class="atm-card__header"><span>Favicon</span></div>
-  <div class="atm-card__body">
-    <p class="lede">Use your forum’s own icon in browser tabs and bookmarks.</p>
-    <div class="favicon-setting">
-      <img
-        class="favicon-preview"
-        src={data.faviconUrl ?? '/favicon.svg'}
-        alt="Current forum favicon"
-        width="64"
-        height="64"
-      />
-      <div>
-        <form class="favicon-actions" method="POST" action="?/uploadFavicon" enctype="multipart/form-data">
-          <label class="atm-btn atm-btn--secondary file-button">
-            <input
-              name="favicon"
-              type="file"
-              accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
-              required
-              disabled={data.writeMode === 'index'}
-              onchange={(event) => (faviconName = event.currentTarget.files?.[0]?.name ?? '')}
-            />
-            {faviconName || 'choose image'}
-          </label>
-          <button class="atm-btn atm-btn--primary" disabled={data.writeMode === 'index'}>save favicon</button>
-        </form>
-        {#if data.faviconCid}
-          <form method="POST" action="?/removeFavicon">
-            <button class="atm-btn atm-btn--ghost">restore default</button>
-          </form>
-        {/if}
-        <p class="atm-hint">
-          Square PNG, JPEG, or WebP recommended; up to 1 MB.{#if data.writeMode === 'index'} Uploads require a connected forum account and PDS.{/if}
-        </p>
+    <div class="preview" style={previewStyle} style:color-scheme={preset.dark ? 'dark' : 'light'} aria-hidden="true">
+      <div class="preview__masthead">
+        <div class="preview__bar">
+          <span class="preview__brand">{data.forumName}</span>
+          <span class="preview__btn preview__btn--ghost">log in</span>
+        </div>
+        <div class="preview__nav">
+          <span class="preview__nav-item preview__nav-item--active">Boards</span>
+          <span class="preview__nav-item">Latest</span>
+          <span class="preview__nav-item">Members</span>
+        </div>
+      </div>
+      <div class="preview__section">
+        <div class="preview__cat">General</div>
+        <div class="preview__row preview__row--pinned">
+          <span class="preview__title">Welcome! Read this first</span>
+          <span class="preview__meta">pinned · <span class="preview__link">mod</span></span>
+        </div>
+        <div class="preview__row">
+          <span class="preview__title">What are you playing this weekend?</span>
+          <span class="preview__meta">42 replies · <span class="preview__rank">regular</span></span>
+        </div>
+        <div class="preview__row preview__row--alt">
+          <span class="preview__title">Introduce yourself</span>
+          <span class="preview__meta">7 replies · <span class="preview__link">newcomer</span></span>
+        </div>
+      </div>
+      <div class="preview__actions">
+        <span class="preview__btn preview__btn--primary">new topic</span>
+        <span class="preview__btn preview__btn--secondary">watch board</span>
       </div>
     </div>
-  </div>
-</div>
 
-<div class="atm-card panel">
-  <div class="atm-card__header"><span>Social preview</span></div>
-  <div class="atm-card__body">
-    <p class="lede">
-      Pick a style and atmoBB builds the image from the forum profile and live stats. No design
-      software needed—the preview updates as you choose.
-    </p>
-    {#if data.ogImageCid}
-      <p class="atm-ok">A finished image is currently active. Choosing a style below will replace it.</p>
-    {/if}
-    <img
-      class="og-preview"
-      src="/og/forum.png?previewTheme={ogTheme}"
-      alt="Current forum social preview"
-      width="1200"
-      height="630"
-    />
-    <form class="theme-builder" method="POST" action="?/saveOgTheme">
+    <form class="theme-form" method="POST" action="?/saveTheme">
       <fieldset class="theme-options">
-        <legend class="atm-label">Style</legend>
-        {#each ogThemes as theme}
-          <label class:theme-option--selected={ogTheme === theme.value} class="theme-option">
+        <legend class="atm-label">Themes</legend>
+        {#each THEME_PRESETS as option}
+          <label class:theme-option--selected={theme === option.value} class="theme-option">
             <input
               type="radio"
-              name="ogTheme"
-              value={theme.value}
-              checked={ogTheme === theme.value}
-              onchange={() => (selectedOgTheme = theme.value)}
+              name="theme"
+              value={option.value}
+              checked={theme === option.value}
+              onchange={() => (selected = option.value)}
             />
             <span class="swatches" aria-hidden="true">
-              {#each theme.colors as color}<i style:background={color}></i>{/each}
+              {#each option.swatches as color}<i style:background={color}></i>{/each}
             </span>
-            <span>{theme.label}</span>
+            <span class="theme-option__text">
+              <b>{option.label}</b>
+              <small>{option.description}</small>
+            </span>
           </label>
         {/each}
       </fieldset>
-      <button class="atm-btn atm-btn--primary">use this style</button>
+      <button class="atm-btn atm-btn--primary">save theme</button>
     </form>
-    <details class="custom-image">
-      <summary>Advanced: use a finished image instead</summary>
-      <p class="atm-hint">A custom image replaces the generated card until you choose a style again.</p>
-      <div class="og-actions">
-        <form class="og-upload" method="POST" action="?/uploadOgImage" enctype="multipart/form-data">
-          <label class="atm-btn atm-btn--secondary file-button">
-            <input
-              name="ogImage"
-              type="file"
-              accept="image/png,.png"
-              required
-              disabled={data.writeMode === 'index'}
-              onchange={(event) => (ogImageName = event.currentTarget.files?.[0]?.name ?? '')}
-            />
-            {ogImageName || 'choose PNG'}
-          </label>
-          <button class="atm-btn atm-btn--primary" disabled={data.writeMode === 'index'}>save preview</button>
-        </form>
-        {#if data.ogImageCid}
-          <form method="POST" action="?/removeOgImage">
-            <button class="atm-btn atm-btn--ghost">restore default</button>
-          </form>
-        {/if}
-      </div>
-      <p class="atm-hint">
-        1200 × 630 PNG, up to 2 MB.{#if data.writeMode === 'index'} Uploads require a connected forum account and PDS.{/if}
-      </p>
-    </details>
-  </div>
-</div>
-
-<div class="atm-card panel">
-  <div class="atm-card__header"><span>Custom CSS</span></div>
-  <div class="atm-card__body">
-    <p class="lede">
-      This stylesheet loads after the built-in theme on every public page. It does not apply to
-      Admin pages, so you can always return here to fix it. Prefer <code>--forum-*</code> tokens and
-      <code>atm-*</code> classes. Built-in styles are layered, so unlayered rules here override them
-      without <code>!important</code>.
-    </p>
-    <form class="appearance" method="POST" action="?/saveCss">
-      <div class="atm-field">
-        <span class="atm-label">CSS</span>
-        <textarea
-          class="atm-textarea code"
-          name="customCss"
-          rows="18"
-          maxlength="100000"
-          spellcheck="false"
-          placeholder={':root {\n  --forum-link: rebeccapurple;\n}'}>{data.customCss}</textarea>
-        <span class="atm-hint">Clearing the field restores the built-in styles. CSS can load external resources, so only use URLs you trust.</span>
-      </div>
-      <button class="atm-btn atm-btn--primary">save CSS</button>
-    </form>
-  </div>
-</div>
-
-<div class="atm-card panel">
-  <div class="atm-card__header"><span>Custom fonts ({data.fonts.length}/12)</span></div>
-  <div class="atm-card__body">
-    <p class="lede">
-      Upload one WOFF or WOFF2 file per face. The family becomes available to the CSS above; set a
-      token such as <code>--font-display: 'Forum Display', sans-serif</code> to use it.
-    </p>
-
-    {#if data.fonts.length}
-      <div class="fonts">
-        {#each data.fonts as font}
-          <div class="font">
-            <div class="font__face">
-              <strong>{font.family}</strong>
-              <span>{font.weight} · {font.style}{#if fontSize(font.size)} · {fontSize(font.size)}{/if}</span>
-            </div>
-            <form method="POST" action="?/removeFont">
-              <input type="hidden" name="cid" value={font.cid} />
-              <input type="hidden" name="family" value={font.family} />
-              <input type="hidden" name="weight" value={font.weight} />
-              <input type="hidden" name="style" value={font.style} />
-              <button class="atm-btn atm-btn--ghost atm-btn--sm">remove</button>
-            </form>
-          </div>
-        {/each}
-      </div>
-    {/if}
-
-    <form class="upload" method="POST" action="?/uploadFont" enctype="multipart/form-data">
-      <div class="atm-field upload__family">
-        <span class="atm-label">Family name</span>
-        <input class="atm-input" name="family" maxlength="64" required placeholder="Forum Display" />
-      </div>
-      <div class="atm-field">
-        <span class="atm-label">Weight</span>
-        <select class="atm-select" name="weight">
-          {#each [100, 200, 300, 400, 500, 600, 700, 800, 900] as weight}
-            <option value={weight} selected={weight === 400}>{weight}</option>
-          {/each}
-        </select>
-      </div>
-      <div class="atm-field">
-        <span class="atm-label">Style</span>
-        <select class="atm-select" name="style">
-          <option value="normal">normal</option>
-          <option value="italic">italic</option>
-        </select>
-      </div>
-      <div class="atm-field upload__file">
-        <span class="atm-label">Font file</span>
-        <input class="atm-input" name="font" type="file" accept=".woff,.woff2,font/woff,font/woff2" required />
-      </div>
-      <button class="atm-btn atm-btn--secondary" disabled={data.writeMode === 'index' || data.fonts.length >= 12}>upload font</button>
-    </form>
-    {#if data.writeMode === 'index'}
-      <p class="atm-hint upload-note">Font uploads are unavailable in development mode because the test forum has no PDS.</p>
-    {:else}
-      <p class="atm-hint upload-note">2 MB maximum. If you connected this forum before font support was added, reconnect it on the Connection tab to allow font uploads.</p>
-    {/if}
   </div>
 </div>
 
@@ -308,69 +83,116 @@
   .panel { max-width: 80ch; margin-bottom: var(--space-4); }
   .lede { margin: 0 0 var(--space-4); font: var(--type-ui); color: var(--forum-ink-soft); }
   .lede code { font-family: var(--font-mono); }
-  .favicon-setting { display: flex; align-items: flex-start; gap: var(--space-4); }
-  .favicon-preview { object-fit: contain; border: var(--border-hair) solid var(--forum-line); border-radius: var(--radius-sm); }
-  .favicon-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-2); }
-  .og-preview { display: block; width: 100%; height: auto; border: var(--border-hair) solid var(--forum-line); }
-  .theme-builder { display: grid; gap: var(--space-3); margin-top: var(--space-3); }
-  .theme-options { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: 0; border: 0; }
-  .theme-options legend { width: 100%; margin-bottom: var(--space-1); }
-  .theme-option { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2); border: var(--border-hair) solid var(--forum-line); background: var(--forum-surface); cursor: pointer; }
-  .theme-option--selected { border-color: var(--forum-accent); box-shadow: 0 0 0 1px var(--forum-accent); }
-  .theme-option input { position: absolute; opacity: 0; pointer-events: none; }
-  .swatches { display: flex; overflow: hidden; border: var(--border-hair) solid var(--forum-line); border-radius: var(--radius-sm); }
-  .swatches i { width: 16px; height: 24px; }
-  .theme-builder .atm-btn { justify-self: start; }
-  .custom-image { margin-top: var(--space-4); border-top: var(--border-hair) solid var(--forum-line); padding-top: var(--space-3); }
-  .custom-image summary { cursor: pointer; font: var(--type-ui); color: var(--forum-link); }
-  .og-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-3); }
-  .og-upload { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-  .file-button { position: relative; max-width: 24rem; overflow: hidden; cursor: pointer; }
-  .file-button input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-  .appearance { display: grid; gap: var(--space-3); }
-  .homepage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
-  .homepage-check { display: flex; align-items: flex-start; gap: var(--space-2); font: var(--type-ui); }
-  .homepage-check input { margin-top: 3px; }
-  .homepage-check span { display: grid; gap: 2px; }
-  .homepage-check b { font-weight: var(--w-semibold); }
-  .homepage-check small { color: var(--forum-ink-soft); }
-  .featured-fields { display: grid; gap: var(--space-2); padding: 0; border: 0; }
-  .featured-fields legend { margin-bottom: var(--space-1); }
-  .featured-field { position: relative; }
-  .featured-field__number {
-    position: absolute;
-    z-index: 1;
-    left: var(--space-3);
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--forum-ink-faint);
-    font: var(--type-meta);
-  }
-  .featured-field .atm-input { padding-left: var(--space-6); font-family: var(--font-mono); font-size: var(--text-xs); }
-  .code { font-family: var(--font-mono); font-size: var(--text-xs); tab-size: 2; }
-  .fonts { margin-bottom: var(--space-4); border-top: var(--border-hair) solid var(--forum-line); }
-  .font {
-    display: flex;
-    align-items: center;
+
+  /* Live preview: a compact mock that reads the same --forum-* tokens as the real pages.
+     The inline style on the container re-skins it without touching the admin itself. */
+  .preview {
+    padding: var(--space-4);
+    border: var(--border-hair) solid var(--forum-line);
+    border-radius: var(--radius-md);
+    background: var(--forum-bg);
+    color: var(--forum-ink);
+    font: var(--type-ui);
+    display: grid;
     gap: var(--space-3);
-    padding: var(--space-2) 0;
+  }
+  .preview__masthead, .preview__section {
+    background: var(--forum-surface);
+    border: var(--border-hair) solid var(--forum-edge);
+    border-radius: var(--radius-md);
+    box-shadow: inset 0 1px 0 var(--forum-bevel), var(--shadow-sm);
+    overflow: hidden;
+  }
+  .preview__bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-2) var(--space-3);
+    border-bottom: var(--border-hair) solid var(--forum-line);
+    background: var(--forum-header-bg);
+  }
+  .preview__brand { font: var(--w-bold) var(--text-md)/1 var(--font-display); color: var(--forum-header-ink); }
+  .preview__nav {
+    display: flex;
+    gap: var(--space-1);
+    padding: 0 var(--space-2);
+    background: var(--forum-cat-bg);
+    box-shadow: inset 0 1px 0 var(--forum-bevel);
+  }
+  .preview__nav-item {
+    padding: 8px 10px 6px;
+    font: var(--w-semibold) var(--text-xs)/1 var(--font-body);
+    color: var(--forum-cat-ink);
+    border-bottom: var(--border-solid) solid transparent;
+  }
+  .preview__nav-item--active { color: var(--forum-ink); border-bottom-color: var(--forum-cat-edge); }
+  .preview__cat {
+    padding: 6px var(--space-3);
+    font: var(--w-bold) var(--text-xs)/1 var(--font-body);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--forum-cat-ink);
+    background: var(--forum-cat-bg);
+    border-bottom: var(--border-solid) solid var(--forum-cat-edge);
+  }
+  .preview__row {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
     border-bottom: var(--border-hair) solid var(--forum-line);
   }
-  .font__face { display: grid; flex: 1; }
-  .font__face strong { font: var(--w-semibold) var(--text-sm)/1.4 var(--font-body); }
-  .font__face span { font: var(--type-meta); color: var(--forum-ink-faint); }
-  .upload {
-    display: grid;
-    grid-template-columns: minmax(12rem, 1fr) auto auto;
-    gap: var(--space-3);
-    align-items: end;
+  .preview__row:last-child { border-bottom: 0; }
+  .preview__row--alt { background: var(--forum-surface-2); }
+  .preview__row--pinned { background: var(--forum-pin-bg); box-shadow: inset 3px 0 0 var(--forum-pin-edge); }
+  .preview__title { font-weight: var(--w-semibold); color: var(--forum-ink); }
+  .preview__meta { font: var(--type-meta); color: var(--forum-ink-faint); white-space: nowrap; }
+  .preview__link { color: var(--forum-link); }
+  .preview__rank {
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    color: var(--forum-rank);
+    background: var(--forum-rank-bg);
+    border: var(--border-hair) solid color-mix(in oklch, var(--forum-rank) 45%, transparent);
   }
-  .upload__file { grid-column: 1 / -1; }
-  .upload .atm-btn { justify-self: start; }
-  .upload-note { margin-top: var(--space-3); }
-  @media (max-width: 640px) {
-    .homepage-grid { grid-template-columns: 1fr; }
-    .upload { grid-template-columns: 1fr 1fr; }
-    .upload__family, .upload__file { grid-column: 1 / -1; }
+  .preview__actions { display: flex; gap: var(--space-2); }
+  .preview__btn {
+    display: inline-flex;
+    padding: 6px 11px;
+    border-radius: var(--radius-sm);
+    border: var(--border-hair) solid transparent;
+    font: var(--w-semibold) var(--text-xs)/1 var(--font-body);
   }
+  .preview__btn--primary {
+    background: linear-gradient(180deg, color-mix(in oklch, var(--forum-accent) 86%, #fff), var(--forum-accent));
+    color: var(--forum-accent-ink);
+    border-color: color-mix(in oklch, var(--forum-accent) 68%, #000);
+  }
+  .preview__btn--secondary { background: var(--forum-surface); color: var(--forum-ink); border-color: var(--forum-line-strong); }
+  .preview__btn--ghost { color: var(--forum-ink-soft); }
+
+  .theme-form { display: grid; gap: var(--space-3); margin-top: var(--space-4); }
+  .theme-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: var(--space-2); padding: 0; border: 0; }
+  .theme-options legend { margin-bottom: var(--space-1); }
+  .theme-option {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    border: var(--border-hair) solid var(--forum-line);
+    border-radius: var(--radius-sm);
+    background: var(--forum-surface);
+    cursor: pointer;
+  }
+  .theme-option:hover { border-color: var(--forum-line-strong); }
+  .theme-option--selected { border-color: var(--forum-accent); box-shadow: 0 0 0 1px var(--forum-accent); }
+  .theme-option input { position: absolute; opacity: 0; pointer-events: none; }
+  .theme-option:has(input:focus-visible) { outline: 2px solid var(--forum-link); outline-offset: 2px; }
+  .swatches { display: flex; flex: none; overflow: hidden; border: var(--border-hair) solid var(--forum-line); border-radius: var(--radius-sm); }
+  .swatches i { width: 16px; height: 32px; }
+  .theme-option__text { display: grid; gap: 2px; font: var(--type-ui); }
+  .theme-option__text b { font-weight: var(--w-semibold); }
+  .theme-option__text small { color: var(--forum-ink-soft); }
+  .theme-form .atm-btn { justify-self: start; }
 </style>

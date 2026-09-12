@@ -1,14 +1,17 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { FORUM_DID, getBoardIndex } from '$lib/server/appview';
+import { DEFAULT_THEME, normalizeTheme, themeColor, type ForumTheme } from '$lib/themes';
 
 export const GET: RequestHandler = async () => {
   let name = 'atmobb';
   let description = 'An independent forum on the atmosphere.';
+  let theme: ForumTheme = DEFAULT_THEME;
   try {
     const forum = (await getBoardIndex(FORUM_DID())).forum;
     name = forum?.name?.trim() || name;
     description = forum?.description?.trim() || description;
+    theme = normalizeTheme(forum?.theme);
   } catch {
     // The manifest remains useful while the appview is temporarily unavailable.
   }
@@ -22,8 +25,8 @@ export const GET: RequestHandler = async () => {
       start_url: '/',
       scope: '/',
       display: 'standalone',
-      background_color: '#eceae7',
-      theme_color: '#eceae7',
+      background_color: themeColor(theme),
+      theme_color: themeColor(theme),
       lang: 'en',
       categories: ['social'],
       icons: [
