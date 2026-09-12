@@ -2,23 +2,6 @@
 
 Forum owners can add CSS and WOFF/WOFF2 fonts from **Admin → Appearance**. Custom CSS loads after atmobb's own styles on every non-admin page. Admin pages keep the built-in styles no matter what, so a theme that breaks everything is still repairable.
 
-## Drop-in themes
-
-[Discourse-inspired light theme](themes/discourse.css) gives the forum neutral surfaces,
-blue accents, system fonts, flat topic lists, and compact author headers in place of
-post sidebars. It keeps the existing routes, pagination, and posting behavior.
-
-Copy the whole stylesheet into **Admin → Appearance → Custom CSS** and save.
-Back up any existing custom CSS first; this theme is intended to replace it, not
-stack on top of another theme. Clear the field to restore the default, or paste
-your previous CSS back. No font uploads or external resources are needed.
-
-Signatures, post counts in author headers, ranks, and custom titles in posts are
-hidden by the labelled **Optional nostalgia reduction** block. Remove that block
-if you want to retain them. Profiles and stored data are unchanged. The theme
-uses stable tokens and `atm-*` hooks; its only `!important` overrides the avatar
-initials' inline font size after shrinking the avatar.
-
 ## Cascade contract
 
 All built-in public-page CSS, Svelte component styles included, sits in a low-priority `atmobb` cascade layer. Unlayered owner CSS beats it without `!important`, and without caring about selector specificity.
