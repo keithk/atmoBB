@@ -1,7 +1,6 @@
 <script lang="ts">
   import { boardPath } from '$lib/appview-paths';
   import type { BoardGroup } from '$lib/board-presentation';
-  import BoardMarker from './BoardMarker.svelte';
 
   let {
     groups,
@@ -20,14 +19,22 @@
   } = $props();
 
   const links = [
-    { label: 'Home', href: '/', icon: '⌂' },
-    { label: 'Latest', href: '/latest', icon: '◷' },
-    { label: 'Members', href: '/members', icon: '♙' },
-    { label: 'Rules', href: '/rules', icon: '§' },
+    { label: 'Home', href: '/', icon: 'M3 10 12 3l9 7v11h-7v-7h-4v7H3Z' },
+    { label: 'Latest', href: '/latest', icon: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M12 7v5l3 2' },
+    { label: 'Members', href: '/members', icon: 'M15 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M3 21v-2a6 6 0 0 1 12 0v2M18 3a4 4 0 0 1 0 8M21 21v-2a6 6 0 0 0-3-5.2' },
+    { label: 'Rules', href: '/rules', icon: 'M14 2H5v20h14V7ZM14 2v5h5M8 12h8M8 16h8' },
   ];
+  const boardIcon = 'M21 11.5a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-4-.9L3 21l1.9-5.5a9 9 0 0 1-.9-4A8.5 8.5 0 0 1 12.5 3h.5a8.5 8.5 0 0 1 8 8v.5Z';
+  const lockIcon = 'M5 10h14v11H5ZM8 10V7a4 4 0 0 1 8 0v3';
   const active = (href: string) =>
     href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
 </script>
+
+{#snippet icon(path: string)}
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d={path} />
+  </svg>
+{/snippet}
 
 <nav class="atm-sidebar-nav" aria-label="Forum navigation">
   <ul class="atm-sidebar-nav__primary">
@@ -40,7 +47,7 @@
           aria-current={active(link.href) ? 'page' : undefined}
           onclick={onNavigate}
         >
-          <span class="atm-sidebar-nav__icon" aria-hidden="true">{link.icon}</span>
+          <span class="atm-sidebar-nav__icon">{@render icon(link.icon)}</span>
           {link.label}
         </a>
       </li>
@@ -54,7 +61,12 @@
           aria-current={active('/admin') ? 'page' : undefined}
           onclick={onNavigate}
         >
-          <span class="atm-sidebar-nav__icon" aria-hidden="true">⚙</span>
+          <span class="atm-sidebar-nav__icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m9 3-.5 2.5-2 1.2L4 6l-2 3.5 2 1.7v2L2 15l2 3.5 2.5-.7 2 1.2L9 22h6l.5-3 2-1.2 2.5.7 2-3.5-2-1.8v-2l2-1.7L20 6l-2.5.7-2-1.2L15 3Z" />
+              <circle cx="12" cy="12.5" r="3" />
+            </svg>
+          </span>
           {admin ? 'Admin' : 'Set up this forum'}
         </a>
       </li>
@@ -76,9 +88,9 @@
                 aria-current={active(href) ? 'page' : undefined}
                 onclick={onNavigate}
               >
-                <BoardMarker color={board.value.color} />
+                <span class="atm-sidebar-nav__icon">{@render icon(boardIcon)}</span>
                 <span class="atm-sidebar-nav__label">{board.value.name}</span>
-                {#if board.value.access?.space}<span class="atm-sidebar-nav__lock" aria-label="Members only">🔒</span>{/if}
+                {#if board.value.access?.space}<span class="atm-sidebar-nav__lock" role="img" aria-label="Members only">{@render icon(lockIcon)}</span>{/if}
               </a>
             </li>
             {#each board.children as child}
@@ -91,9 +103,9 @@
                   aria-current={active(childHref) ? 'page' : undefined}
                   onclick={onNavigate}
                 >
-                  <BoardMarker color={child.value.color} />
+                  <span class="atm-sidebar-nav__icon">{@render icon(boardIcon)}</span>
                   <span class="atm-sidebar-nav__label">{child.value.name}</span>
-                  {#if child.value.access?.space}<span class="atm-sidebar-nav__lock" aria-label="Members only">🔒</span>{/if}
+                  {#if child.value.access?.space}<span class="atm-sidebar-nav__lock" role="img" aria-label="Members only">{@render icon(lockIcon)}</span>{/if}
                 </a>
               </li>
             {/each}
@@ -132,7 +144,9 @@
     color: var(--forum-link);
     background: var(--forum-accent-soft);
   }
-  .atm-sidebar-nav__icon { width: 1.25em; color: var(--forum-ink-faint); text-align: center; }
+  .atm-sidebar-nav__icon { display: flex; justify-content: center; width: 18px; flex: none; color: var(--forum-ink-soft); }
+  .atm-sidebar-nav__link:hover .atm-sidebar-nav__icon,
+  .atm-sidebar-nav__link--active .atm-sidebar-nav__icon { color: inherit; }
   .atm-sidebar-nav__boards { padding-top: var(--space-3); }
   .atm-sidebar-nav__group + .atm-sidebar-nav__group { margin-top: var(--space-3); }
   .atm-sidebar-nav__heading {
@@ -146,6 +160,6 @@
   .atm-sidebar-nav__board { font-weight: var(--w-medium); }
   .atm-sidebar-nav__board--child { padding-left: calc(var(--space-3) + 1.25em); font-size: var(--text-xs); }
   .atm-sidebar-nav__label { min-width: 0; overflow-wrap: anywhere; }
-  .atm-sidebar-nav__lock { margin-left: auto; color: var(--forum-ink-faint); font-size: 0.75em; }
+  .atm-sidebar-nav__lock { display: flex; flex: none; margin-left: auto; color: var(--forum-ink-soft); }
   }
 </style>
