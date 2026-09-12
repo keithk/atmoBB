@@ -8,6 +8,7 @@
   import { postAnchor, postAuthor, postPath, replyPath } from '$lib/appview-paths';
   import PostEditor from '$lib/components/PostEditor.svelte';
   import ConversationLogin from '$lib/components/ConversationLogin.svelte';
+  import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
   // Simplified sibling of /t/[did]/[rkey]: private threads live in a space, so
   // reads are immediate (no firehose lag) — no waiting/polling states needed.
   let { data, form } = $props();
@@ -50,6 +51,9 @@
     <p class="atm-ok">Deleted.</p>
   {/if}
   {#if form?.message && !form?.posted && !data.editing}<p class="atm-err">{form.message}</p>{/if}
+  {#if data.offerNotifications && form?.posted}
+    <NotifyPrompt next={page.url.pathname} />
+  {/if}
 
   <article class="atm-card atm-card--edge atm-post atm-post--op" id={postAnchor(data.thread.uri)}>
     <PostMeta

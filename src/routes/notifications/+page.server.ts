@@ -1,12 +1,19 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { agentFor } from '$lib/server/atproto-oauth';
+import { forumPermissionDetails, optInDeps, recheckPending } from '$lib/server/notify/optin';
 import { markRead, readMember } from '$lib/server/notify/store';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, parent }) => {
   if (!locals.user) redirect(302, '/login');
+  // KTD14: while `pending`, ask the relay again (at most once a minute) and
+  // flip to `on` on alreadyGranted, since the relay does not call back yet.
+  const deps = optInDeps(agentFor);
+  if (deps) {
+    const { forum, forumFavicon } = (await parent()) as { forum: { name: string }; forumFavicon: { url: string } | null };
+    await recheckPending({ did: locals.user.did, deps, ...forumPermissionDetails(forum.name, forumFavicon?.url) });
+  }
   const member = await readMember(locals.user.did);
-  // KTD14 re-check runs here in a later unit: while `pending`, re-request the
-  // permission (at most once a minute) and flip to `on` on alreadyGranted.
   return {
     status: member?.status ?? 'off',
     // The store keeps entries newest first.

@@ -20,6 +20,7 @@ import { attachImages, resolveBodyImages } from '$lib/server/richtext';
 import { addMentionFacets } from '$lib/server/mentions';
 import { banMessage, bannedFrom } from '$lib/server/standing';
 import { handleNotifyVisit } from '$lib/server/notify/visit';
+import { readMember } from '$lib/server/notify/store';
 
 const QUOTE = 'app.atmobb.richtext.block#quote';
 const LIMIT = 25;
@@ -104,6 +105,9 @@ export const load: PageServerLoad = async ({ params, locals, parent, url, isData
     threadUri: uri,
     boardPath,
     boardName,
+    // KTD11: the first-post prompt keys on "no notification state file yet".
+    // A store error just means no prompt; it never breaks the page.
+    offerNotifications: await readMember(locals.user.did).then((m) => m === null, () => false),
     handles,
     presence,
     ranks: forum?.ranks ?? [],

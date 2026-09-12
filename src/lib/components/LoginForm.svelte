@@ -1,8 +1,9 @@
 <script lang="ts">
-  let { action = '/login?/login', handle = '' }: { action?: string; handle?: string } = $props();
+  let { action = '/login?/login', handle = '', next = '' }: { action?: string; handle?: string; next?: string } = $props();
 </script>
 
 <form method="POST" {action} class="atm-loginform">
+  {#if next}<input type="hidden" name="next" value={next} />{/if}
   <input
     class="atm-input"
     name="handle"

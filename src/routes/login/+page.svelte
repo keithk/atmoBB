@@ -1,6 +1,7 @@
 <script lang="ts">
   import AtmosphereExplainer from '$lib/components/AtmosphereExplainer.svelte';
   import LoginForm from '$lib/components/LoginForm.svelte';
+  import { page } from '$app/state';
 
   let { form } = $props();
 </script>
@@ -12,7 +13,7 @@
 
   {#if form?.message}<p class="atm-err">{form.message}</p>{/if}
 
-  <LoginForm action="?/login" handle={form?.handle ?? ''} />
+  <LoginForm action="?/login" handle={form?.handle ?? ''} next={page.url.searchParams.get('next') ?? ''} />
 
   <div class="login__more">
     <AtmosphereExplainer />
