@@ -13,7 +13,16 @@ import {
   getBoardAccess,
 } from '$lib/server/appview';
 import { readSpaceBoardThreads } from '$lib/server/space-read';
-import { assertNoImages, createThread, getAccessRequest, requestAccess } from '$lib/server/pds';
+import {
+  assertNoImages,
+  createThread,
+  getAccessRequest,
+  isWatching,
+  requestAccess,
+  unwatchBoard,
+  watchBoard,
+  watchFailureMessage,
+} from '$lib/server/pds';
 import { boardModerator, canModerate } from '$lib/server/admin';
 import { createForumRecord } from '$lib/server/forum-repo';
 import { parseBBCode } from '$lib/richtext/bbcode';
@@ -56,6 +65,9 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
   );
   const board = page.board;
   if (!board) error(404, 'Board not found.');
+  // Watch state comes from the member's own PDS; null when logged out or the
+  // PDS can't be read, and the page hides the toggle rather than guess.
+  const watching = locals.user ? await isWatching(locals.user.did, FORUM_DID(), uri) : null;
   return {
     metadata: {
       title: board.name,
@@ -81,9 +93,31 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
     locked,
     member,
     requested,
+    watching,
     ...page,
   };
 };
+
+// Watching and unwatching share the posting refusals: log in, not banned.
+async function toggleWatch(
+  locals: App.Locals,
+  board: string,
+  write: (did: string, forum: string, board: string) => Promise<void>,
+) {
+  if (!locals.user) return fail(401, { watch: true, message: 'Log in to watch boards.' });
+  let ban;
+  try {
+    ban = await bannedFrom(locals.user.did, board);
+  } catch {
+    return fail(502, { watch: true, message: "We couldn't check your standing. Try again." });
+  }
+  if (ban) return fail(403, { watch: true, message: banMessage(ban) });
+  try {
+    await write(locals.user.did, FORUM_DID(), board);
+  } catch (e) {
+    return fail(502, { watch: true, message: watchFailureMessage(e) });
+  }
+}
 
 export const actions: Actions = {
   newThread: async ({ params, request, locals }) => {
@@ -145,6 +179,9 @@ export const actions: Actions = {
     }
     redirect(303, `${threadPath(uri)}?fresh=1`);
   },
+
+  watch: async ({ params, locals }) => toggleWatch(locals, boardUri(params.rkey, params.did), watchBoard),
+  unwatch: async ({ params, locals }) => toggleWatch(locals, boardUri(params.rkey, params.did), unwatchBoard),
 
   // Ask a members-only board's moderators for access. Writes an accessRequest
   // record into the requester's repo; a sysop resolves it from the mod queue.
