@@ -75,7 +75,14 @@ export async function handleSubscriberChanged(request: Request): Promise<Respons
     });
   } catch (err) {
     if (err instanceof ServiceJwtError && err.reason === 'issuer') return reply(403, { error: 'Forbidden', message: err.message });
-    return reply(401, { error: 'AuthInvalid', message: err instanceof Error ? err.message : 'Bad token' });
+    if (!(err instanceof ServiceJwtError)) {
+      // Anything else is the relay's key not being fetchable, not a bad token.
+      // The relay drops on 4xx and retries on 5xx, so answer 503 or a real
+      // callback is lost to a blip.
+      console.error('[notify] subscriberChanged: could not fetch the relay signing key', err);
+      return reply(503, { error: 'RelayKeyUnavailable' });
+    }
+    return reply(401, { error: 'AuthInvalid', message: err.message });
   }
 
   if (!(request.headers.get('content-type') ?? '').startsWith('application/json')) {

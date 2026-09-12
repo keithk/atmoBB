@@ -10,7 +10,7 @@ import { NOTIFY_VIA } from '$lib/server/notify/visit';
 // and those links carry their own marker, which passes through so the thread
 // page still counts the return. The member's own session gates the redirect.
 export const GET: RequestHandler = async ({ params, url, locals, setHeaders }) => {
-  if (!locals.user) redirect(302, '/login');
+  if (!locals.user) redirect(302, `/login?next=${encodeURIComponent(url.pathname + url.search)}`);
   const member = await readMember(locals.user.did);
   const entry = member?.entries.find((e) => e.id === params.id);
   if (!entry) error(404, 'That notification is gone.');

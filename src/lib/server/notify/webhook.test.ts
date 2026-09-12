@@ -94,6 +94,19 @@ describe('handleSubscriberChanged', () => {
     expect(await readMember(member)).toBeNull();
   });
 
+  it('answers 503, not 401, when the relay key cannot be fetched so the relay retries', async () => {
+    // The cache is empty after reset, so the failed fetch has nothing to fall back on.
+    setFetchForTests((async () => {
+      throw new Error('ECONNRESET');
+    }) as unknown as typeof fetch);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await post({ recipient: member, enabled: true });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: 'RelayKeyUnavailable' });
+    expect(error).toHaveBeenCalled();
+    expect(await readMember(member)).toBeNull();
+  });
+
   it('answers 400 for a body missing enabled, a non-JSON content type, or a 9 KB body', async () => {
     expect((await post({ recipient: member })).status).toBe(400);
     expect((await post({ recipient: member, enabled: 'yes' })).status).toBe(400);

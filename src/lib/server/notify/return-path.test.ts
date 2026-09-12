@@ -15,6 +15,19 @@ describe('safeReturnPath', () => {
     );
   });
 
+  it('accepts the notifications page and open links, with or without the alert marker', () => {
+    const id = '0f9a1b2c-3d4e-4f60-8a71-92b3c4d5e6f7';
+    expect(safeReturnPath('/notifications')).toBe('/notifications');
+    expect(safeReturnPath(`/notifications/open/${id}`)).toBe(`/notifications/open/${id}`);
+    expect(safeReturnPath(`/notifications/open/${id}?via=notify`)).toBe(`/notifications/open/${id}?via=notify`);
+  });
+
+  it('rejects notification paths that stray from those shapes', () => {
+    expect(safeReturnPath('/notifications/open/../x')).toBeNull();
+    expect(safeReturnPath('/notifications/open/0f9a1b2c-3d4e-4f60-8a71-92b3c4d5e6f7?via=other')).toBeNull();
+    expect(safeReturnPath('/notificationsx')).toBeNull();
+  });
+
   it('rejects protocol-relative, backslash, absolute, and off-list paths', () => {
     expect(safeReturnPath('//evil.example')).toBeNull();
     expect(safeReturnPath('/\\evil')).toBeNull();

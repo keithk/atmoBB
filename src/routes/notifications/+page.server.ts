@@ -4,8 +4,8 @@ import { agentFor } from '$lib/server/atproto-oauth';
 import { forumPermissionDetails, optInDeps, recheckPending } from '$lib/server/notify/optin';
 import { markRead, readMember } from '$lib/server/notify/store';
 
-export const load: PageServerLoad = async ({ locals, parent }) => {
-  if (!locals.user) redirect(302, '/login');
+export const load: PageServerLoad = async ({ locals, parent, url }) => {
+  if (!locals.user) redirect(302, `/login?next=${encodeURIComponent(url.pathname + url.search)}`);
   // KTD14: while `pending`, ask the relay again (at most once a minute) and
   // flip to `on` on alreadyGranted, since the relay does not call back yet.
   const deps = optInDeps(agentFor);

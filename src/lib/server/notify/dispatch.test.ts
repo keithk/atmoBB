@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { notifyForPost, resetDispatchForTests, type DispatchDeps, type NotifyForPostInput } from './dispatch';
-import { readMember, readStats, resetStoreForTests, setStatus } from './store';
+import { appendEntry, bumpStats, readMember, readStats, resetStoreForTests, setStatus, updateEntry } from './store';
 import type { SendResult } from './relay';
 
 const forum = 'did:plc:forum';
@@ -158,6 +158,27 @@ describe('recipient filtering', () => {
     const deps = fakeDeps();
     await notifyForPost(publicReply, deps);
     expect(deps.getWatchers).not.toHaveBeenCalled();
+  });
+
+  it('drops only the member whose state file cannot be read', async () => {
+    const deps = fakeDeps({
+      store: {
+        readMember: vi.fn(async (did: string) => {
+          if (did === carol) throw new Error('corrupt state file');
+          return readMember(did);
+        }),
+        appendEntry,
+        updateEntry,
+        setStatus,
+        bumpStats,
+      },
+    });
+    await expect(notifyForPost(publicReply, deps)).resolves.toBeUndefined();
+    expect((await entriesOf(alice))[0]).toMatchObject({ kind: 'thread-reply', delivery: 'sent' });
+    expect(await entriesOf(carol)).toEqual([]);
+    expect(deps.send).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(deps.send!).mock.calls[0][0].recipient).toBe(alice);
+    expect(console.error).toHaveBeenCalled();
   });
 
   it('keeps the other kinds when the watcher query throws on a public board', async () => {

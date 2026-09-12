@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { P256Keypair } from '@atproto/crypto';
 import { mintServiceJwt } from './service-jwt';
@@ -48,8 +48,16 @@ async function loadOrCreateKeypair(): Promise<P256Keypair> {
   let stored: StoredKey | null = null;
   try {
     stored = JSON.parse(readFileSync(keyPath(), 'utf8'));
-  } catch {
-    // no key yet (or unreadable), create one below
+  } catch (err) {
+    // Only a missing file means "mint one". Anything else (permissions, a
+    // truncated file, bad JSON) must not be silently overwritten with a new
+    // identity, which would force every member to re-approve.
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw new Error(
+        `The sender key at ${keyPath()} exists but cannot be read. Restore it from backup, or delete it to mint a new sender identity.`,
+        { cause: err },
+      );
+    }
   }
   if (stored) {
     // Never trust the mode the file arrived with: a restore or a copy can
@@ -64,8 +72,12 @@ async function loadOrCreateKeypair(): Promise<P256Keypair> {
     did: keypair.did(),
   };
   mkdirSync(notifyDir(), { recursive: true });
-  writeFileSync(keyPath(), JSON.stringify(file), { mode: 0o600 });
-  chmodSync(keyPath(), 0o600);
+  // Write beside the target and rename so a crash mid-write cannot leave a
+  // half-written key that the next boot would refuse to read.
+  const tmpPath = `${keyPath()}.tmp`;
+  writeFileSync(tmpPath, JSON.stringify(file), { mode: 0o600 });
+  chmodSync(tmpPath, 0o600);
+  renameSync(tmpPath, keyPath());
   return keypair;
 }
 

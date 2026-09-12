@@ -113,7 +113,16 @@ async function dispatch(input: NotifyForPostInput, deps: DispatchDeps) {
     recipients = recipients.filter((r) => members.has(r.did));
   }
 
-  const states = await Promise.all(recipients.map((r) => deps.store.readMember(r.did)));
+  // One member's unreadable state file must cost only that member their alert,
+  // not everyone else on the post theirs.
+  const states = await Promise.all(
+    recipients.map((r) =>
+      deps.store.readMember(r.did).catch((err) => {
+        console.error(`[notify] could not read state for ${r.did}:`, err);
+        return null;
+      }),
+    ),
+  );
   const on = recipients.filter((_, i) => states[i]?.status === 'on');
   if (!on.length) return;
 

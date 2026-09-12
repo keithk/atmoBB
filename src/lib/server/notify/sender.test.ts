@@ -1,4 +1,13 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { formatMultikey, parseMultikey, verifySignature } from '@atproto/crypto';
@@ -83,6 +92,21 @@ describe('senderKeypair', () => {
     mkdirSync(join(dataDir, 'notify', 'members'), { recursive: true });
     await senderKeypair();
     expect(warn).not.toHaveBeenCalled();
+  });
+  it('refuses to replace a truncated key file and leaves it untouched', async () => {
+    mkdirSync(join(dataDir, 'notify'), { recursive: true });
+    const truncated = '{"privateKey":"abc';
+    writeFileSync(keyPath(), truncated);
+    await expect(senderKeypair()).rejects.toThrow(/exists but cannot be read/);
+    expect(readFileSync(keyPath(), 'utf8')).toBe(truncated);
+    expect(existsSync(`${keyPath()}.tmp`)).toBe(false);
+  });
+  it('still mints a key when the file is missing', async () => {
+    expect(existsSync(keyPath())).toBe(false);
+    const keypair = await senderKeypair();
+    expect(keypair.did()).toMatch(/^did:key:z/);
+    expect(existsSync(keyPath())).toBe(true);
+    expect(existsSync(`${keyPath()}.tmp`)).toBe(false);
   });
   it('rejects when the directory is unwritable and retries on the next call', async () => {
     // A regular file where the notify directory should be makes mkdir fail

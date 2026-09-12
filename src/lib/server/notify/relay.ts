@@ -136,6 +136,9 @@ async function fetchRelayKey(): Promise<string> {
 // The relay's did:key, cached five minutes. A forced refresh (after a
 // signature failure) is honored at most once per 30 seconds of wall clock, so
 // a flood of garbage tokens cannot turn the webhook into an outbound fetcher.
+// When a refetch fails and an older key is on hand, that key is served: a
+// stale key still verifies real callbacks, and a rejection would turn a relay
+// blip into a dropped callback.
 export function relaySigningKey(forceRefresh = false): Promise<string> {
   const now = Date.now();
   const stale = !cachedKey || now - cachedKey.fetchedAt >= KEY_CACHE_MS;
@@ -143,10 +146,16 @@ export function relaySigningKey(forceRefresh = false): Promise<string> {
   if (cachedKey && !stale && !mayForce) return Promise.resolve(cachedKey.didKey);
   if (inflight) return inflight;
   if (mayForce) lastForcedAt = now;
+  const previous = cachedKey;
   inflight = fetchRelayKey()
     .then((didKey) => {
       cachedKey = { didKey, fetchedAt: now };
       return didKey;
+    })
+    .catch((err) => {
+      if (!previous) throw err;
+      console.warn('[notify] could not refresh the relay signing key; using the cached one', err);
+      return previous.didKey;
     })
     .finally(() => {
       inflight = null;
