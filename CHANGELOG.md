@@ -6,6 +6,12 @@ means. Every entry names the Happyview release it was tested against.
 
 ## Unreleased
 
+- Notifications through atmo.pub: replies, quotes, mentions, and new threads in boards you watch. Members opt in once from settings or the prompt after their first post; each forum is its own atmo.pub sender with a key generated on first boot. A bell in the masthead and a notifications page read the forum's own send log. Members-only boards send bare alerts and only to current members.
+- Board watching, as `app.atmobb.forum.watch` records in the member's repo, with a watchers query on the appview.
+- `app.atmobb.authForum` gains the watch collection and an `rpc` grant for atmo.pub's permission request; the login scope now carries the relay as the include audience, so members re-consent at their next login. Publish the watch schema and the updated set before deploying; `setup.sh` needs the record schema on the network.
+- The data directory now holds `notify/`, with the sender key and notification state. Back it up with everything else and restore it together.
+- Tested against Happyview 2.14.0.
+
 ## 0.1.0
 
 First versioned release. Happyview 2.14.0.

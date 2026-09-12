@@ -252,7 +252,7 @@ ls -lh "$BACKUP_DIR"
 ```
 
 > [!WARNING]
-> These archives contain credentials and private data. Copy them off the server, restrict access, and test a restore. Public records can be backfilled; derived statistics, Happyview configuration and keys, private-board content, and OAuth sessions cannot.
+> These archives contain credentials and private data, including the private key the forum signs notifications with. Copy them off the server, restrict access, and test a restore. Public records can be backfilled; derived statistics, Happyview configuration and keys, private-board content, OAuth sessions, and notification state cannot. Restore the data directory and the database from the same backup: a data directory without its `notify/sender-key.json` starts the forum as a new atmo.pub sender, the app logs a warning at startup, and every member has to approve it again.
 
 ### Upgrades
 
@@ -297,7 +297,7 @@ Bundle install:
 |---|---|
 | `/srv/atmobb/.env` | Hostnames, forum DID, every secret, and the Happyview operator key. Only the setup job receives the operator key; the web app container never does. |
 | `/srv/atmobb/compose.yml` | The pinned stack. Replaced by each release. |
-| `/var/lib/atmobb/oauth` | Persistent user and forum OAuth sessions, mounted at `/data` in the app container. Owned by uid 10001. |
+| `/var/lib/atmobb/oauth` | Persistent user and forum OAuth sessions, plus `notify/` with the atmo.pub signing key and notification state, mounted at `/data` in the app container. Owned by uid 10001. |
 | `atmobb_pgdata` volume | Postgres data. |
 
 Source install:
@@ -320,7 +320,7 @@ Relevant app environment variables:
 | `HAPPYVIEW_URL` | Public Happyview base URL. |
 | `ATMOBB_FORUM_DID` | DID of the dedicated forum account. |
 | `ATMOBB_COOKIE_SECRET` | Signs app login cookies; rotating it logs everyone out. |
-| `DATA_DIR` | Persistent OAuth state; losing it disconnects every account. |
+| `DATA_DIR` | Persistent OAuth state, the forum's atmo.pub signing key, and members' notification state. Losing it disconnects every account and makes the forum a new sender, so members approve it again. |
 | `HAPPYVIEW_SESSION_SECRET` | Copy of Happyview's session secret for private boards. Must be at least 32 bytes; in production the app refuses to start with a weak one, and treats a weak `ATMOBB_COOKIE_SECRET` the same way. |
 | `HAPPYVIEW_CLIENT_KEY` | Optional app identity for Happyview rate limiting. |
 | `ATMOBB_AVATAR_BUILDER_URL` | Optional. Links an external avatar builder from profile settings. |

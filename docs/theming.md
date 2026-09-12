@@ -55,7 +55,8 @@ Shared forum UI uses an `atm-` prefix with BEM-style parts and modifiers. The ho
 - lists: `.atm-boardrow`, `.atm-threadrow`, `.atm-memberrow`
 - threads: `.atm-post`, `.atm-postmeta`, `.atm-post__body`, `.atm-post__meta`, `.atm-composer`
 - content: `.atm-richtext`, `.atm-sig`, `.atm-avatar`, `.atm-rank`, `.atm-chip`, `.atm-hovercard`, `.atm-spoiler`
-- navigation: `.atm-crumbs`, `.atm-pager`, `.atm-tabs`
+- navigation: `.atm-crumbs`, `.atm-pager`, `.atm-tabs`, `.atm-bell`
+- notifications: `.atm-notify-prompt`, `.atm-notification`, `.atm-notification--unread`
 - forms: `.atm-btn`, `.atm-linkbtn`, `.atm-field`, `.atm-label`, `.atm-input`, `.atm-textarea`, `.atm-select`, `.atm-toolbar`
 
 Parts use `__` (`.atm-threadrow__title`), variants use `--` (`.atm-btn--primary`). Inspect the rendered markup to find the part hooks you want. Anything unprefixed is a page-local implementation detail and I will absolutely rename it.
