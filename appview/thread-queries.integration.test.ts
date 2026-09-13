@@ -432,3 +432,232 @@ run('stamp trigger SQL integration', () => {
     expect(await awards()).toEqual(liveAwards);
   });
 });
+
+// Stamps: the read-time tray resolution every stamp-bearing query shares, and
+// the members list order it accompanies.
+function stampQueries() {
+  const names = ['getStamps', 'getThreadPage', 'getMembers', 'getMembership'];
+  const scripts = names.map((name) => source(`./lua/${name}.lua`));
+  const members = source('./lua/getMembers.lua');
+  const [gated] = capture(members, /if #gated > 0 then\s*members_cte = \[\[([\s\S]*?)\]\]/, 'gated members CTE');
+  const [open] = capture(members, /else\s*members_cte = \[\[([\s\S]*?)\]\]/, 'open members CTE');
+  const [rows] = capture(members, /local rows = db\.raw\(members_cte \.\. \[\[([\s\S]*?)\]\], \{/, 'members rows');
+  return {
+    names,
+    resolutions: scripts.map((text) => statement(text, 'Tray resolution', 'tray resolution')),
+    cutoffs: scripts.map((text) => capture(text, /local EARLY_DAYS_CUTOFF = "([^"]+)"/, 'early days cutoff')[0]),
+    definitions: statement(scripts[0], 'Stamp definitions', 'stamp definitions'),
+    membersGated: gated + rows,
+    membersOpen: open + rows,
+    membersSource: members,
+  };
+}
+
+run('stamp resolution SQL integration', () => {
+  const sql = postgres(DATABASE_URL!, { max: 1 });
+  const queries = stampQueries();
+  const SECOND = `at://${F}/${NS}.forum.board/second`;
+  const THIRD = `at://${F}/${NS}.forum.board/third`;
+  const FOURTH = `at://${F}/${NS}.forum.board/fourth`;
+  const GONE = `at://${F}/${NS}.forum.board/gone`;
+  const stamp = (rkey: string, forum = F) => `at://${forum}/${NS}.forum.stamp/${rkey}`;
+  const boardId = (uri: string) => `atmobb:board:${uri}`;
+  const H = 'did:plc:hush';
+  const G = 'did:plc:gated';
+  const HUSH_BOARD = `at://${H}/${NS}.forum.board/main`;
+  const look = { bg: '#111111', ink: '#ffffff', shape: 'pill' };
+
+  const resolve = async (dids: string[], forum = F) => {
+    const rows = await sql.unsafe(queries.resolutions[0], [forum, dids.join(','), queries.cutoffs[0]]);
+    const trays: Record<string, { id: string; source: string; name: string; worn: boolean; row: Record<string, unknown> }[]> = {};
+    for (const did of dids) trays[did] = [];
+    const wornCount: Record<string, number> = {};
+    for (const row of rows) {
+      wornCount[row.did] ??= 0;
+      const worn = row.worn_rank != null && wornCount[row.did] < 3;
+      if (worn) wornCount[row.did] += 1;
+      trays[row.did].push({ id: row.id, source: row.source, name: row.name, worn, row });
+    }
+    return trays;
+  };
+  const worn = (entries: { id: string; worn: boolean }[]) => entries.filter((e) => e.worn).map((e) => e.id);
+  const ids = (entries: { id: string }[]) => entries.map((e) => e.id).sort();
+
+  const record = (uri: string, did: string, collection: string, value: object, created: string) => sql`
+    INSERT INTO happyview_records ${sql({
+      uri, did, collection, rkey: uri.split('/').at(-1)!, record: JSON.stringify(value), cid: `cid-${uri.split('/').at(-1)}`, created_at: created,
+    })}`;
+  const declaration = (did: string, forum: string, value: object, created: string) =>
+    record(`at://${did}/${NS}.forum.membership/${forum.split(':').at(-1)}`, did, `${NS}.forum.membership`, { forum, ...value }, created);
+  const first = (did: string, board: string | null, at: string, forum = F) => sql`
+    INSERT INTO atmobb_firsts ${sql({ forum_did: forum, did, board_uri: board, first_at: at, source_uri: `at://${did}/${NS}.discussion.thread/${at}` })}`;
+  const posted = async (did: string, boards: string[], at: string, forum = F) => {
+    await first(did, null, at, forum);
+    for (const board of boards) await first(did, board, at, forum);
+  };
+  const award = (did: string, uri: string, forum = F, revoked: string | null = null) => sql`
+    INSERT INTO atmobb_stamp_awards ${sql({ forum_did: forum, did, stamp_uri: uri, actor_did: 'did:plc:staff', created_at: '2026-02-01T00:00:00Z', revoked_at: revoked })}`;
+  const window = (did: string, since: string, via: string, sponsor: string | null = null, forum = F) => sql`
+    INSERT INTO atmobb_member_windows ${sql({ action_uri: `accept-${forum}-${did}`, forum_did: forum, did, since, until: null, sponsor, via })}`;
+  const actorProfile = (did: string, createdAt: string) =>
+    record(`at://${did}/${NS}.actor.profile/self`, did, `${NS}.actor.profile`, { displayName: did, createdAt }, createdAt);
+
+  beforeAll(async () => {
+    await fixtures(sql);
+    for (const [uri, name, extra] of [[SECOND, 'Second', { color: '#123456' }], [THIRD, 'Third', {}], [FOURTH, 'Fourth', {}]] as const) {
+      await record(uri, F, `${NS}.forum.board`, { name, topic: 'own', ...extra }, '2020-01-01T00:00:00Z');
+    }
+    const stamps: [string, string, object][] = [
+      ['helper', 'helper', { kind: 'byHand' }],
+      ['veteran', 'veteran', { kind: 'profileBefore', before: '2025-06-01T00:00:00Z' }],
+      ['lost', 'lost', { kind: 'firstPostInBoard', board: GONE }],
+      ['regular', 'regular', { kind: 'firstPostInBoard', board: SECOND }],
+      ['arrived', 'arrived', { kind: 'arrivedBy', via: 'application' }],
+      ['here', 'here', { kind: 'firstPostHere' }],
+    ];
+    for (const [rkey, name, trigger] of stamps) {
+      await record(stamp(rkey), F, `${NS}.forum.stamp`, { name, look, trigger, createdAt: `2026-01-0${stamps.findIndex((s) => s[0] === rkey) + 1}T00:00:00Z` }, '2026-01-01T00:00:00Z');
+    }
+    // AE4: firsts in four boards, no wearing.
+    await first('did:plc:four', null, '2026-01-01T00:00:00Z');
+    for (const [board, at] of [[BOARD, '2026-01-01T00:00:00Z'], [SECOND, '2026-01-02T00:00:00Z'], [THIRD, '2026-01-03T00:00:00Z'], [FOURTH, '2026-01-04T00:00:00Z']] as const) {
+      await first('did:plc:four', board, at);
+    }
+    await declaration('did:plc:four', F, { createdAt: '2026-01-03T00:00:00Z' }, '2026-01-03T00:00:00Z');
+    // AE5: a by-hand award left out of wearing.
+    await posted('did:plc:r1', [BOARD], '2026-01-05T00:00:00Z');
+    await award('did:plc:r1', stamp('helper'));
+    await award('did:plc:r1', stamp('veteran'), F, '2026-02-02T00:00:00Z');
+    await declaration('did:plc:r1', F, { wearing: [boardId(BOARD)], createdAt: '2026-01-01T00:00:00Z' }, '2026-01-01T00:00:00Z');
+    // AE6: wearing names a stamp whose record is gone.
+    await posted('did:plc:ghost', [BOARD], '2026-01-06T00:00:00Z');
+    await award('did:plc:ghost', stamp('gone'));
+    await declaration('did:plc:ghost', F, { wearing: [stamp('gone'), boardId(BOARD)], createdAt: '2026-01-02T00:00:00Z' }, '2026-01-02T00:00:00Z');
+    // AE7: a first on another forum only.
+    await posted('did:plc:elsewhere', [PEER], '2026-01-07T00:00:00Z', 'did:plc:peer');
+    // AE8: arrival by application with a sponsor.
+    await window('did:plc:applied', '2026-03-01T00:00:00Z', 'application', 'did:plc:staff');
+    await declaration('did:plc:applied', F, { createdAt: '2026-01-04T00:00:00Z' }, '2026-01-04T00:00:00Z');
+    await declaration('did:plc:nodate', F, {}, '2026-01-02T12:00:00Z');
+    // profileBefore either side of the cutoff, and a profile after early days.
+    await actorProfile('did:plc:old', '2025-05-31T00:00:00Z');
+    await actorProfile('did:plc:new', '2025-06-02T00:00:00Z');
+    await actorProfile('did:plc:future', '2026-12-01T00:00:00Z');
+    // A first in a board whose record no longer exists.
+    await posted('did:plc:lostboard', [GONE], '2026-01-08T00:00:00Z');
+    // A forum hiding default stamps.
+    await record(`at://${H}/${NS}.forum.profile/self`, H, `${NS}.forum.profile`, { name: 'Hush', hideDefaultStamps: true }, '2020-01-01T00:00:00Z');
+    await record(HUSH_BOARD, H, `${NS}.forum.board`, { name: 'Main' }, '2020-01-01T00:00:00Z');
+    await record(stamp('hh', H), H, `${NS}.forum.stamp`, { name: 'hush hand', look, trigger: { kind: 'byHand' }, createdAt: '2026-01-01T00:00:00Z' }, '2026-01-01T00:00:00Z');
+    await posted('did:plc:hushed', [HUSH_BOARD], '2026-01-09T00:00:00Z', H);
+    await window('did:plc:hushed', '2026-01-01T00:00:00Z', 'founding', null, H);
+    await award('did:plc:hushed', stamp('hh', H), H);
+    await actorProfile('did:plc:hushed', '2020-01-01T00:00:00Z');
+    // AE10: a gated forum whose members arrived out of DID order.
+    await sql`INSERT INTO atmobb_forum_gating ${sql({ action_uri: 'gate-g', forum_did: G, gated_since: '2026-01-01T00:00:00Z', opened_at: null, mode: 'apply' })}`;
+    await window('did:plc:zed', '2026-02-01T00:00:00Z', 'invite', 'did:plc:staff', G);
+    await window('did:plc:abe', '2026-02-02T00:00:00Z', 'invite', 'did:plc:staff', G);
+    await window('did:plc:silent', '2026-01-15T00:00:00Z', 'invite', 'did:plc:staff', G);
+    await declaration('did:plc:zed', G, {}, '2026-02-01T00:00:00Z');
+    await declaration('did:plc:abe', G, {}, '2026-02-02T00:00:00Z');
+  });
+  afterAll(() => sql.end());
+
+  it('every stamp-bearing script carries the same resolution SQL and early days cutoff', () => {
+    for (const [i, name] of queries.names.entries()) {
+      expect(queries.resolutions[i], `${name} resolution`).toBe(queries.resolutions[0]);
+      expect(queries.cutoffs[i], `${name} cutoff`).toBe('2026-10-01T00:00:00Z');
+    }
+  });
+
+  it('AE4: with no wearing, a member with firsts in four boards wears the three newest defaults', async () => {
+    const { 'did:plc:four': tray } = await resolve(['did:plc:four']);
+    expect(worn(tray)).toEqual([boardId(FOURTH), boardId(THIRD), boardId(SECOND)]);
+    expect(ids(tray)).toEqual([
+      boardId(BOARD), boardId(SECOND), boardId(THIRD), boardId(FOURTH), stamp('regular'), stamp('here'), 'atmobb:first-light',
+    ].sort());
+    const second = tray.find((e) => e.id === boardId(SECOND))!;
+    expect(second.name).toBe('Second');
+    expect(second.source).toBe('default');
+    expect(second.row.board).toBe(SECOND);
+    expect(second.row.board_color).toBe('#123456');
+    expect(tray.find((e) => e.id === boardId(BOARD))!.row.board_color).toBeNull();
+  });
+
+  it('AE5: an awarded by-hand stamp left out of wearing is in the tray and not worn; a revoked one is not held', async () => {
+    const { 'did:plc:r1': tray } = await resolve(['did:plc:r1']);
+    expect(worn(tray)).toEqual([boardId(BOARD)]);
+    expect(ids(tray)).toEqual([boardId(BOARD), stamp('helper'), stamp('here'), 'atmobb:first-light'].sort());
+    const helper = tray.find((e) => e.id === stamp('helper'))!;
+    expect(helper.source).toBe('byHand');
+    expect(helper.row.uri).toBe(stamp('helper'));
+    expect(helper.row.cid).toBe('cid-helper');
+    expect(JSON.parse(helper.row.look as string)).toEqual(look);
+  });
+
+  it('AE6: a wearing entry whose stamp record was deleted is dropped from worn', async () => {
+    const { 'did:plc:ghost': tray } = await resolve(['did:plc:ghost']);
+    expect(worn(tray)).toEqual([boardId(BOARD)]);
+    expect(ids(tray)).not.toContain(stamp('gone'));
+  });
+
+  it('AE7: a forum-level first anywhere on the appview lights up on every forum', async () => {
+    const trays = await resolve(['did:plc:elsewhere', 'did:plc:nowhere']);
+    expect(ids(trays['did:plc:elsewhere'])).toEqual(['atmobb:first-light']);
+    expect(trays['did:plc:elsewhere'][0].source).toBe('network');
+    expect(trays['did:plc:nowhere']).toEqual([]);
+  });
+
+  it('AE8: an application window carries an arrival default naming the sponsor; founding reads as original member', async () => {
+    const trays = await resolve(['did:plc:applied', 'did:plc:member']);
+    const applied = trays['did:plc:applied'];
+    expect(ids(applied)).toEqual(['atmobb:arrival', stamp('arrived')].sort());
+    const arrival = applied.find((e) => e.id === 'atmobb:arrival')!;
+    expect(arrival.source).toBe('default');
+    expect(arrival.row.via).toBe('application');
+    expect(arrival.row.sponsor).toBe('did:plc:staff');
+    expect(worn(applied)).toEqual(['atmobb:arrival']);
+    const founding = trays['did:plc:member'].find((e) => e.id === 'atmobb:arrival')!;
+    expect(founding.row.via).toBe('founding');
+    expect(founding.name).toBe('original member');
+  });
+
+  it('a profileBefore stamp matches a profile created the day before its cutoff and not the day after', async () => {
+    const trays = await resolve(['did:plc:old', 'did:plc:new', 'did:plc:future']);
+    expect(ids(trays['did:plc:old'])).toEqual([stamp('veteran'), 'atmobb:early-days'].sort());
+    expect(ids(trays['did:plc:new'])).toEqual(['atmobb:early-days']);
+    expect(ids(trays['did:plc:future'])).toEqual([]);
+  });
+
+  it('hideDefaultStamps removes board and arrival defaults and leaves admin and network stamps', async () => {
+    const { 'did:plc:hushed': tray } = await resolve(['did:plc:hushed'], H);
+    expect(ids(tray)).toEqual([stamp('hh', H), 'atmobb:first-light', 'atmobb:early-days'].sort());
+    expect(worn(tray)).toEqual([]);
+  });
+
+  it('a firstPostInBoard stamp whose board was deleted is excluded from definitions and trays', async () => {
+    const defs = await sql.unsafe(queries.definitions, [F]);
+    expect(defs.map((row) => row.uri).sort()).toEqual([
+      stamp('helper'), stamp('veteran'), stamp('regular'), stamp('arrived'), stamp('here'),
+    ].sort());
+    const { 'did:plc:lostboard': tray } = await resolve(['did:plc:lostboard']);
+    expect(ids(tray)).toEqual([stamp('here'), 'atmobb:first-light'].sort());
+  });
+
+  it('AE10: members list by since on a gated forum, by declaration createdAt on an open one, without post counts', async () => {
+    const params = (forum: string) => [`${NS}.forum.membership`, `at://${forum}/%`, forum, `${NS}.actor.profile`, 50, 0];
+    const gated = await sql.unsafe(queries.membersGated, params(G));
+    expect(gated.map((row) => [row.did, row.since])).toEqual([
+      ['did:plc:zed', '2026-02-01T00:00:00Z'], ['did:plc:abe', '2026-02-02T00:00:00Z'],
+    ]);
+    const open = await sql.unsafe(queries.membersOpen, params(F));
+    expect(open.map((row) => [row.did, row.since])).toEqual([
+      ['did:plc:r1', '2026-01-01T00:00:00Z'], ['did:plc:ghost', '2026-01-02T00:00:00Z'], ['did:plc:nodate', '2026-01-02T12:00:00Z'],
+      ['did:plc:four', '2026-01-03T00:00:00Z'], ['did:plc:applied', '2026-01-04T00:00:00Z'],
+    ]);
+    expect(Object.keys(open[0])).not.toContain('posts');
+    expect(Object.keys(open[0])).not.toContain('total_posts');
+    expect(queries.membersSource).not.toContain('atmobb_post_counts');
+    expect(source('./lua/getThreadPage.lua')).not.toContain('authorPosts');
+  });
+});

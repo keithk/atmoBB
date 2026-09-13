@@ -213,6 +213,7 @@ upload_script "xrpc.query:$NS.forum.getMembers" getMembers.lua
 upload_script "xrpc.query:$NS.forum.getDirectory" getDirectory.lua
 upload_script "xrpc.query:$NS.forum.getStaff" getStaff.lua
 upload_script "xrpc.query:$NS.forum.getMembership" getMembership.lua
+upload_script "xrpc.query:$NS.forum.getStamps" getStamps.lua
 upload_script "xrpc.query:$NS.forum.getAccessRequests" getAccessRequests.lua
 upload_script "xrpc.query:$NS.forum.getWatchers" getWatchers.lua
 upload_script "xrpc.query:$NS.moderation.getLog" getModerationLog.lua

@@ -89,8 +89,8 @@
     },
     "trayEntry": {
       "type": "object",
-      "description": "One stamp a member holds. id is the stamp record's at-uri for an admin stamp or the fixed id of a generated one; uri and cid are present for admin stamps.",
-      "required": ["id", "name", "look", "source"],
+      "description": "One stamp a member holds. id is the stamp record's at-uri for an admin stamp or the fixed id of a generated one. uri, cid, and look are present for admin stamps and look for network stamps; a board default carries the board and its color so the app can draw it, and an arrival default carries via and sponsor.",
+      "required": ["id", "name", "source"],
       "properties": {
         "id": { "type": "string", "maxLength": 300 },
         "name": { "type": "string", "maxLength": 240, "maxGraphemes": 24 },
@@ -101,6 +101,11 @@
           "type": "string",
           "format": "at-uri",
           "description": "For a board stamp: the board it marks."
+        },
+        "boardColor": {
+          "type": "string",
+          "maxLength": 7,
+          "description": "For a board stamp: the board's six-digit hex color, when it has one."
         },
         "sponsor": {
           "type": "string",

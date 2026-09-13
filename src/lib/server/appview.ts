@@ -189,16 +189,56 @@ export interface MemberActivity {
   }[];
 }
 
+/** How a stamp is drawn: two hex colors and one of a bounded set of shapes. */
+export interface StampLook {
+  bg: string;
+  ink: string;
+  shape: string;
+}
+
+/** What earns an admin-defined stamp; the field matching `kind` is set. */
+export interface StampTrigger {
+  kind: string;
+  board?: string;
+  before?: string;
+  via?: string;
+}
+
+/**
+ * One stamp a member holds on a forum. `id` is the stamp record's at-uri for
+ * an admin stamp or a fixed id for a generated one (`atmobb:board:<uri>`,
+ * `atmobb:arrival`, `atmobb:first-light`, `atmobb:early-days`).
+ */
+export interface TrayEntry {
+  id: string;
+  name: string;
+  /** admin (trigger matched), default (board or arrival), network, or byHand. */
+  source: string;
+  /** Present for admin and network stamps; board and arrival defaults are drawn by the app. */
+  look?: StampLook;
+  uri?: string;
+  cid?: string;
+  /** For a board default: the board and its color, when it has one. */
+  board?: string;
+  boardColor?: string;
+  /** For an arrival default: how the member was accepted and by whom. */
+  via?: string;
+  sponsor?: string;
+}
+
 export interface Members {
   members: {
     did: string;
     profile?: ActorProfile;
     lastActive?: string;
-    /** On a gated forum, the acceptance behind this row: when it opened and who brought them in. */
+    /** When the member arrived: the acceptance on a gated forum, the declaration on an open one. */
     since?: string;
+    /** On a gated forum, who brought them in. */
     sponsor?: string;
     /** invite, application, or founding. */
     via?: string;
+    /** The stamps the member wears on this forum, in order, at most three. */
+    stamps: TrayEntry[];
   }[];
   cursor?: string;
 }
@@ -249,6 +289,8 @@ export interface ThreadPage {
     cid?: string;
     author: string;
     authorProfile?: ActorProfile;
+    /** The stamps the author wears on the viewing forum, in order, at most three. */
+    authorStamps: TrayEntry[];
     value: {
       title: string;
       body?: RichTextBlock[];
@@ -271,6 +313,8 @@ export interface ThreadPage {
     cid?: string;
     author: string;
     authorProfile?: ActorProfile;
+    /** The stamps the author wears on the viewing forum, in order, at most three. */
+    authorStamps: TrayEntry[];
     value: {
       body?: RichTextBlock[];
       createdAt?: string;
@@ -559,10 +603,27 @@ export interface Membership {
   via?: string;
   /** Currently accepted members this account sponsored. */
   sponsored: { did: string; since: string; via?: string }[];
+  /** Every stamp the actor holds on this forum. */
+  tray: TrayEntry[];
+  /** Ids from the tray the actor wears, in order, at most three. */
+  worn: string[];
 }
 
 export const getMembership = (actor: string, forum = FORUM_DID()) =>
   xrpc<Membership>('GET', `${NS}.forum.getMembership`, { params: { forum, actor } });
+
+export interface Stamps {
+  /** The forum's stamp records, minus any firstPostInBoard stamp whose board is gone. */
+  stamps: { uri: string; cid: string; name: string; look: StampLook; trigger: StampTrigger; createdAt: string }[];
+  /** The network set every forum offers: first light and early days. */
+  network: { id: string; name: string; look: StampLook }[];
+  /** Present when `actor` was given. */
+  tray?: TrayEntry[];
+  worn?: string[];
+}
+
+export const getStamps = (forum = FORUM_DID(), actor?: string) =>
+  xrpc<Stamps>('GET', `${NS}.forum.getStamps`, { params: { forum, ...(actor ? { actor } : {}) } });
 
 export interface Directory {
   forums: { did: string; name: string; description?: string; createdAt: string }[];

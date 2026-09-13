@@ -1,10 +1,7 @@
--- xrpc.query:app.atmobb.forum.getMembership
--- One account's standing with a forum, from the acceptance windows the
--- forum's acceptMember / revokeMember actions produce: accepted while an open
--- window exists; since, sponsor, and via come from the newest window either
--- way, so a removed member still reports who brought them in. sponsored lists
--- the currently accepted members this account sponsored. tray and worn are
--- the actor's stamps on this forum.
+-- xrpc.query:app.atmobb.forum.getStamps
+-- A forum's stamps: the admin-defined records (minus any firstPostInBoard
+-- stamp whose board is gone) and the generated network set. With actor, also
+-- that member's tray and the ids they wear, in order.
 
 -- Profiles created before this moment hold the network's "early days" stamp.
 -- Two months after stamps shipped: room for the first wave to arrive, and
@@ -187,48 +184,55 @@ local function worn_stamps(by_did, did)
   return member and member.worn or toarray({})
 end
 
+-- The network set every forum offers, mirrored in the tray resolution above.
+local NETWORK = toarray({
+  { id = "atmobb:first-light", name = "first light",
+    look = { bg = "#fff3c4", ink = "#5b4300", shape = "stamp" } },
+  { id = "atmobb:early-days", name = "early days",
+    look = { bg = "#e4e0ff", ink = "#2b1f6b", shape = "ticket" } },
+})
+
 function handle()
   local forum = params.forum
   if not forum then
     error("missing required parameter: forum")
   end
-  local actor = params.actor
-  if not actor then
-    error("missing required parameter: actor")
+
+  local rows = db.raw([[
+    -- Stamp definitions: the forum's records, minus firstPostInBoard stamps
+    -- whose board is gone.
+    SELECT s.uri, s.cid, s.record, s.created_at
+    FROM happyview_records s
+    WHERE s.did = $1 AND s.collection = 'app.atmobb.forum.stamp'
+      AND ((s.record::jsonb)->'trigger'->>'kind' IS DISTINCT FROM 'firstPostInBoard'
+        OR EXISTS (
+          SELECT 1 FROM happyview_records b
+          WHERE b.uri = (s.record::jsonb)->'trigger'->>'board'
+            AND b.collection = 'app.atmobb.forum.board'))
+    ORDER BY COALESCE((s.record::jsonb)->>'createdAt', s.created_at::text) ASC, s.uri ASC
+  ]], { forum })
+
+  local stamps = toarray({})
+  for i, row in ipairs(rows) do
+    local rec = json.decode(row.record)
+    stamps[i] = {
+      uri = row.uri,
+      cid = row.cid,
+      name = rec.name,
+      look = rec.look,
+      trigger = rec.trigger,
+      createdAt = rec.createdAt or row.created_at,
+    }
   end
 
-  local windows = db.raw([[
-    SELECT since, until, sponsor, via
-    FROM atmobb_member_windows
-    WHERE forum_did = $1 AND did = $2
-    ORDER BY since DESC, action_uri DESC
-    LIMIT 1
-  ]], { forum, actor })
-
-  local sponsored_rows = db.raw([[
-    SELECT did, since, via
-    FROM atmobb_member_windows
-    WHERE forum_did = $1 AND sponsor = $2 AND until IS NULL
-    ORDER BY since ASC, did ASC
-  ]], { forum, actor })
-
-  local sponsored = toarray({})
-  for i, row in ipairs(sponsored_rows) do
-    sponsored[i] = { did = row.did, since = row.since, via = row.via }
-  end
-
-  local by_did = resolve_stamps(forum, { actor })
-  local member = by_did[actor] or { tray = toarray({}), worn = toarray({}) }
-  local worn = toarray({})
-  for i, entry in ipairs(member.worn) do worn[i] = entry.id end
-
-  local result = { accepted = false, sponsored = sponsored, tray = member.tray, worn = worn }
-  local w = windows[1]
-  if w then
-    result.accepted = w["until"] == nil
-    result.since = w.since
-    result.sponsor = w.sponsor
-    result.via = w.via
+  local result = { stamps = stamps, network = NETWORK }
+  if params.actor then
+    local by_did = resolve_stamps(forum, { params.actor })
+    local member = by_did[params.actor] or { tray = toarray({}), worn = toarray({}) }
+    local worn = toarray({})
+    for i, entry in ipairs(member.worn) do worn[i] = entry.id end
+    result.tray = member.tray
+    result.worn = worn
   end
   return result
 end

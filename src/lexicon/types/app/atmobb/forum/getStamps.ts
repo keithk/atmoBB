@@ -94,16 +94,18 @@ export function validateGeneratedStamp<V>(v: V) {
   return validate<GeneratedStamp & V>(v, id, hashGeneratedStamp)
 }
 
-/** One stamp a member holds. id is the stamp record's at-uri for an admin stamp or the fixed id of a generated one; uri and cid are present for admin stamps. */
+/** One stamp a member holds. id is the stamp record's at-uri for an admin stamp or the fixed id of a generated one. uri, cid, and look are present for admin stamps and look for network stamps; a board default carries the board and its color so the app can draw it, and an arrival default carries via and sponsor. */
 export interface TrayEntry {
   $type?: 'app.atmobb.forum.getStamps#trayEntry'
   id: string
   name: string
-  look: AppAtmobbForumStamp.Look
+  look?: AppAtmobbForumStamp.Look
   uri?: string
   cid?: string
   /** For a board stamp: the board it marks. */
   board?: string
+  /** For a board stamp: the board's six-digit hex color, when it has one. */
+  boardColor?: string
   /** For an arrival stamp: who brought the member in. */
   sponsor?: string
   /** For an arrival stamp: how the member was accepted. */
