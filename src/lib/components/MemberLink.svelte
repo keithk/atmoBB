@@ -69,7 +69,7 @@
   >
     {#if showAvatar && card}
       <span class="atm-memberlink__avatar">
-        <Avatar seed={card.did} profile={card.profile} size={18} alt="" />
+        <Avatar seed={card.did} profile={card.profile} size={24} alt="" />
       </span>
     {/if}{@render children()}</a>
 
@@ -91,8 +91,13 @@
   .atm-memberlink { position: relative; }
   .atm-memberlink__avatar {
     display: inline-flex;
-    margin-right: 0.2em;
-    vertical-align: -0.2em;
+    margin-right: 0.1em;
+    vertical-align: -0.4em;
+  }
+  .atm-memberlink__avatar :global(.atm-avatar) {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
   }
   .atm-memberlink__pop {
     position: fixed;
