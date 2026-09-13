@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { groupBoards, normalizeBoardColor, parseBoardColor, withBoardColor } from './board-presentation';
+import {
+  boardOrderPeers,
+  groupBoards,
+  normalizeBoardColor,
+  parseBoardColor,
+  withBoardColor,
+} from './board-presentation';
 
 const board = (uri: string, name: string, extra: Record<string, unknown> = {}) => ({
   uri,
@@ -51,5 +57,28 @@ describe('groupBoards', () => {
     expect(groups[0].boards.map((item) => item.value.name)).toEqual(['Second', 'Private']);
     expect(groups[0].boards[1].value.access).toEqual({ space: 'at://f/space/private' });
     expect(groups[1].boards[0].children.map((item) => item.value.name)).toEqual(['Child']);
+  });
+
+  it('scopes ordering to a category or a shared parent', () => {
+    const boards = [
+      board('at://f/board/one-a', 'One A', { category: 'at://f/category/one' }),
+      board('at://f/board/two', 'Two', { category: 'at://f/category/two' }),
+      board('at://f/board/one-b', 'One B', { category: 'at://f/category/one' }),
+      board('at://f/board/uncategorized', 'Uncategorized'),
+      board('at://f/board/stale', 'Stale', { category: 'at://f/category/deleted' }),
+      board('at://f/board/child-a', 'Child A', { parent: 'at://f/board/one-a' }),
+      board('at://f/board/child-b', 'Child B', { parent: 'at://f/board/one-a' }),
+    ];
+    const categories = [
+      { uri: 'at://f/category/one', value: { name: 'One' } },
+      { uri: 'at://f/category/two', value: { name: 'Two' } },
+    ];
+
+    expect(boardOrderPeers(boards, categories, 'at://f/board/one-a')?.map((item) => item.value.name))
+      .toEqual(['One A', 'One B']);
+    expect(boardOrderPeers(boards, categories, 'at://f/board/stale')?.map((item) => item.value.name))
+      .toEqual(['Uncategorized', 'Stale']);
+    expect(boardOrderPeers(boards, categories, 'at://f/board/child-a')?.map((item) => item.value.name))
+      .toEqual(['Child A', 'Child B']);
   });
 });

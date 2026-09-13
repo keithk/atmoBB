@@ -56,3 +56,27 @@ export function groupBoards(boards: Board[], categories: Category[]): BoardGroup
     },
   ].filter((group) => group.boards.length > 0);
 }
+
+/** Boards that share one visible ordering lane: a category, or one parent. */
+export function boardOrderPeers(
+  boards: Board[],
+  categories: Category[],
+  uri: string,
+): Board[] | undefined {
+  const board = boards.find((item) => item.uri === uri);
+  if (!board) return undefined;
+
+  if (board.value.parent) {
+    return boards.filter((item) => item.value.parent === board.value.parent);
+  }
+
+  const categoryUris = new Set(categories.map((category) => category.uri));
+  const visibleCategory = (item: Board) =>
+    item.value.category && categoryUris.has(item.value.category)
+      ? item.value.category
+      : undefined;
+  const category = visibleCategory(board);
+  return boards.filter(
+    (item) => !item.value.parent && visibleCategory(item) === category,
+  );
+}

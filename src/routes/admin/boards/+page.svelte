@@ -1,12 +1,23 @@
 <script lang="ts">
   import { page } from '$app/state';
   import BoardMarker from '$lib/components/BoardMarker.svelte';
+  import { boardOrderPeers, groupBoards } from '$lib/board-presentation';
 
   let { data, form } = $props();
 
   const saved = $derived(page.url.searchParams.has('saved'));
   const pending = $derived(page.url.searchParams.has('pending'));
   const topLevel = $derived(data.boards.filter((b) => !b.value.parent));
+  const boardGroups = $derived(
+    groupBoards(data.boards, data.categories).map((group) => ({
+      ...group,
+      boards: group.boards.flatMap((board) => [board, ...board.children]),
+    })),
+  );
+  const orderPosition = (uri: string) => {
+    const peers = boardOrderPeers(data.boards, data.categories, uri) ?? [];
+    return { index: peers.findIndex((board) => board.uri === uri), length: peers.length };
+  };
   const categoryName = (uri?: string) =>
     data.categories.find((c) => c.uri === uri)?.value.name;
 </script>
@@ -24,87 +35,95 @@
   <section>
     <div class="atm-card">
       <div class="atm-card__header"><span>Boards</span></div>
-      <div class="atm-card__body rows">
-        {#each data.boards as board, i}
-          <div class="orow">
-            <form class="orow__move" method="POST" action="?/moveBoard">
-              <input type="hidden" name="uri" value={board.uri} />
-              <button class="orow__btn" name="dir" value="up" disabled={i === 0} aria-label="Move {board.value.name} up">↑</button>
-              <button class="orow__btn" name="dir" value="down" disabled={i === data.boards.length - 1} aria-label="Move {board.value.name} down">↓</button>
-            </form>
-            <details class="atm-adminrow">
-              <summary>
-                <span class="atm-adminrow__name">
-                  {#if board.value.parent}<span class="row__sub">↳</span>{/if}
-                  <BoardMarker color={board.value.color} />
-                  {board.value.name}
-                </span>
-                <span class="atm-adminrow__meta">
-                  {#if board.value.access?.space}<span class="row__private">private</span> · {/if}
-                  {#if categoryName(board.value.category)}{categoryName(board.value.category)} · {/if}
-                  {board.threadCount} {board.threadCount === 1 ? 'thread' : 'threads'}
-                </span>
-              </summary>
-              <form class="atm-editform" method="POST" action="?/updateBoard">
-                <input type="hidden" name="uri" value={board.uri} />
-                <div class="atm-field">
-                  <span class="atm-label">Name</span>
-                  <input class="atm-input" name="name" required maxlength="100" value={board.value.name} />
+      <div class="atm-card__body board-groups">
+        {#each boardGroups as group, groupIndex}
+          <section class="board-group" aria-labelledby="board-group-{groupIndex}">
+            <h3 id="board-group-{groupIndex}" class="board-group__heading">{group.name}</h3>
+            <div class="rows">
+              {#each group.boards as board, i}
+                {@const position = orderPosition(board.uri)}
+                <div class:orow--sub={!!board.value.parent} class="orow">
+                  <form class="orow__move" method="POST" action="?/moveBoard">
+                    <input type="hidden" name="uri" value={board.uri} />
+                    <button class="orow__btn" name="dir" value="up" disabled={position.index === 0} aria-label="Move {board.value.name} up">↑</button>
+                    <button class="orow__btn" name="dir" value="down" disabled={position.index === position.length - 1} aria-label="Move {board.value.name} down">↓</button>
+                  </form>
+                  <details class="atm-adminrow">
+                    <summary>
+                      <span class="atm-adminrow__name">
+                        {#if board.value.parent}<span class="row__sub">↳</span>{/if}
+                        <BoardMarker color={board.value.color} />
+                        {board.value.name}
+                      </span>
+                      <span class="atm-adminrow__meta">
+                        {#if board.value.access?.space}<span class="row__private">private</span> · {/if}
+                        {#if categoryName(board.value.category)}{categoryName(board.value.category)} · {/if}
+                        {board.threadCount} {board.threadCount === 1 ? 'thread' : 'threads'}
+                      </span>
+                    </summary>
+                    <form class="atm-editform" method="POST" action="?/updateBoard">
+                      <input type="hidden" name="uri" value={board.uri} />
+                      <div class="atm-field">
+                        <span class="atm-label">Name</span>
+                        <input class="atm-input" name="name" required maxlength="100" value={board.value.name} />
+                      </div>
+                      <div class="atm-field">
+                        <span class="atm-label">Description</span>
+                        <input class="atm-input" name="description" maxlength="1000" value={board.value.description ?? ''} />
+                      </div>
+                      <div class="atm-field">
+                        <span class="atm-label">Color</span>
+                        <input
+                          class="atm-input"
+                          name="color"
+                          value={board.value.color ?? ''}
+                          pattern="#[0-9A-Fa-f]{6}"
+                          maxlength="7"
+                          placeholder="#1a73e8 (optional)"
+                          aria-describedby="board-color-help-{i}"
+                        />
+                        <span class="field-help" id="board-color-help-{i}">Full six-digit hex color used for this board's marker.</span>
+                      </div>
+                      <div class="atm-field">
+                        <span class="atm-label">Category</span>
+                        <select class="atm-select" name="category">
+                          <option value="">(none)</option>
+                          {#each data.categories as cat}
+                            <option value={cat.uri} selected={board.value.category === cat.uri}>{cat.value.name}</option>
+                          {/each}
+                        </select>
+                      </div>
+                      {#if data.privateBoardsEnabled || board.value.access?.space}
+                        <label class="edit__private">
+                          <input type="checkbox" name="private" checked={!!board.value.access?.space} />
+                          members-only (private board)
+                        </label>
+                      {/if}
+                      {#if board.value.access?.space}
+                        <label class="edit__really">
+                          <input type="checkbox" name="really" />
+                          I understand that making this board public will delete its private space and every thread inside it.
+                        </label>
+                      {/if}
+                      <div class="atm-editform__actions">
+                        <button class="atm-btn atm-btn--primary atm-btn--sm">save</button>
+                      </div>
+                    </form>
+                    <form class="edit__danger" method="POST" action="?/deleteBoard">
+                      <input type="hidden" name="uri" value={board.uri} />
+                      {#if board.threadCount > 0}
+                        <label class="edit__really">
+                          <input type="checkbox" name="really" />
+                          I understand that {board.threadCount} {board.threadCount === 1 ? 'thread' : 'threads'} will no longer have a board.
+                        </label>
+                      {/if}
+                      <button class="atm-btn atm-btn--ghost atm-btn--sm">delete board</button>
+                    </form>
+                  </details>
                 </div>
-                <div class="atm-field">
-                  <span class="atm-label">Description</span>
-                  <input class="atm-input" name="description" maxlength="1000" value={board.value.description ?? ''} />
-                </div>
-                <div class="atm-field">
-                  <span class="atm-label">Color</span>
-                  <input
-                    class="atm-input"
-                    name="color"
-                    value={board.value.color ?? ''}
-                    pattern="#[0-9A-Fa-f]{6}"
-                    maxlength="7"
-                    placeholder="#1a73e8 (optional)"
-                    aria-describedby="board-color-help-{i}"
-                  />
-                  <span class="field-help" id="board-color-help-{i}">Full six-digit hex color used for this board's marker.</span>
-                </div>
-                <div class="atm-field">
-                  <span class="atm-label">Category</span>
-                  <select class="atm-select" name="category">
-                    <option value="">(none)</option>
-                    {#each data.categories as cat}
-                      <option value={cat.uri} selected={board.value.category === cat.uri}>{cat.value.name}</option>
-                    {/each}
-                  </select>
-                </div>
-                {#if data.privateBoardsEnabled || board.value.access?.space}
-                  <label class="edit__private">
-                    <input type="checkbox" name="private" checked={!!board.value.access?.space} />
-                    members-only (private board)
-                  </label>
-                {/if}
-                {#if board.value.access?.space}
-                  <label class="edit__really">
-                    <input type="checkbox" name="really" />
-                    I understand that making this board public will delete its private space and every thread inside it.
-                  </label>
-                {/if}
-                <div class="atm-editform__actions">
-                  <button class="atm-btn atm-btn--primary atm-btn--sm">save</button>
-                </div>
-              </form>
-              <form class="edit__danger" method="POST" action="?/deleteBoard">
-                <input type="hidden" name="uri" value={board.uri} />
-                {#if board.threadCount > 0}
-                  <label class="edit__really">
-                    <input type="checkbox" name="really" />
-                    I understand that {board.threadCount} {board.threadCount === 1 ? 'thread' : 'threads'} will no longer have a board.
-                  </label>
-                {/if}
-                <button class="atm-btn atm-btn--ghost atm-btn--sm">delete board</button>
-              </form>
-            </details>
-          </div>
+              {/each}
+            </div>
+          </section>
         {:else}
           <p class="atm-empty atm-empty--bare">No boards yet.</p>
         {/each}
@@ -219,8 +238,20 @@
     gap: var(--space-5);
     align-items: start;
   }
-  .rows { display: grid; gap: var(--space-2); }
+  .rows, .board-groups { display: grid; gap: var(--space-2); }
+  .board-group { display: grid; gap: var(--space-2); }
+  .board-group + .board-group { margin-top: var(--space-3); }
+  .board-group__heading {
+    margin: 0;
+    padding-bottom: var(--space-1);
+    border-bottom: var(--border-hair) solid var(--forum-line);
+    font: var(--type-meta);
+    color: var(--forum-ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
   .orow { display: flex; gap: var(--space-2); align-items: stretch; }
+  .orow--sub { margin-left: var(--space-4); }
   .orow > .atm-adminrow { flex: 1; min-width: 0; }
   .orow__move { display: flex; flex-direction: column; justify-content: center; gap: 2px; }
   .orow__btn {

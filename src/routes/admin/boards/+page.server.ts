@@ -13,7 +13,7 @@ import { privateBoardsEnabled } from '$lib/server/happyview-session';
 import { createForumRecord, deleteForumRecord, putForumRecord } from '$lib/server/forum-repo';
 import { savedRedirect } from '$lib/server/saved-redirect';
 import { parseAtUri } from '$lib/appview-paths';
-import { parseBoardColor, withBoardColor } from '$lib/board-presentation';
+import { boardOrderPeers, parseBoardColor, withBoardColor } from '$lib/board-presentation';
 
 const NS = 'app.atmobb';
 const SPACE_ACCESS = `${NS}.forum.board#space`;
@@ -77,12 +77,19 @@ export const actions: Actions = {
       return fail(400, { message: 'Members-only boards aren\'t available on this deployment.' });
     }
     const index = await getBoardIndex(FORUM_DID());
-    const maxOrder = Math.max(-1, ...index.boards.map((b) => b.value.order ?? -1));
+    const parent = optional(form.get('parent'));
+    const category = optional(form.get('category'));
+    const peers = parent
+      ? index.boards.filter((board) => board.value.parent === parent)
+      : index.boards.filter(
+          (board) => !board.value.parent && board.value.category === category,
+        );
+    const maxOrder = Math.max(-1, ...peers.map((b) => b.value.order ?? -1));
     const value = withBoardColor<Record<string, unknown>>({
       name,
       description: optional(form.get('description')),
-      category: optional(form.get('category')),
-      parent: optional(form.get('parent')),
+      category,
+      parent,
       order: maxOrder + 1,
       createdAt: new Date().toISOString(),
     }, parsedColor.color);
@@ -242,16 +249,16 @@ export const actions: Actions = {
     await saveRedirect((i) => !i.boards.some((b) => b.uri === uri));
   },
 
-  // Move a board one step in the display order. The admin list and the appview
-  // share one flat sort, so a swap here is exactly what visitors see (within a
-  // category the relative order is what matters).
+  // Move a board one step within its visible category, or among sibling
+  // subforums. Those are the ordering lanes visitors see on the board index.
   moveBoard: async ({ request, locals }) => {
     if (!(await adminActor(locals))) return fail(403, { message: 'Only admins can make this change.' });
     const form = await request.formData();
     const uri = String(form.get('uri') ?? '');
     const dir = form.get('dir') === 'up' ? 'up' : 'down';
     const index = await readIndex();
-    const writes = reordered(index.boards, uri, dir);
+    const peers = boardOrderPeers(index.boards, index.categories ?? [], uri);
+    const writes = peers ? reordered(peers, uri, dir) : null;
     if (!writes) return fail(404, { message: 'Board not found.' });
     try {
       for (const { row, order } of writes) {
