@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import RichTextEditor from '$lib/components/RichTextEditor.svelte';
 
   let { data, form } = $props();
 
@@ -23,9 +24,15 @@
         <input class="atm-input" name="name" maxlength="100" required value={data.profile.name} />
       </div>
       <div class="atm-field">
-        <span class="atm-label">Description</span>
+        <span class="atm-label">Tagline</span>
         <input class="atm-input" name="description" maxlength="1000" value={data.profile.description}
           placeholder="What this place is about, in a sentence or two" />
+        <span class="atm-hint">One plain sentence. Shows under the forum name and in search and social previews.</span>
+      </div>
+      <div class="atm-field">
+        <span class="atm-label">Intro</span>
+        <RichTextEditor name="intro" placeholder="Welcome new members, say what the place is for, point them somewhere…" initial={data.introDoc} allowImages={false} />
+        <span class="atm-hint">Optional. Shows in the home page hero under the tagline. Leave it empty to keep the hero to the name and tagline.</span>
       </div>
       <div class="atm-field">
         <span class="atm-label">Rules</span>

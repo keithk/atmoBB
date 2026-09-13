@@ -29,6 +29,13 @@ export interface Main {
     | $Typed<AppAtmobbRichtextBlock.Code>
     | { $type: string }
   )[]
+  /** Rich welcome shown in the home page hero under the description. Absent means the hero shows the name and description only. */
+  intro?: (
+    | $Typed<AppAtmobbRichtextBlock.Text>
+    | $Typed<AppAtmobbRichtextBlock.Quote>
+    | $Typed<AppAtmobbRichtextBlock.Code>
+    | { $type: string }
+  )[]
   /** Post-count rank ladder, ordered ascending by minPosts. Ranks are computed by appviews from indexed post counts. */
   ranks?: Rank[]
   links?: string[]

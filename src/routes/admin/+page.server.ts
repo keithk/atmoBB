@@ -4,12 +4,15 @@ import { getBoardIndex, FORUM_DID } from '$lib/server/appview';
 import { adminActor } from '$lib/server/admin';
 import { putForumRecord } from '$lib/server/forum-repo';
 import { savedRedirect } from '$lib/server/saved-redirect';
+import { parseBBCode, type RichTextBlock } from '$lib/richtext/bbcode';
+import { blocksToDoc } from '$lib/richtext/blocks-tiptap';
 
 const NS = 'app.atmobb';
 
 type ProfileRecord = {
   name?: string;
   description?: string;
+  intro?: RichTextBlock[];
   rules?: { $type: string; text?: string }[];
   [k: string]: unknown;
 };
@@ -21,7 +24,11 @@ export const load: PageServerLoad = async () => {
     .map((b) => b.text ?? '')
     .filter(Boolean)
     .join('\n\n');
-  return { profile: { name: profile.name ?? '', description: profile.description ?? '' }, rulesText };
+  return {
+    profile: { name: profile.name ?? '', description: profile.description ?? '' },
+    introDoc: profile.intro?.length ? blocksToDoc(profile.intro) : undefined,
+    rulesText,
+  };
 };
 
 export const actions: Actions = {
@@ -31,6 +38,8 @@ export const actions: Actions = {
     const form = await request.formData();
     const name = String(form.get('name') ?? '').trim();
     const description = String(form.get('description') ?? '').trim();
+    // The hero has no image uploads, so any pasted image placeholder is dropped.
+    const intro = parseBBCode(String(form.get('intro') ?? '')).filter((b) => !b.$type.endsWith('#image'));
     const rulesText = String(form.get('rules') ?? '').trim();
     if (!name) return fail(400, { message: 'Enter a name for the forum.' });
 
@@ -52,8 +61,9 @@ export const actions: Actions = {
           .map((text) => ({ $type: `${NS}.richtext.block#text`, text }))
       : undefined;
 
-    const record: ProfileRecord = { ...current, name, description: description || undefined, rules };
+    const record: ProfileRecord = { ...current, name, description: description || undefined, intro, rules };
     if (!record.description) delete record.description;
+    if (!record.intro?.length) delete record.intro;
     if (!record.rules) delete record.rules;
 
     try {
@@ -69,6 +79,7 @@ export const actions: Actions = {
         return (
           p.name === record.name &&
           (p.description ?? undefined) === record.description &&
+          JSON.stringify(p.intro ?? null) === JSON.stringify(record.intro ?? null) &&
           JSON.stringify(p.rules ?? null) === JSON.stringify(record.rules ?? null)
         );
       },

@@ -63,6 +63,8 @@ export interface ForumFont {
 export interface ForumProfile {
   name: string;
   description?: string;
+  /** Rich welcome shown in the home page hero under the description. */
+  intro?: RichTextBlock[];
   ranks?: { title: string; minPosts: number }[];
   homepage?: {
     layout?: string;

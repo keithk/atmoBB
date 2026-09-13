@@ -81,7 +81,7 @@ Joining a forum is an `app.atmobb.forum.membership` record in the member's own r
 
 Custom CSS never applies to `/admin`, so a broken theme is always repairable.
 
-- **Profile.** Forum name, description, and rules (rendered at `/rules`).
+- **Profile.** Forum name, a plain tagline (also the search and social description), an optional rich intro shown in the home page hero, and rules (rendered at `/rules`).
 - **Appearance.** Custom CSS and up to 12 uploaded WOFF/WOFF2 webfonts. See [theming](theming.md) for the cascade contract, tokens, and class hooks.
 - **Boards.** Create, edit, delete, categorize, nest, reorder with up/down arrows, toggle members-only, with destructive-action confirmations where they're needed.
 - **Staff.** Grant and revoke admin and moderator roles.

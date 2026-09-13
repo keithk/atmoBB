@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import Logo from '$lib/components/Logo.svelte';
   import Avatar from '$lib/components/Avatar.svelte';
+  import RichText from '$lib/components/RichText.svelte';
   import ForumSidebarNav from '$lib/components/ForumSidebarNav.svelte';
   import ForumSidebarDrawer from '$lib/components/ForumSidebarDrawer.svelte';
   import { groupBoards } from '$lib/board-presentation';
@@ -171,13 +172,17 @@
       </div>
     </div>
 
-    <div class="atm-masthead__hero">
-      <div class="atm-masthead__name">{data.forum.name}</div>
-      {#if data.forum.description}
-        <div class="atm-masthead__tagline">{data.forum.description}</div>
-      {/if}
-      <code class="atm-masthead__handle">{data.forumDid}</code>
-    </div>
+    {#if page.route.id === '/'}
+      <div class="atm-masthead__hero">
+        <div class="atm-masthead__name">{data.forum.name}</div>
+        {#if data.forum.description}
+          <div class="atm-masthead__tagline">{data.forum.description}</div>
+        {/if}
+        {#if data.forum.intro?.length}
+          <div class="atm-masthead__intro"><RichText body={data.forum.intro} /></div>
+        {/if}
+      </div>
+    {/if}
 
     <nav class="atm-mastnav" aria-label="Forum">
       {#each tabs as tab}
@@ -354,11 +359,10 @@
     margin-top: var(--space-1);
     max-width: 70ch;
   }
-  .atm-masthead__handle {
-    display: inline-block;
-    margin-top: var(--space-2);
-    font: var(--type-handle);
-    color: var(--forum-ink-faint);
+  .atm-masthead__intro {
+    margin-top: var(--space-4);
+    max-width: 70ch;
+    color: var(--forum-header-ink);
   }
 
   .atm-mastnav {

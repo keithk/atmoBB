@@ -1362,6 +1362,20 @@ export const schemaDict = {
                 ],
               },
             },
+            intro: {
+              type: 'array',
+              description:
+                'Rich welcome shown in the home page hero under the description. Absent means the hero shows the name and description only.',
+              maxLength: 50,
+              items: {
+                type: 'union',
+                refs: [
+                  'lex:app.atmobb.richtext.block#text',
+                  'lex:app.atmobb.richtext.block#quote',
+                  'lex:app.atmobb.richtext.block#code',
+                ],
+              },
+            },
             ranks: {
               type: 'array',
               description:

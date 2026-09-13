@@ -28,6 +28,15 @@
               "refs": ["app.atmobb.richtext.block#text", "app.atmobb.richtext.block#quote", "app.atmobb.richtext.block#code"]
             }
           },
+          "intro": {
+            "type": "array",
+            "description": "Rich welcome shown in the home page hero under the description. Absent means the hero shows the name and description only.",
+            "maxLength": 50,
+            "items": {
+              "type": "union",
+              "refs": ["app.atmobb.richtext.block#text", "app.atmobb.richtext.block#quote", "app.atmobb.richtext.block#code"]
+            }
+          },
           "ranks": {
             "type": "array",
             "description": "Post-count rank ladder, ordered ascending by minPosts. Ranks are computed by appviews from indexed post counts.",
