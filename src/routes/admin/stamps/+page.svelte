@@ -196,14 +196,21 @@
       <div class="atm-field" class:atm-field--error={!normalizeBoardColor(draft.bg)}>
         <label class="atm-label atm-label--quiet" for="{id}-bg">Background</label>
         <span class="hex">
-          <i class="hex__swatch" style:background={normalizeBoardColor(draft.bg)} aria-hidden="true"></i>
+          <input
+            class="hex__picker"
+            type="color"
+            value={draft.look.bg}
+            aria-label="Choose background color"
+            title="Choose background color"
+            oninput={(e) => edit(uri, stamp, { bg: e.currentTarget.value })}
+          />
           <input
             class="atm-input"
             id="{id}-bg"
             name="bg"
             list="stamp-bg-presets"
             required
-            pattern="#[0-9A-Fa-f]{6}"
+            pattern={'#[0-9A-Fa-f]{6}'}
             maxlength="7"
             value={draft.bg}
             oninput={(e) => edit(uri, stamp, { bg: e.currentTarget.value })}
@@ -215,14 +222,21 @@
       <div class="atm-field" class:atm-field--error={!normalizeBoardColor(draft.ink)}>
         <label class="atm-label atm-label--quiet" for="{id}-ink">Ink</label>
         <span class="hex">
-          <i class="hex__swatch" style:background={normalizeBoardColor(draft.ink)} aria-hidden="true"></i>
+          <input
+            class="hex__picker"
+            type="color"
+            value={draft.look.ink}
+            aria-label="Choose ink color"
+            title="Choose ink color"
+            oninput={(e) => edit(uri, stamp, { ink: e.currentTarget.value })}
+          />
           <input
             class="atm-input"
             id="{id}-ink"
             name="ink"
             list="stamp-ink-presets"
             required
-            pattern="#[0-9A-Fa-f]{6}"
+            pattern={'#[0-9A-Fa-f]{6}'}
             maxlength="7"
             value={draft.ink}
             oninput={(e) => edit(uri, stamp, { ink: e.currentTarget.value })}
@@ -350,13 +364,15 @@
 
   .hex { display: flex; align-items: center; gap: var(--space-2); }
   .hex .atm-input { flex: 1; font-family: var(--font-mono); }
-  .hex__swatch {
+  .hex__picker {
     flex: none;
-    width: 28px;
-    height: 28px;
+    width: 36px;
+    height: 34px;
+    padding: 3px;
     border-radius: var(--radius-sm);
     border: var(--border-hair) solid var(--forum-line-strong);
-    background: repeating-conic-gradient(var(--forum-sunken) 0 25%, var(--forum-surface) 0 50%) 0 0 / 8px 8px;
+    background: var(--forum-surface);
+    cursor: pointer;
   }
 
   .contrast {

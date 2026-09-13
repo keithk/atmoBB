@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import BoardColorInput from '$lib/components/BoardColorInput.svelte';
   import BoardMarker from '$lib/components/BoardMarker.svelte';
   import { boardOrderPeers, groupBoards } from '$lib/board-presentation';
 
@@ -72,17 +73,13 @@
                         <input class="atm-input" name="description" maxlength="1000" value={board.value.description ?? ''} />
                       </div>
                       <div class="atm-field">
-                        <span class="atm-label">Color</span>
-                        <input
-                          class="atm-input"
-                          name="color"
-                          value={board.value.color ?? ''}
-                          pattern="#[0-9A-Fa-f]{6}"
-                          maxlength="7"
-                          placeholder="#1a73e8 (optional)"
-                          aria-describedby="board-color-help-{i}"
+                        <label class="atm-label" for="board-color-{groupIndex}-{i}">Color</label>
+                        <BoardColorInput
+                          id="board-color-{groupIndex}-{i}"
+                          value={board.value.color}
+                          describedBy="board-color-help-{groupIndex}-{i}"
                         />
-                        <span class="field-help" id="board-color-help-{i}">Full six-digit hex color used for this board's marker.</span>
+                        <span class="field-help" id="board-color-help-{groupIndex}-{i}">Full six-digit hex color used for this board's marker.</span>
                       </div>
                       <div class="atm-field">
                         <span class="atm-label">Category</span>
@@ -143,15 +140,8 @@
             <input class="atm-input" name="description" maxlength="1000" placeholder="What belongs here" />
           </div>
           <div class="atm-field">
-            <span class="atm-label">Color</span>
-            <input
-              class="atm-input"
-              name="color"
-              pattern="#[0-9A-Fa-f]{6}"
-              maxlength="7"
-              placeholder="#1a73e8 (optional)"
-              aria-describedby="new-board-color-help"
-            />
+            <label class="atm-label" for="new-board-color">Color</label>
+            <BoardColorInput id="new-board-color" describedBy="new-board-color-help" />
             <span class="field-help" id="new-board-color-help">Full six-digit hex color used for this board's marker.</span>
           </div>
           <div class="atm-editform__row">
