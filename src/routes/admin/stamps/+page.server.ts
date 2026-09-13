@@ -1,7 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { getBoardIndex, getStamps, FORUM_DID } from '$lib/server/appview';
-import type { ForumProfile, Stamps } from '$lib/server/appview';
+import { getBoardIndex, getStamps, spaceOfBoard, FORUM_DID } from '$lib/server/appview';
+import type { BoardIndex, ForumProfile, Stamps } from '$lib/server/appview';
 import { adminActor } from '$lib/server/admin';
 import { createForumRecord, deleteForumRecord, listForumRecords, putForumRecord } from '$lib/server/forum-repo';
 import { currentProfile, profileRedirect, saveProfile } from '$lib/server/forum-appearance';
@@ -11,6 +11,7 @@ import {
   parseLook,
   parseStampForm,
   retiredByDeletedBoard,
+  sameTrigger,
   triggerLabel,
   type StampFormFields,
   type StampLook,
@@ -63,9 +64,15 @@ async function stampRows(): Promise<StampRow[]> {
   return rows.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.uri.localeCompare(b.uri));
 }
 
+// A first-post stamp can only fire on a public board: members-only (space)
+// boards' posts are outside the public index, so they never trigger one.
+function publicBoards(index: BoardIndex) {
+  return index.boards.filter((b) => !spaceOfBoard(b.value.access));
+}
+
 export const load: PageServerLoad = async () => {
   const [index, rows] = await Promise.all([getBoardIndex(FORUM_DID()), stampRows()]);
-  const boards = index.boards.map((b) => ({ uri: b.uri, name: b.value.name }));
+  const boards = publicBoards(index).map((b) => ({ uri: b.uri, name: b.value.name }));
   const boardUris = boards.map((b) => b.uri);
   const boardName = (uri?: string) => boards.find((b) => b.uri === uri)?.name;
   return {
@@ -110,7 +117,7 @@ export const actions: Actions = {
     const form = await request.formData();
     const fields = fieldsOf(form);
     const index = await getBoardIndex(FORUM_DID());
-    const parsed = parseStampForm(fields, index.boards.map((b) => b.uri));
+    const parsed = parseStampForm(fields, publicBoards(index).map((b) => b.uri));
     if (!parsed.ok) return fail(400, { message: parsed.error, warning: parsed.warning, fields, uri: 'new' });
     let created: { uri: string };
     try {
@@ -130,7 +137,7 @@ export const actions: Actions = {
     if (!p || !current) return fail(404, { message: 'Stamp not found.' });
     const fields = fieldsOf(form);
     const index = await getBoardIndex(FORUM_DID());
-    const parsed = parseStampForm(fields, index.boards.map((b) => b.uri));
+    const parsed = parseStampForm(fields, publicBoards(index).map((b) => b.uri));
     if (!parsed.ok) return fail(400, { message: parsed.error, warning: parsed.warning, fields, uri });
     const record = {
       ...current.value,
@@ -148,7 +155,7 @@ export const actions: Actions = {
         !!x &&
         x.name === record.name &&
         JSON.stringify(parseLook(x.look)) === JSON.stringify(record.look) &&
-        JSON.stringify(x.trigger) === JSON.stringify(record.trigger)
+        sameTrigger(x.trigger, record.trigger)
       );
     });
   },

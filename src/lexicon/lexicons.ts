@@ -1277,7 +1277,7 @@ export const schemaDict = {
               network: {
                 type: 'array',
                 description:
-                  'The generated set every atmobb forum offers: board, arrival, and era stamps with fixed ids.',
+                  'The fixed network stamps every forum on this appview offers (first light, early days). Board and arrival defaults are per member and appear in the tray.',
                 items: {
                   type: 'ref',
                   ref: 'lex:app.atmobb.forum.getStamps#generatedStamp',

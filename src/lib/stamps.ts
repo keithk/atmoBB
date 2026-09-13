@@ -287,6 +287,16 @@ export interface StoredTrigger {
   via?: string;
 }
 
+/**
+ * Whether two triggers describe the same thing. The appview returns a trigger
+ * as parsed JSON whose key order can differ from a locally built object, so a
+ * plain `JSON.stringify` comparison isn't reliable; this compares field by
+ * field instead.
+ */
+export function sameTrigger(a: StoredTrigger, b: StoredTrigger): boolean {
+  return a.kind === b.kind && a.board === b.board && a.before === b.before && a.via === b.via;
+}
+
 /** True when a board trigger points at a board that is gone: the stamp reads as retired. */
 export function retiredByDeletedBoard(trigger: StoredTrigger, boards: readonly string[]): boolean {
   return trigger.kind === 'firstPostInBoard' && !(trigger.board && boards.includes(trigger.board));

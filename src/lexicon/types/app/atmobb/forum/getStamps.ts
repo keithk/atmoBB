@@ -26,7 +26,7 @@ export type InputSchema = undefined
 export interface OutputSchema {
   /** Stamps the forum defined, as app.atmobb.forum.stamp records. */
   stamps: StampView[]
-  /** The generated set every atmobb forum offers: board, arrival, and era stamps with fixed ids. */
+  /** The fixed network stamps every forum on this appview offers (first light, early days). Board and arrival defaults are per member and appear in the tray. */
   network: GeneratedStamp[]
   /** Every stamp the actor holds on this forum. Present only when actor is given. */
   tray?: TrayEntry[]

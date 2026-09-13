@@ -76,13 +76,33 @@ export async function joinForum(did: string, forum: string, wearing?: string[]):
   membershipCache.delete(did);
 }
 
+// One wearing write per did at a time: without this, two concurrent saves
+// from a member with no declaration (a double submit, or a `move` right
+// after a `save`) both see none from findDeclaration and both create one,
+// leaving two membership records behind that a later Leave only clears one
+// of. Queued so a concurrent call waits for the one ahead of it and then
+// re-reads the declaration it created, instead of racing to create its own.
+const settingWearing = new Map<string, Promise<void>>();
+
 /**
  * Set the stamps the member wears on this forum: the `wearing` field on their
  * declaration (KTD3). Without a declaration (an open forum, never joined by
  * hand) one is created carrying the choice; leaving deletes it and the choice
  * with it. Other fields on the record are kept.
  */
-export async function setWearing(did: string, forum: string, wearing: string[]): Promise<void> {
+export function setWearing(did: string, forum: string, wearing: string[]): Promise<void> {
+  const ahead = settingWearing.get(did) ?? Promise.resolve();
+  const write: Promise<void> = ahead
+    .catch(() => {})
+    .then(() => writeWearing(did, forum, wearing))
+    .finally(() => {
+      if (settingWearing.get(did) === write) settingWearing.delete(did);
+    });
+  settingWearing.set(did, write);
+  return write;
+}
+
+async function writeWearing(did: string, forum: string, wearing: string[]): Promise<void> {
   const current = await findDeclaration(did, forum);
   if (!current) return joinForum(did, forum, wearing);
   const p = parseAtUri(current.uri);

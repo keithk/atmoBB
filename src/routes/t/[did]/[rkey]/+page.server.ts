@@ -135,7 +135,7 @@ export const load: PageServerLoad = async ({ params, url, parent, locals, isData
     ...posts.map((p) => p.author),
     ...page.replies.flatMap((r) => (r.value.parent ? [postAuthor(r.value.parent.uri)] : [])),
     ...posts.flatMap((p) => (p.body ?? []).flatMap((b) => (b.subject ? [postAuthor(b.subject.uri)] : []))),
-    ...sponsorDids([...(page.thread?.authorStamps ?? []), ...page.replies.flatMap((r) => r.authorStamps)]),
+    ...sponsorDids([...(page.thread?.authorStamps ?? []), ...page.replies.flatMap((r) => r.authorStamps ?? [])]),
   ];
   const uniqueAuthors = [...new Set(authors)];
   const handles = await handleMap(uniqueAuthors);

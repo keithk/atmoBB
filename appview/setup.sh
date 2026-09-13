@@ -109,6 +109,8 @@ CREATE TABLE IF NOT EXISTS atmobb_firsts (
   source_uri text NOT NULL,
   UNIQUE NULLS NOT DISTINCT (forum_did, did, board_uri)
 );
+CREATE INDEX IF NOT EXISTS idx_atmobb_firsts_network
+  ON atmobb_firsts (did) WHERE board_uri IS NULL;
 -- By-hand stamp awards from awardStamp actions signed by the stamp's own
 -- forum. actor_did is the staffer who gave it when the action names one.
 -- revokeStamp sets revoked_at and a later awardStamp clears it.

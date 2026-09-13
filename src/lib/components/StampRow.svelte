@@ -4,12 +4,12 @@
   import Stamp from './Stamp.svelte';
 
   let {
-    stamps,
+    stamps = [],
     handles = {},
     size = 'full',
     class: className = '',
   }: {
-    stamps: TrayEntry[];
+    stamps?: TrayEntry[];
     handles?: Handles;
     size?: 'full' | 'compact';
     class?: string;

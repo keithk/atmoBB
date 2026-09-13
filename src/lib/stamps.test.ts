@@ -11,6 +11,7 @@ import {
   parseStampForm,
   parseTrigger,
   parseWearing,
+  sameTrigger,
   sponsorDids,
   stampLabel,
   triggerLabel,
@@ -220,6 +221,20 @@ describe('parseStampForm', () => {
   it('rejects abbreviated hex and unknown shapes', () => {
     expect(parseStampForm({ ...fields, bg: '#abc' }).ok).toBe(false);
     expect(parseStampForm({ ...fields, shape: 'hexagon' }).ok).toBe(false);
+  });
+});
+
+describe('sameTrigger', () => {
+  it('treats key order as irrelevant', () => {
+    const a = { kind: 'firstPostInBoard', board: 'at://b' };
+    const b = { board: 'at://b', kind: 'firstPostInBoard' };
+    expect(sameTrigger(a, b)).toBe(true);
+  });
+
+  it('treats a different board as a different trigger', () => {
+    const a = { kind: 'firstPostInBoard', board: 'at://b' };
+    const b = { kind: 'firstPostInBoard', board: 'at://other' };
+    expect(sameTrigger(a, b)).toBe(false);
   });
 });
 
