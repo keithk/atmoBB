@@ -20,7 +20,7 @@ export const load: PageServerLoad = async ({ url }) => {
   const previewSlug = slugify(url.searchParams.get('preview') ?? '');
   const [index, log, preview, directory] = await Promise.all([
     getBoardIndex(FORUM_DID()),
-    getModerationLog(FORUM_DID(), 30).catch(() => ({ actions: [] })),
+    getModerationLog(FORUM_DID(), 30, 'moderation').catch(() => ({ actions: [] })),
     previewSlug ? getTopic(previewSlug).catch((): Topic | null => null) : null,
     getTopics().catch((): Topics => ({ topics: [] })),
   ]);
@@ -124,7 +124,7 @@ export const actions: Actions = {
     const key = actionKey({ subject, action, ...(board ? { board } : {}) });
     await savedRedirect(
       '/admin/topics?saved=1',
-      () => getModerationLog(FORUM_DID(), 30),
+      () => getModerationLog(FORUM_DID(), 30, 'moderation'),
       (log) => log.actions.find((a) => actionKey(a.value) === key)?.value.action === inverse,
     );
   },

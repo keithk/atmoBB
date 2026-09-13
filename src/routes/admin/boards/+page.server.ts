@@ -1,19 +1,13 @@
-import { fail, redirect } from '@sveltejs/kit';
+import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import {
   getBoardIndex,
-  getAccessRequests,
   FORUM_DID,
   createSpace,
   deleteSpace,
-  addSpaceMember,
-  removeSpaceMember,
-  isSpaceMember,
   spaceOfBoard,
-  resolveHandle,
 } from '$lib/server/appview';
-import type { BoardIndex, SpaceMember } from '$lib/server/appview';
-import { boardMembers } from '$lib/server/space-access';
+import type { BoardIndex } from '$lib/server/appview';
 import { adminActor } from '$lib/server/admin';
 import { privateBoardsEnabled } from '$lib/server/happyview-session';
 import { createForumRecord, deleteForumRecord, putForumRecord } from '$lib/server/forum-repo';
@@ -24,48 +18,12 @@ import { parseBoardColor, withBoardColor } from '$lib/board-presentation';
 const NS = 'app.atmobb';
 const SPACE_ACCESS = `${NS}.forum.board#space`;
 
+// Access requests and each private board's readers live on /admin/members.
 export const load: PageServerLoad = async () => {
   const index = await getBoardIndex(FORUM_DID());
-  // Map each board URI to its backing space (if any) so we can both label the
-  // queue and drop requests from people who are already members.
-  const spaceByBoard = new Map(
-    index.boards.map((b) => [b.uri, spaceOfBoard(b.value.access)] as const),
-  );
-  let requests: Awaited<ReturnType<typeof getAccessRequests>>['requests'] = [];
-  try {
-    const res = await getAccessRequests(FORUM_DID());
-    const checked = await Promise.all(
-      res.requests.map(async (r) => {
-        const space = spaceByBoard.get(r.board);
-        if (!space) return null; // board went public or vanished
-        return (await isSpaceMember(space, r.requester)) ? null : r;
-      }),
-    );
-    requests = checked.filter((r): r is NonNullable<typeof r> => r !== null);
-  } catch {
-    // getAccessRequests may not be registered yet on older instances.
-  }
-  // Who can read each private board, so an admin can show someone out. The
-  // forum account is the space authority, not a member in this sense.
-  const members: Record<string, (SpaceMember & { handle: string })[]> = {};
-  await Promise.all(
-    [...spaceByBoard].map(async ([uri, space]) => {
-      if (!space) return;
-      try {
-        const list = await boardMembers(space);
-        members[uri] = await Promise.all(
-          list.map(async (m) => ({ ...m, handle: await resolveHandle(m.did) })),
-        );
-      } catch {
-        // space unreachable — the row just shows no member list
-      }
-    }),
-  );
   return {
     boards: index.boards,
     categories: index.categories ?? [],
-    requests,
-    members,
     privateBoardsEnabled: privateBoardsEnabled(),
   };
 };
@@ -307,79 +265,6 @@ export const actions: Actions = {
       (i) => writes.every(({ row, order }) => i.boards.find((b) => b.uri === row.uri)?.value.order === order),
       false,
     );
-  },
-
-  // Grant a pending access request: add the requester to the board's space as a
-  // write member. Once they're a member the queue drops them automatically.
-  approveRequest: async ({ request, locals }) => {
-    if (!(await adminActor(locals))) return fail(403, { message: 'Only admins can make this change.' });
-    const form = await request.formData();
-    const boardUri = String(form.get('board') ?? '');
-    const did = String(form.get('did') ?? '');
-    const board = await currentBoard(boardUri);
-    const space = board && spaceOfBoard(board.value.access);
-    if (!space) return fail(404, { message: 'That board is not members-only.' });
-    try {
-      await addSpaceMember(space, did, 'write');
-      await createForumRecord(`${NS}.moderation.action`, {
-        subject: { $type: `${NS}.moderation.action#account`, did },
-        action: 'grantAccess',
-        board: boardUri,
-      });
-    } catch (e) {
-      return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t approve this request. Try again.' });
-    }
-    redirect(303, '/admin/boards?saved=1');
-  },
-
-  // Deny a request: record a denyAccess moderation.action so the queue stops
-  // surfacing it (getAccessRequests filters denied requests out).
-  denyRequest: async ({ request, locals }) => {
-    if (!(await adminActor(locals))) return fail(403, { message: 'Only admins can make this change.' });
-    const form = await request.formData();
-    const boardUri = String(form.get('board') ?? '');
-    const did = String(form.get('did') ?? '');
-    try {
-      await createForumRecord(`${NS}.moderation.action`, {
-        subject: { $type: `${NS}.moderation.action#account`, did },
-        action: 'denyAccess',
-        board: boardUri,
-      });
-    } catch (e) {
-      return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t deny this request. Try again.' });
-    }
-    // The queue only drops the request once the denyAccess action is indexed.
-    await savedRedirect(
-      '/admin/boards?saved=1',
-      () => getAccessRequests(FORUM_DID()),
-      (r) => !r.requests.some((x) => x.board === boardUri && x.requester === did),
-    );
-  },
-
-  // Take a member out of a private board: remove them from its space, then
-  // record a revokeAccess action so the queue treats their old request as
-  // settled. They can ask again.
-  removeMember: async ({ request, locals }) => {
-    if (!(await adminActor(locals))) return fail(403, { message: 'Only admins can make this change.' });
-    const form = await request.formData();
-    const boardUri = String(form.get('board') ?? '');
-    const did = String(form.get('did') ?? '');
-    if (!did.startsWith('did:')) return fail(400, { message: 'Member information is missing.' });
-    if (did === FORUM_DID()) return fail(400, { message: "The forum account can't be removed from its own space." });
-    const board = await currentBoard(boardUri);
-    const space = board && spaceOfBoard(board.value.access);
-    if (!space) return fail(404, { message: 'That board is not members-only.' });
-    try {
-      await removeSpaceMember(space, did);
-      await createForumRecord(`${NS}.moderation.action`, {
-        subject: { $type: `${NS}.moderation.action#account`, did },
-        action: 'revokeAccess',
-        board: boardUri,
-      });
-    } catch (e) {
-      return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t remove this member. Try again.' });
-    }
-    redirect(303, '/admin/boards?saved=1');
   },
 
   createCategory: async ({ request, locals }) => {

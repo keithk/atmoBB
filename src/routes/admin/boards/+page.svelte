@@ -18,34 +18,7 @@
 {/if}
 {#if form?.message}<p class="atm-err">{form.message}</p>{/if}
 
-{#if data.requests.length > 0}
-  <div class="atm-card requests">
-    <div class="atm-card__header"><span>Access requests ({data.requests.length})</span></div>
-    <div class="atm-card__body rows">
-      {#each data.requests as r}
-        <div class="reqrow">
-          <div class="reqrow__who">
-            <strong>{r.requesterProfile?.displayName ?? r.requester.slice(8, 20)}</strong>
-            <span class="reqrow__board">wants access to {r.boardName ?? 'a board'}</span>
-            {#if r.reason}<span class="reqrow__reason">“{r.reason}”</span>{/if}
-          </div>
-          <div class="reqrow__acts">
-            <form method="POST" action="?/approveRequest">
-              <input type="hidden" name="board" value={r.board} />
-              <input type="hidden" name="did" value={r.requester} />
-              <button class="atm-btn atm-btn--primary atm-btn--sm">approve</button>
-            </form>
-            <form method="POST" action="?/denyRequest">
-              <input type="hidden" name="board" value={r.board} />
-              <input type="hidden" name="did" value={r.requester} />
-              <button class="atm-btn atm-btn--ghost atm-btn--sm">deny</button>
-            </form>
-          </div>
-        </div>
-      {/each}
-    </div>
-  </div>
-{/if}
+<p class="atm-hint members-note">Access requests and each members-only board's readers are on <a href="/admin/members">Members</a>.</p>
 
 <div class="cols">
   <section>
@@ -120,30 +93,6 @@
                   <button class="atm-btn atm-btn--primary atm-btn--sm">save</button>
                 </div>
               </form>
-              {#if board.value.access?.space}
-                {@const members = data.members[board.uri]}
-                <div class="members">
-                  <span class="atm-label">Members</span>
-                  {#if !members}
-                    <p class="members__empty">Couldn't reach the board's space to list members.</p>
-                  {:else if members.length === 0}
-                    <p class="members__empty">No members yet. Approve a request above to add one.</p>
-                  {:else}
-                    <ul class="members__list">
-                      {#each members as m}
-                        <li class="members__row">
-                          <a href="/members/{encodeURIComponent(m.handle)}">@{m.handle}</a>
-                          <form method="POST" action="?/removeMember">
-                            <input type="hidden" name="board" value={board.uri} />
-                            <input type="hidden" name="did" value={m.did} />
-                            <button class="atm-btn atm-btn--ghost atm-btn--sm">remove</button>
-                          </form>
-                        </li>
-                      {/each}
-                    </ul>
-                  {/if}
-                </div>
-              {/if}
               <form class="edit__danger" method="POST" action="?/deleteBoard">
                 <input type="hidden" name="uri" value={board.uri} />
                 {#if board.threadCount > 0}
@@ -313,24 +262,9 @@
   .newcat .atm-input { flex: 1; }
   .create { margin-top: var(--space-5); }
 
-  .requests { margin-bottom: var(--space-5); }
-  .reqrow {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    flex-wrap: wrap;
-  }
-  .reqrow__who { display: flex; gap: var(--space-2); align-items: baseline; flex-wrap: wrap; }
-  .reqrow__board { font: var(--type-meta); color: var(--forum-ink-soft); }
-  .reqrow__reason { font: var(--type-meta); color: var(--forum-ink-faint); font-style: italic; }
-  .reqrow__acts { display: flex; gap: var(--space-2); }
+  .members-note { margin-bottom: var(--space-4); }
 
   @media (max-width: 860px) {
     .cols { grid-template-columns: 1fr; }
   }
-  .members { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
-  .members__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
-  .members__row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); font: var(--type-ui); }
-  .members__empty { font: var(--type-ui); color: var(--forum-ink-soft); margin: 0; }
 </style>

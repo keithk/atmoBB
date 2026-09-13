@@ -114,6 +114,30 @@
           {#if !data.standing.bans.length && !data.standing.warnings.length}
             <p class="atm-empty atm-empty--bare">In good standing.</p>
           {/if}
+          {#if data.membership}
+            <div class="standing__item standing__member">
+              {#if data.membership.accepted}
+                <span class="atm-chip atm-chip--ok">member</span>
+                <span>
+                  since {day(data.membership.since)}
+                  {#if data.membership.via === 'founding' || !data.membership.sponsor}
+                    · original member
+                  {:else}
+                    · {data.membership.via === 'application' ? 'approved' : 'invited'} by
+                    <a href="/members/{encodeURIComponent(data.sponsorHandle ?? data.membership.sponsor)}">{data.sponsorHandle && data.sponsorHandle !== data.membership.sponsor ? `@${data.sponsorHandle}` : data.membership.sponsor.slice(8, 20)}</a>
+                  {/if}
+                </span>
+                {#if staff && !data.isYou}
+                  <form method="POST" action="?/remove">
+                    <button class="atm-btn atm-btn--ghost atm-btn--sm">remove from forum</button>
+                  </form>
+                {/if}
+              {:else}
+                <span class="atm-chip">not a member</span>
+                {#if data.membership.since}<span>membership ended; joined {day(data.membership.since)}</span>{/if}
+              {/if}
+            </div>
+          {/if}
           {#if staff && !data.isYou}
             <details class="standing__act">
               <summary>Warn</summary>
@@ -288,6 +312,7 @@
   .standing__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
   .standing__item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font: var(--type-meta); color: var(--forum-ink-soft); }
   .standing__reason { flex-basis: 100%; color: var(--forum-ink); }
+  .standing__member { margin-top: var(--space-2); }
   .standing__act { margin-top: var(--space-3); }
   .standing__act summary { cursor: pointer; font: var(--type-meta); color: var(--forum-ink-soft); }
   .standing__form { display: grid; gap: var(--space-2); margin-top: var(--space-2); }

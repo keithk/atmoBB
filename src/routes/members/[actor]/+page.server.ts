@@ -1,10 +1,11 @@
 import type { Actions, PageServerLoad } from './$types';
 import { error, fail } from '@sveltejs/kit';
-import { canModerate, canModerateForum } from '$lib/server/admin';
-import { getBoardIndex, getStanding, FORUM_DID } from '$lib/server/appview';
+import { canModerate, canModerateForum, forumStaff } from '$lib/server/admin';
+import { getBoardIndex, getMembership, getStanding, FORUM_DID } from '$lib/server/appview';
 import { createForumRecord } from '$lib/server/forum-repo';
 import { savedRedirect } from '$lib/server/saved-redirect';
 import { revokeSpaceAccess } from '$lib/server/space-access';
+import { joinMode } from '$lib/membership';
 import { expiryFromDays } from '$lib/standing';
 
 const NS = 'app.atmobb';
@@ -34,12 +35,14 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
   // Standing is shown to the member themself and to staff, who can act on it.
   const isYou = locals.user?.did === id.did;
   const showStanding = isYou || !!staffRole;
+  const gated = joinMode(forum.membership as { mode?: string } | undefined) !== 'open';
 
-  const [profile, activity, elsewhere, standing, index] = await Promise.all([
+  const [profile, activity, elsewhere, standing, membership, index] = await Promise.all([
     getPublicProfile(id.did, id.pds),
     getAtmobbActivity(id.did, forumDid),
     getElsewhere(id.did, id.pds, id.handle),
     showStanding ? getStanding(id.did, forumDid).catch(() => null) : null,
+    showStanding && gated ? getMembership(id.did, forumDid).catch(() => null) : null,
     staffRole ? getBoardIndex(forumDid).catch(() => null) : null,
   ]);
   await resolveBodyImages([{ author: id.did, body: profile?.signature }]);
@@ -104,6 +107,8 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
     forumSites,
     isYou,
     standing,
+    membership,
+    sponsorHandle: membership?.sponsor ? await resolveHandle(membership.sponsor) : null,
     boards: (index?.boards ?? []).map((b) => ({ uri: b.uri, name: b.value.name })),
   };
 };
@@ -162,13 +167,55 @@ export const actions: Actions = {
       await revokeSpaceAccess(id.did, board);
     } catch (e) {
       return fail(502, {
-        message: `The ban is recorded, but removing them from members-only boards failed: ${e instanceof Error ? e.message : 'space error'}. Remove them from Boards in the admin area.`,
+        message: `The ban is recorded, but removing them from members-only boards failed: ${e instanceof Error ? e.message : 'space error'}. Remove them from Members in the admin area.`,
       });
+    }
+    // A forum-wide ban also ends their membership on a gated forum, on the
+    // record. Lifting the ban later does not bring it back.
+    if (!board) {
+      try {
+        await createForumRecord(`${NS}.moderation.action`, {
+          subject: { $type: `${NS}.moderation.action#account`, did: id.did },
+          action: 'revokeMember',
+        });
+      } catch (e) {
+        return fail(502, {
+          message: `The ban is recorded, but ending their membership failed: ${e instanceof Error ? e.message : 'write error'}. Remove them from Members in the admin area.`,
+        });
+      }
     }
     await savedRedirect(
       `/members/${encodeURIComponent(params.actor)}?saved=1`,
       () => getStanding(id.did, FORUM_DID()),
       (s) => s.bans.some((b) => (b.board ?? '') === (board ?? '')),
+    );
+  },
+
+  // End someone's membership on a gated forum. Their posts stay; they can
+  // apply again. Staff must leave staff first, the same rule as a ban.
+  remove: async ({ params, locals }) => {
+    const id = await resolveActor(params.actor);
+    if (!id) return fail(404, { message: 'No member by that name.' });
+    if (id.did === locals.user?.did) return fail(400, { message: "You can't remove yourself." });
+    if (!(await actor(locals))) return fail(403, { message: 'Only forum-wide staff can remove members.' });
+    if (id.did === FORUM_DID()) return fail(400, { message: "The forum account can't be removed from its own forum." });
+    if ((await forumStaff()).some((s) => s.subject === id.did)) {
+      return fail(400, { message: 'Remove them from staff before removing them from the forum.' });
+    }
+    const membership = await getMembership(id.did, FORUM_DID()).catch(() => null);
+    if (!membership?.accepted) return fail(400, { message: "They aren't a member right now." });
+    try {
+      await createForumRecord(`${NS}.moderation.action`, {
+        subject: { $type: `${NS}.moderation.action#account`, did: id.did },
+        action: 'revokeMember',
+      });
+    } catch (e) {
+      return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t remove this member. Try again.' });
+    }
+    await savedRedirect(
+      `/members/${encodeURIComponent(params.actor)}?saved=1`,
+      () => getMembership(id.did, FORUM_DID()),
+      (m) => !m.accepted,
     );
   },
 

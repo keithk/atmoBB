@@ -34,6 +34,31 @@ export async function createForumRecord(
   return { uri: res.data.uri };
 }
 
+/** Create many records in one collection: applyWrites in chunks of 200 (the
+ *  PDS ceiling per call), or one index write each in dev. */
+export async function createForumRecords(
+  collection: string,
+  values: ForumRecordValue[],
+): Promise<void> {
+  const createdAt = new Date().toISOString();
+  const records = values.map((value) => ({ $type: collection, createdAt, ...value }));
+  if (forumWriteMode() === 'index') {
+    for (const record of records) await indexPut(collection, tid(), record);
+    return;
+  }
+  const agent = await agentFor(FORUM_DID());
+  for (let i = 0; i < records.length; i += 200) {
+    await agent.com.atproto.repo.applyWrites({
+      repo: FORUM_DID(),
+      writes: records.slice(i, i + 200).map((value) => ({
+        $type: 'com.atproto.repo.applyWrites#create' as const,
+        collection,
+        value,
+      })),
+    });
+  }
+}
+
 export async function putForumRecord(
   collection: string,
   rkey: string,

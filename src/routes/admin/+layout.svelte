@@ -8,6 +8,7 @@
     { label: 'Appearance', href: '/admin/appearance' },
     { label: 'Boards', href: '/admin/boards' },
     { label: 'Staff', href: '/admin/staff' },
+    { label: 'Members', href: '/admin/members' },
     { label: 'Topics', href: '/admin/topics' },
     ...(data.hostingEnabled ? [{ label: 'Hosting', href: '/admin/hosting' }] : []),
     { label: 'Connection', href: '/admin/connect' },
