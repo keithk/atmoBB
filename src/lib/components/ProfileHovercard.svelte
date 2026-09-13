@@ -37,6 +37,7 @@
 
   <div class="atm-hovercard__foot">
     {#if card.isYou}
+      <a class="atm-btn atm-btn--secondary atm-btn--sm" href="/settings/stamps">Choose stamps</a>
       <a class="atm-btn atm-btn--secondary atm-btn--sm" href="/settings/profile">Edit profile</a>
     {:else}
       <a class="atm-btn atm-btn--primary atm-btn--sm" href={profileHref(card.did)}>Profile →</a>

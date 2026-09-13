@@ -107,6 +107,22 @@ export function wornFromTray(tray: TrayEntry[], worn: string[]): TrayEntry[] {
   return wornEntries(worn.flatMap((id) => byId.get(id) ?? []));
 }
 
+export type WearingResult = { ok: true; ids: string[] } | { ok: false; error: string };
+
+/**
+ * The ids a member chose to wear, from a submitted list: only stamps in their
+ * tray, each once, in the order sent. More than the cap is an error rather
+ * than a silent trim, so the member sees which to drop.
+ */
+export function parseWearing(input: string[], tray: Pick<TrayEntry, 'id'>[]): WearingResult {
+  const held = new Set(tray.map((entry) => entry.id));
+  const ids = [...new Set(input.filter((id) => held.has(id)))];
+  if (ids.length > WORN_LIMIT) {
+    return { ok: false, error: `You can wear up to three stamps. Untick ${ids.length - WORN_LIMIT} to save.` };
+  }
+  return { ok: true, ids };
+}
+
 /** Sponsor DIDs named by worn arrival stamps, so loaders can resolve their handles. */
 export function sponsorDids(worn: Pick<TrayEntry, 'id' | 'sponsor'>[]): string[] {
   return [...new Set(worn.flatMap((entry) => (entry.id === ARRIVAL_ID && entry.sponsor ? [entry.sponsor] : [])))];

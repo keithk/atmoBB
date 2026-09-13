@@ -10,6 +10,7 @@ import {
   parseLook,
   parseStampForm,
   parseTrigger,
+  parseWearing,
   sponsorDids,
   stampLabel,
   triggerLabel,
@@ -82,6 +83,29 @@ describe('wornEntries', () => {
   it('resolves worn ids against the tray in the member’s order', () => {
     const tray = ['a', 'b', 'c', 'd'].map((id) => entry(id));
     expect(wornFromTray(tray, ['c', 'a', 'missing', 'd', 'b']).map((e) => e.id)).toEqual(['c', 'a', 'd']);
+  });
+});
+
+describe('parseWearing', () => {
+  const tray = ['a', 'b', 'c'].map((id) => entry(id, { source: id === 'c' ? 'byHand' : 'admin' }));
+
+  it('keeps only the ids the member checked, so a by-hand stamp left unchecked stays off (AE5)', () => {
+    expect(parseWearing(['a', 'b'], tray)).toEqual({ ok: true, ids: ['a', 'b'] });
+  });
+
+  it('refuses more than three rather than truncating', () => {
+    const four = ['a', 'b', 'c', 'd'].map((id) => entry(id));
+    const result = parseWearing(['a', 'b', 'c', 'd'], four);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/three/);
+  });
+
+  it('strips ids not in the tray, drops duplicates, and keeps the submitted order', () => {
+    expect(parseWearing(['c', 'missing', 'a', 'c', 'a'], tray)).toEqual({ ok: true, ids: ['c', 'a'] });
+  });
+
+  it('accepts an empty list: wear nothing', () => {
+    expect(parseWearing([], tray)).toEqual({ ok: true, ids: [] });
   });
 });
 

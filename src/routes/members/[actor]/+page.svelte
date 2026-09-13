@@ -69,6 +69,7 @@
     </div>
     <div class="cover__actions">
       {#if data.isYou}
+        <a class="atm-btn atm-btn--secondary" href="/settings/stamps">Choose stamps</a>
         <a class="atm-btn atm-btn--secondary" href="/settings/profile">Change avatar</a>
         <a class="atm-btn atm-btn--primary" href="/settings/profile">Edit profile</a>
       {:else if m.elsewhere.bsky}
