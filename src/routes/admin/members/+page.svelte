@@ -157,9 +157,8 @@
             <div class="member__who">
               <a class="member__name" href="/members/{encodeURIComponent(handle(m.did))}">{displayName(m.did, m.profile)}</a>
               <span class="member__meta">
-                {m.posts} {m.posts === 1 ? 'post' : 'posts'}
-                {#if m.line} · {m.line}{/if}
-                {#if m.since} · since {day(m.since)}{/if}
+                {#if m.line}{m.line}{/if}
+                {#if m.since}{#if m.line} · {/if}since {day(m.since)}{/if}
               </span>
             </div>
             {#if gated}

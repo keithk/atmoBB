@@ -1,13 +1,14 @@
 <script lang="ts">
   import Avatar from '$lib/components/Avatar.svelte';
-  import RankBadge from '$lib/components/RankBadge.svelte';
   import Card from '$lib/components/Card.svelte';
   import { relTime } from '$lib/reltime';
   import { threadPath } from '$lib/appview-paths';
   import RichText from '$lib/components/RichText.svelte';
   import MemberLink from '$lib/components/MemberLink.svelte';
   import SponsorLine from '$lib/components/SponsorLine.svelte';
+  import StampRow from '$lib/components/StampRow.svelte';
   import { page } from '$app/state';
+  import { hereSince } from '$lib/profile-card';
 
   let { data, form } = $props();
 
@@ -22,9 +23,7 @@
   const name = $derived(p?.displayName ?? m.handle);
   const local = $derived(m.activity.local);
   const global = $derived(m.activity.global);
-  const joined = $derived(
-    p?.createdAt ? new Date(p.createdAt).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : null,
-  );
+  const since = $derived(hereSince(p?.createdAt));
   const memberSince = $derived(
     data.membership?.accepted && data.membership.since
       ? new Date(data.membership.since).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
@@ -55,30 +54,22 @@
       <h1 class="cover__name">{name}</h1>
       <code class="cover__handle">@{m.handle}</code>
       <div class="cover__meta">
-        {#if joined}<span>Joined {joined}</span>{/if}
-        {#if local.posts > 0}
-          {#if joined}<span aria-hidden="true">·</span>{/if}
-          <span><b>{local.posts.toLocaleString()}</b> posts on {forumName}</span>
-        {/if}
-        {#if global.posts > 0}
-          {#if joined || local.posts > 0}<span aria-hidden="true">·</span>{/if}
-          <span><b>{global.posts.toLocaleString()}</b> public posts across atmobb</span>
-        {/if}
+        {#if since}<span>here since {since}</span>{/if}
         {#if presenceLabel}
-          {#if joined || local.posts > 0 || global.posts > 0}<span aria-hidden="true">·</span>{/if}
+          {#if since}<span aria-hidden="true">·</span>{/if}
           <span class="atm-presence atm-presence--{m.presence}">{presenceLabel}</span>
         {/if}
       </div>
-      {#if data.sponsorText}
+      {#if memberSince}
         <div class="cover__meta">
           <span>Member since {memberSince}</span>
-          <span aria-hidden="true">·</span>
-          <span><SponsorLine text={data.sponsorText} handle={data.sponsorHandle} /></span>
         </div>
       {/if}
+      <StampRow stamps={data.stamps} handles={data.handles} class="cover__stamps" />
     </div>
     <div class="cover__actions">
       {#if data.isYou}
+        <a class="atm-btn atm-btn--secondary" href="/settings/stamps">Choose stamps</a>
         <a class="atm-btn atm-btn--secondary" href="/settings/profile">Change avatar</a>
         <a class="atm-btn atm-btn--primary" href="/settings/profile">Edit profile</a>
       {:else if m.elsewhere.bsky}
@@ -172,6 +163,42 @@
               </form>
             </details>
           {/if}
+          {#if data.stampsByHand}
+            {@const held = data.stampsByHand.filter((s) => s.held)}
+            {@const giveable = data.stampsByHand.filter((s) => !s.held)}
+            <details class="standing__act">
+              <summary>Give a stamp</summary>
+              {#if !data.stampsByHand.length}
+                <p class="atm-empty atm-empty--bare standing__note">
+                  No hand-awarded stamps yet — <a href="/admin/stamps">create one in Admin → Stamps</a>.
+                </p>
+              {:else}
+                {#if held.length}
+                  <ul class="standing__list standing__held">
+                    {#each held as s (s.uri)}
+                      <li class="standing__item">
+                        <span class="atm-chip">{s.name}</span>
+                        <form method="POST" action="?/revoke">
+                          <input type="hidden" name="stamp" value={s.uri} />
+                          <button class="atm-btn atm-btn--ghost atm-btn--sm">revoke</button>
+                        </form>
+                      </li>
+                    {/each}
+                  </ul>
+                {/if}
+                {#if giveable.length}
+                  <form class="standing__form" method="POST" action="?/award">
+                    <select class="atm-select" name="stamp" required>
+                      {#each giveable as s (s.uri)}<option value={s.uri}>{s.name}</option>{/each}
+                    </select>
+                    <button class="atm-btn atm-btn--sm">give stamp</button>
+                  </form>
+                {:else}
+                  <p class="atm-empty atm-empty--bare standing__note">They hold every hand-awarded stamp.</p>
+                {/if}
+              {/if}
+            </details>
+          {/if}
         </Card>
       {/if}
       {#if data.sponsored}
@@ -247,57 +274,18 @@
     </div>
 
     <aside class="col col--rail">
-      {#if local.posts > 0}
-        <Card title={forumName}>
+      <Card title={forumName}>
+        {#if local.lastActive}
           <div class="standing">
-            <RankBadge ranks={data.ranks} posts={local.posts} />
-            <div class="standing__stats">
-              <span><b>{local.posts.toLocaleString()}</b> posts</span>
-              <span><b>{local.topics.toLocaleString()}</b> topics</span>
-              <span><b>{local.replies.toLocaleString()}</b> replies</span>
-            </div>
-            {#if local.lastActive}
-              <span class="standing__seen">active {relTime(local.lastActive)}</span>
-            {/if}
+            <span class="standing__seen">active {relTime(local.lastActive)}</span>
           </div>
-        </Card>
-      {:else}
-        <Card title={forumName}>
+        {:else}
           <p class="muted">
             {data.isYou ? "You haven't" : `${name} hasn't`} made any public posts on {forumName} yet.
             This atmosphere profile is shared across forums.
           </p>
-        </Card>
-      {/if}
-
-      {#if global.posts > 0}
-        <Card title="Across atmobb">
-          <div class="network-stats">
-            <div><b>{global.posts.toLocaleString()}</b><span>posts</span></div>
-            <div><b>{global.topics.toLocaleString()}</b><span>topics</span></div>
-            <div><b>{global.replies.toLocaleString()}</b><span>replies</span></div>
-            <div><b>{global.forums.toLocaleString()}</b><span>public {global.forums === 1 ? 'forum' : 'forums'}</span></div>
-          </div>
-          <ul class="forum-activity">
-            {#each m.activity.forums as forum}
-              <li>
-                <span class="forum-activity__name">
-                  {forum.name ?? forum.did.slice(8, 24)}
-                  {#if forum.did === data.forumDid}<span class="atm-chip">here</span>{/if}
-                </span>
-                <span class="forum-activity__count">
-                  {forum.posts.toLocaleString()} {forum.posts === 1 ? 'post' : 'posts'}
-                  <small>
-                    {forum.topics.toLocaleString()} {forum.topics === 1 ? 'topic' : 'topics'} ·
-                    {forum.replies.toLocaleString()} {forum.replies === 1 ? 'reply' : 'replies'}
-                  </small>
-                </span>
-              </li>
-            {/each}
-          </ul>
-          <p class="muted public-note">Public forums only.</p>
-        </Card>
-      {/if}
+        {/if}
+      </Card>
 
       {#if m.elsewhere.bsky || m.elsewhere.apps.length}
         <Card title="Elsewhere">
@@ -345,6 +333,8 @@
   .standing__form { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
   .standing__row { display: flex; align-items: center; gap: var(--space-2); font: var(--type-meta); color: var(--forum-ink-soft); }
   .standing__days { width: 6ch; }
+  .standing__note { margin-top: var(--space-2); }
+  .standing__held { margin-top: var(--space-2); }
 
   @layer atmobb {
   .profile {
@@ -372,6 +362,7 @@
     font: var(--type-meta); color: var(--forum-ink-soft);
   }
   .cover__meta b { color: var(--forum-ink); font-weight: var(--w-semibold); }
+  .cover__stamps { margin-top: var(--space-2); }
   .cover__actions { display: flex; gap: var(--space-2); flex: none; flex-wrap: wrap; justify-content: flex-end; }
 
   .grid {
@@ -403,28 +394,7 @@
   .sig { margin-top: 0; }
 
   .standing { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
-  .standing__stats { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); font: var(--type-meta); color: var(--forum-ink-soft); }
-  .standing__stats b { color: var(--forum-ink); font-weight: var(--w-semibold); }
   .standing__seen { font: var(--type-meta); color: var(--forum-ink-faint); }
-
-  .network-stats {
-    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3);
-    padding-bottom: var(--space-3); border-bottom: var(--border-hair) solid var(--forum-line);
-  }
-  .network-stats div { display: flex; flex-direction: column; gap: 1px; }
-  .network-stats b { font: var(--w-semibold) var(--text-lg)/1.2 var(--font-display); color: var(--forum-ink); }
-  .network-stats span { font: var(--type-meta); color: var(--forum-ink-faint); }
-  .forum-activity { list-style: none; margin: 0; padding: var(--space-2) 0 0; }
-  .forum-activity li {
-    display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3);
-    padding: var(--space-2) 0; border-bottom: var(--border-hair) solid var(--forum-line);
-    font: var(--type-meta);
-  }
-  .forum-activity li:last-child { border-bottom: none; }
-  .forum-activity__name { display: flex; align-items: center; gap: var(--space-1); min-width: 0; overflow-wrap: anywhere; color: var(--forum-ink); font-weight: var(--w-semibold); }
-  .forum-activity__count { display: flex; flex-direction: column; align-items: flex-end; color: var(--forum-ink-soft); white-space: nowrap; }
-  .forum-activity__count small { font: inherit; color: var(--forum-ink-faint); }
-  .public-note { margin-top: var(--space-1); }
 
   .elsewhere { list-style: none; margin: 0 0 var(--space-2); padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
   .elsewhere li { display: flex; align-items: center; gap: var(--space-2); font: var(--type-meta); }

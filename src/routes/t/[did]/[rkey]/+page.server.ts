@@ -23,6 +23,7 @@ import { createForumRecord, forumWriteErrorMessage } from '$lib/server/forum-rep
 import { savedRedirect } from '$lib/server/saved-redirect';
 import { actionFamily, isThreadAction } from '$lib/moderation';
 import { presenceFor } from '$lib/server/profiles';
+import { sponsorDids } from '$lib/stamps';
 import { parseBBCode } from '$lib/richtext/bbcode';
 import { attachImages, resolveBodyImages } from '$lib/server/richtext';
 import { addMentionFacets } from '$lib/server/mentions';
@@ -93,7 +94,7 @@ export const load: PageServerLoad = async ({ params, url, parent, locals, isData
     }
     error(404, 'This thread lives on another forum.');
   }
-  const [{ forum, staffRole }, boardName] = await Promise.all([
+  const [{ staffRole }, boardName] = await Promise.all([
     parent(),
     page.thread
       ? getBoardThreads(page.thread.value.board, undefined, 1)
@@ -128,11 +129,13 @@ export const load: PageServerLoad = async ({ params, url, parent, locals, isData
       ? blocksToDoc([{ $type: QUOTE, text: blocksToPlainText(target!.body), subject: { uri: replyTo.uri, cid: replyTo.cid } }])
       : null;
   // The post rail shows @handle for every author, not just handle-less ones,
-  // and reply-to lines and quote attributions name their authors too.
+  // and reply-to lines and quote attributions name their authors too. A worn
+  // arrival stamp names its sponsor, so those resolve as well.
   const authors = [
     ...posts.map((p) => p.author),
     ...page.replies.flatMap((r) => (r.value.parent ? [postAuthor(r.value.parent.uri)] : [])),
     ...posts.flatMap((p) => (p.body ?? []).flatMap((b) => (b.subject ? [postAuthor(b.subject.uri)] : []))),
+    ...sponsorDids([...(page.thread?.authorStamps ?? []), ...page.replies.flatMap((r) => r.authorStamps ?? [])]),
   ];
   const uniqueAuthors = [...new Set(authors)];
   const handles = await handleMap(uniqueAuthors);
@@ -201,7 +204,6 @@ export const load: PageServerLoad = async ({ params, url, parent, locals, isData
     canModerate: page.thread ? await canModerate(locals.user?.did, page.thread.value.board) : false,
     handles,
     presence,
-    ranks: forum.ranks ?? [],
     limit: LIMIT,
     offset: Number(cursor ?? 0),
     ...page,

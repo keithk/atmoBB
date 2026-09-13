@@ -58,7 +58,7 @@ Reach for tokens on colors and typography, because every shared component reads 
 | Category bars | `--forum-cat-bg`, `--forum-cat-ink`, `--forum-cat-edge` |
 | Masthead | `--forum-header-bg`, `--forum-header-ink` |
 | Pinned content | `--forum-pin-bg`, `--forum-pin-edge` |
-| Ranks and titles | `--forum-rank`, `--forum-rank-bg` |
+| Default stamp look and member titles | `--forum-rank`, `--forum-rank-bg` |
 | Font families | `--font-display`, `--font-wordmark`, `--font-body`, `--font-serif`, `--font-mono` |
 
 Generated Open Graph images use this same token cascade. The selected built-in
@@ -78,12 +78,18 @@ Shared forum UI uses an `atm-` prefix with BEM-style parts and modifiers. The ho
 - surfaces: `.atm-card`, `.atm-panel`, `.atm-board-section`, `.atm-notice`, `.atm-empty`
 - lists: `.atm-boardrow`, `.atm-threadrow`, `.atm-memberrow`
 - threads: `.atm-post`, `.atm-postmeta`, `.atm-post__body`, `.atm-post__meta`, `.atm-composer`
-- content: `.atm-richtext`, `.atm-sig`, `.atm-avatar`, `.atm-rank`, `.atm-chip`, `.atm-hovercard`, `.atm-spoiler`
+- content: `.atm-richtext`, `.atm-sig`, `.atm-avatar`, `.atm-stamps`, `.atm-stamp`, `.atm-rank`, `.atm-chip`, `.atm-hovercard`, `.atm-spoiler`
 - navigation: `.atm-crumbs`, `.atm-pager`, `.atm-tabs`, `.atm-bell`
 - notifications: `.atm-notify-prompt`, `.atm-notify-delivery`, `.atm-notification`, `.atm-notification--unread`
 - forms: `.atm-btn`, `.atm-linkbtn`, `.atm-field`, `.atm-label`, `.atm-input`, `.atm-textarea`, `.atm-select`, `.atm-toolbar`
 
 Parts use `__` (`.atm-threadrow__title`), variants use `--` (`.atm-btn--primary`). Inspect the rendered markup to find the part hooks you want. Anything unprefixed is a page-local implementation detail and I will absolutely rename it.
+
+### Stamps
+
+Members wear up to three stamps on the post rail, the hovercard, the member list, and their profile. Each stamp is an `.atm-stamp` inside an `.atm-stamps` list, with modifiers for its shape (`--stamp`, `--pill`, `--ticket`, `--pixel`), its size (`--full`, `--compact`), and where it came from (`--admin`, `--default`, `--network`, `--byHand`).
+
+A stamp with fixed colors (an admin's own stamp, a board's first-post stamp in the board's color, the network set) carries `.atm-stamp--custom` and sets `--atm-stamp-bg` and `--atm-stamp-ink` inline. Every other stamp, the arrival stamp included, draws from `--forum-rank` and `--forum-rank-bg`, the same tokens the `.atm-rank` badge and member titles use, so a theme that restyles those tokens restyles the default stamps with them.
 
 ## Custom fonts
 

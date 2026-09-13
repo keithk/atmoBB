@@ -27,6 +27,8 @@ Notifications need nothing from the tenant either. The app generates its atmo.pu
 
 [Membership](features.md#membership) (join modes, applications, invites) needs no operator step either; none of it touches the session secret. One thing to know: a tenant's invite links are `/join/<token>` URLs, and the token is the whole secret, so every redeemed and unredeemed invite lands in the host's access logs. Keep log retention short.
 
+[Stamps](features.md#stamps) need no per-tenant step either. A tenant's stamp records live in its own forum repo, and the shared appview issues one network set to every forum it serves. Taking stamps live is one setup and backfill on the shared appview, after at least one site has redeployed, as with any release that touches `appview/`.
+
 ## The invite queue
 
 Signup can also be self-serve. Set `ATMOBB_HOSTING=1` and a dashboard `DEPLOY_SESSION_TOKEN` on the one deployment that offers hosting, and it grows two pages. `/host` is public: someone with an invite code logs in, claims a subdomain, and names their forum account. Admin → Hosting is where invite codes get minted and requests get approved or rejected. Approving one provisions the site through the dashboard automatically and the page flips it to live once the new forum serves its DID.

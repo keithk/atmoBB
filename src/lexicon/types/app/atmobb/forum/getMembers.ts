@@ -10,6 +10,7 @@ import {
   is$typed as _is$typed,
   type OmitKey,
 } from '../../../../util.js'
+import type * as AppAtmobbForumGetStamps from './getStamps.js'
 
 const is$typed = _is$typed,
   validate = _validate
@@ -23,6 +24,7 @@ export type QueryParams = {
 export type InputSchema = undefined
 
 export interface OutputSchema {
+  /** Each item is shaped like #memberView. */
   members: { [_ in string]: unknown }[]
   cursor?: string
 }
@@ -40,4 +42,33 @@ export interface Response {
 
 export function toKnownErr(e: any) {
   return e
+}
+
+/** One member as getMembers returns them. */
+export interface MemberView {
+  $type?: 'app.atmobb.forum.getMembers#memberView'
+  did: string
+  /** The member's app.atmobb.actor.profile record, when they have one. */
+  profile?: { [_ in string]: unknown }
+  /** When the member arrived: their acceptance on a gated forum, or their membership declaration on an open one. */
+  since?: string
+  sponsor?: string
+  via?: 'invite' | 'application' | 'founding' | (string & {})
+  lastActive?: string
+  /** Deprecated and no longer rendered: post count on this forum. Kept for older clients. */
+  posts?: number
+  /** Deprecated and no longer rendered: post count across every indexed forum. Kept for older clients. */
+  totalPosts?: number
+  /** The stamps the member wears on this forum, in order. */
+  stamps?: AppAtmobbForumGetStamps.TrayEntry[]
+}
+
+const hashMemberView = 'memberView'
+
+export function isMemberView<V>(v: V) {
+  return is$typed(v, id, hashMemberView)
+}
+
+export function validateMemberView<V>(v: V) {
+  return validate<MemberView & V>(v, id, hashMemberView)
 }

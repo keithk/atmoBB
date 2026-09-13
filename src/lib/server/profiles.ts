@@ -7,7 +7,6 @@ import {
   type MemberActivity,
 } from './appview';
 import { presenceSnapshot } from './presence';
-import type { Rank } from '$lib/rank';
 import { blobCid } from '$lib/avatar/profile-image';
 
 export { blobCid } from '$lib/avatar/profile-image';
@@ -191,13 +190,12 @@ export async function getPublicProfile(did: string, pds?: string): Promise<Actor
 // --- public atmobb participation --------------------------------------------
 
 const emptyActivity = (): MemberActivity => ({
-  local: { posts: 0, topics: 0, replies: 0 },
-  global: { posts: 0, topics: 0, replies: 0, forums: 0 },
-  forums: [],
+  local: {},
+  global: {},
   recentThreads: [],
 });
 
-/** Exact public activity on this forum and across every indexed atmobb forum. */
+/** Public activity on this forum and across every indexed atmobb forum. */
 export async function getAtmobbActivity(did: string, forum = FORUM_DID()): Promise<MemberActivity> {
   const key = `${did}:${forum}`;
   const hit = activityCache.get(key);
@@ -343,14 +341,10 @@ export async function getForumProfile(): Promise<ForumProfile | undefined> {
   try {
     forum = (await getBoardIndex(FORUM_DID())).forum;
   } catch {
-    // board index unreachable — no profile means no rank and no gate, which is fine
+    // board index unreachable — no profile means no gate, which is fine
   }
   forumCache = { forum, at: Date.now() };
   return forum;
-}
-
-export async function getForumRanks(): Promise<Rank[]> {
-  return (await getForumProfile())?.ranks ?? [];
 }
 
 export function presenceFor(did: string): Presence {

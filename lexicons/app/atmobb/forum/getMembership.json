@@ -23,7 +23,18 @@
             "since": { "type": "string", "format": "datetime" },
             "sponsor": { "type": "string", "format": "did" },
             "via": { "type": "string" },
-            "sponsored": { "type": "array", "items": { "type": "unknown" } }
+            "sponsored": { "type": "array", "items": { "type": "unknown" } },
+            "tray": {
+              "type": "array",
+              "description": "Every stamp the actor holds on this forum.",
+              "items": { "type": "ref", "ref": "app.atmobb.forum.getStamps#trayEntry" }
+            },
+            "worn": {
+              "type": "array",
+              "description": "Ids from the tray the actor wears, in order.",
+              "maxLength": 3,
+              "items": { "type": "string", "maxLength": 300 }
+            }
           }
         }
       }

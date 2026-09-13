@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { relTime } from '$lib/reltime';
+  import { actionLabel } from '$lib/moderation';
 
   let { data, form } = $props();
 
@@ -131,7 +132,7 @@
   <div class="atm-card__body">
     {#each data.activeActions as a}
       <div class="act">
-        <span class="atm-chip atm-chip--danger">{a.value.action}</span>
+        <span class="atm-chip atm-chip--danger">{actionLabel({ action: a.value.action, stampName: a.stampName })}</span>
         <span class="act__what">
           {#if a.value.subject.uri}
             {a.threadTitle ?? a.value.subject.uri}

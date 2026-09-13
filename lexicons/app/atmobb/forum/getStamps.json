@@ -1,0 +1,130 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.forum.getStamps",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "A forum's stamps: the admin-defined stamp records plus the generated network set. With actor, also that member's tray (every stamp they hold on this forum) and the ids they currently wear, in order.",
+      "parameters": {
+        "type": "params",
+        "required": ["forum"],
+        "properties": {
+          "forum": { "type": "string", "format": "did" },
+          "actor": {
+            "type": "string",
+            "format": "did",
+            "description": "A member whose tray and worn list to include."
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["stamps", "network"],
+          "properties": {
+            "stamps": {
+              "type": "array",
+              "description": "Stamps the forum defined, as app.atmobb.forum.stamp records.",
+              "items": { "type": "ref", "ref": "#stampView" }
+            },
+            "network": {
+              "type": "array",
+              "description": "The fixed network stamps every forum on this appview offers (first light, early days). Board and arrival defaults are per member and appear in the tray.",
+              "items": { "type": "ref", "ref": "#generatedStamp" }
+            },
+            "tray": {
+              "type": "array",
+              "description": "Every stamp the actor holds on this forum. Present only when actor is given.",
+              "items": { "type": "ref", "ref": "#trayEntry" }
+            },
+            "worn": {
+              "type": "array",
+              "description": "Ids from the tray the actor wears, in order. Present only when actor is given.",
+              "maxLength": 3,
+              "items": { "type": "string", "maxLength": 300 }
+            }
+          }
+        }
+      }
+    },
+    "stampView": {
+      "type": "object",
+      "description": "An admin-defined stamp. uri and cid let a by-hand award build its strongRef.",
+      "required": ["uri", "cid", "name", "look", "trigger", "createdAt"],
+      "properties": {
+        "uri": { "type": "string", "format": "at-uri" },
+        "cid": { "type": "string", "format": "cid" },
+        "name": { "type": "string", "maxLength": 240, "maxGraphemes": 24 },
+        "look": { "type": "ref", "ref": "app.atmobb.forum.stamp#look" },
+        "trigger": { "type": "ref", "ref": "app.atmobb.forum.stamp#trigger" },
+        "createdAt": { "type": "string", "format": "datetime" }
+      }
+    },
+    "generatedStamp": {
+      "type": "object",
+      "description": "A stamp the network generates rather than an admin defining. Its id is fixed: atmobb:board:<board at-uri>, atmobb:arrival, atmobb:first-light, or atmobb:early-days.",
+      "required": ["id", "name", "look"],
+      "properties": {
+        "id": { "type": "string", "maxLength": 300 },
+        "name": { "type": "string", "maxLength": 240, "maxGraphemes": 24 },
+        "look": { "type": "ref", "ref": "app.atmobb.forum.stamp#look" },
+        "board": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "For a board stamp: the board it marks."
+        },
+        "sponsor": {
+          "type": "string",
+          "format": "did",
+          "description": "For an arrival stamp: who brought the member in."
+        },
+        "via": {
+          "type": "string",
+          "knownValues": ["invite", "application", "founding"],
+          "maxLength": 32,
+          "description": "For an arrival stamp: how the member was accepted."
+        }
+      }
+    },
+    "trayEntry": {
+      "type": "object",
+      "description": "One stamp a member holds. id is the stamp record's at-uri for an admin stamp or the fixed id of a generated one. uri, cid, and look are present for admin stamps and look for network stamps; a board default carries the board and its color so the app can draw it, and an arrival default carries via and sponsor.",
+      "required": ["id", "name", "source"],
+      "properties": {
+        "id": { "type": "string", "maxLength": 300 },
+        "name": { "type": "string", "maxLength": 240, "maxGraphemes": 24 },
+        "look": { "type": "ref", "ref": "app.atmobb.forum.stamp#look" },
+        "uri": { "type": "string", "format": "at-uri" },
+        "cid": { "type": "string", "format": "cid" },
+        "board": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "For a board stamp: the board it marks."
+        },
+        "boardColor": {
+          "type": "string",
+          "maxLength": 7,
+          "description": "For a board stamp: the board's six-digit hex color, when it has one."
+        },
+        "sponsor": {
+          "type": "string",
+          "format": "did",
+          "description": "For an arrival stamp: who brought the member in."
+        },
+        "via": {
+          "type": "string",
+          "knownValues": ["invite", "application", "founding"],
+          "maxLength": 32,
+          "description": "For an arrival stamp: how the member was accepted."
+        },
+        "source": {
+          "type": "string",
+          "description": "How the member came to hold it: an admin-defined trigger, a default every member gets, the network set, or a by-hand award.",
+          "knownValues": ["admin", "default", "network", "byHand"],
+          "maxLength": 32
+        }
+      }
+    }
+  }
+}

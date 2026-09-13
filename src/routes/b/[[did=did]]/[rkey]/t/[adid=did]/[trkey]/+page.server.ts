@@ -16,6 +16,7 @@ import { blocksToDoc } from '$lib/richtext/blocks-tiptap';
 import { blocksToPlainText } from '$lib/richtext/plain';
 import { postAuthor } from '$lib/appview-paths';
 import { presenceFor } from '$lib/server/profiles';
+import { sponsorDids } from '$lib/stamps';
 import { parseBBCode } from '$lib/richtext/bbcode';
 import { attachImages, resolveBodyImages } from '$lib/server/richtext';
 import { addMentionFacets } from '$lib/server/mentions';
@@ -62,7 +63,7 @@ async function notifyReply(record: Parameters<typeof createReply>[1], replyUri: 
   });
 }
 
-export const load: PageServerLoad = async ({ params, locals, parent, url, isDataRequest, setHeaders }) => {
+export const load: PageServerLoad = async ({ params, locals, url, isDataRequest, setHeaders }) => {
   handleNotifyVisit({ url, isDataRequest, locals, setHeaders });
   const { space, uri, boardPath } = threadRef(params);
   // Membership gates the whole page; non-members bounce to the locked board.
@@ -82,8 +83,6 @@ export const load: PageServerLoad = async ({ params, locals, parent, url, isData
     { author: page.thread.author, body: page.thread.authorProfile?.signature },
     ...page.replies.map((r) => ({ author: r.author, body: r.authorProfile?.signature })),
   ]);
-  const { forum } = (await parent()) as { forum?: { ranks?: { title: string; minPosts: number }[] } };
-
   // ?to=<rkey> answers a post; ?quote=<rkey> answers it with its text quoted.
   const posts = [
     { uri, cid: page.thread.cid, author: page.thread.author, body: page.thread.value.body },
@@ -98,10 +97,13 @@ export const load: PageServerLoad = async ({ params, locals, parent, url, isData
       ? blocksToDoc([{ $type: QUOTE, text: blocksToPlainText(target!.body), subject: { uri: replyTo.uri, cid: replyTo.cid } }])
       : null;
 
+  // Rail handles, reply-to and quote attributions, and the sponsor a worn
+  // arrival stamp names.
   const authors = [
     ...posts.map((p) => p.author),
     ...page.replies.flatMap((r) => (r.value.parent ? [postAuthor(r.value.parent.uri)] : [])),
     ...posts.flatMap((p) => (p.body ?? []).flatMap((b) => (b.subject ? [postAuthor(b.subject.uri)] : []))),
+    ...sponsorDids([...page.thread.authorStamps, ...page.replies.flatMap((r) => r.authorStamps)]),
   ];
   const uniqueAuthors = [...new Set(authors)];
   const handles = Object.fromEntries(
@@ -139,7 +141,6 @@ export const load: PageServerLoad = async ({ params, locals, parent, url, isData
     offerNotifications: await neverAskedAboutNotifications(locals.user.did),
     handles,
     presence,
-    ranks: forum?.ranks ?? [],
     limit: LIMIT,
     offset: 0,
     ...page,

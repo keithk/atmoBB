@@ -47,25 +47,72 @@ export interface Membership {
   uri?: string;
 }
 
+/** The member's declaration record for `forum`, read live from their PDS. */
+async function findDeclaration(did: string, forum: string): Promise<{ uri: string; value: Record<string, unknown> } | null> {
+  const agent = await agentFor(did);
+  const res = await agent.com.atproto.repo.listRecords({
+    repo: did,
+    collection: MEMBERSHIP,
+    limit: 100,
+  });
+  const rec = res.data.records.find((r) => (r.value as { forum?: string }).forum === forum);
+  return rec ? { uri: rec.uri, value: rec.value as Record<string, unknown> } : null;
+}
+
 export async function getMembership(did: string, forum: string): Promise<Membership | null> {
   return cached(membershipCache, did, async () => {
-    const agent = await agentFor(did);
-    const res = await agent.com.atproto.repo.listRecords({
-      repo: did,
-      collection: MEMBERSHIP,
-      limit: 100,
-    });
-    const rec = res.data.records.find((r) => (r.value as { forum?: string }).forum === forum);
+    const rec = await findDeclaration(did, forum);
     return { joined: !!rec, uri: rec?.uri };
   });
 }
 
-export async function joinForum(did: string, forum: string): Promise<void> {
+export async function joinForum(did: string, forum: string, wearing?: string[]): Promise<void> {
   const agent = await agentFor(did);
   await agent.com.atproto.repo.createRecord({
     repo: did,
     collection: MEMBERSHIP,
-    record: { $type: MEMBERSHIP, forum, createdAt: new Date().toISOString() },
+    record: { $type: MEMBERSHIP, forum, ...(wearing ? { wearing } : {}), createdAt: new Date().toISOString() },
+  });
+  membershipCache.delete(did);
+}
+
+// One wearing write per did at a time: without this, two concurrent saves
+// from a member with no declaration (a double submit, or a `move` right
+// after a `save`) both see none from findDeclaration and both create one,
+// leaving two membership records behind that a later Leave only clears one
+// of. Queued so a concurrent call waits for the one ahead of it and then
+// re-reads the declaration it created, instead of racing to create its own.
+const settingWearing = new Map<string, Promise<void>>();
+
+/**
+ * Set the stamps the member wears on this forum: the `wearing` field on their
+ * declaration (KTD3). Without a declaration (an open forum, never joined by
+ * hand) one is created carrying the choice; leaving deletes it and the choice
+ * with it. Other fields on the record are kept.
+ */
+export function setWearing(did: string, forum: string, wearing: string[]): Promise<void> {
+  const ahead = settingWearing.get(did) ?? Promise.resolve();
+  const write: Promise<void> = ahead
+    .catch(() => {})
+    .then(() => writeWearing(did, forum, wearing))
+    .finally(() => {
+      if (settingWearing.get(did) === write) settingWearing.delete(did);
+    });
+  settingWearing.set(did, write);
+  return write;
+}
+
+async function writeWearing(did: string, forum: string, wearing: string[]): Promise<void> {
+  const current = await findDeclaration(did, forum);
+  if (!current) return joinForum(did, forum, wearing);
+  const p = parseAtUri(current.uri);
+  if (!p) throw new Error('membership record has no usable uri');
+  const agent = await agentFor(did);
+  await agent.com.atproto.repo.putRecord({
+    repo: did,
+    collection: MEMBERSHIP,
+    rkey: p.rkey,
+    record: { ...current.value, $type: MEMBERSHIP, wearing },
   });
   membershipCache.delete(did);
 }

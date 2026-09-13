@@ -23,8 +23,6 @@ const classic = {
   catBg: 'linear-gradient(180deg,#f3f0ec,#e9e4de)',
   catEdge: '#f79b7a',
 
-  rank: '#8a5a7a',
-  rankBg: '#f3e7ef',
 
   online: '#4a9b4e',
   idle: '#d0951f',
@@ -54,8 +52,6 @@ const TOKEN_TO_SKIN = {
   '--forum-link': 'link',
   '--forum-cat-bg': 'catBg',
   '--forum-cat-edge': 'catEdge',
-  '--forum-rank': 'rank',
-  '--forum-rank-bg': 'rankBg',
   '--online': 'online',
   '--idle': 'idle',
   '--offline': 'offline',

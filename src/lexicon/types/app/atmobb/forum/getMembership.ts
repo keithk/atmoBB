@@ -10,6 +10,7 @@ import {
   is$typed as _is$typed,
   type OmitKey,
 } from '../../../../util.js'
+import type * as AppAtmobbForumGetStamps from './getStamps.js'
 
 const is$typed = _is$typed,
   validate = _validate
@@ -27,6 +28,10 @@ export interface OutputSchema {
   sponsor?: string
   via?: string
   sponsored: { [_ in string]: unknown }[]
+  /** Every stamp the actor holds on this forum. */
+  tray?: AppAtmobbForumGetStamps.TrayEntry[]
+  /** Ids from the tray the actor wears, in order. */
+  worn?: string[]
 }
 
 export interface CallOptions {

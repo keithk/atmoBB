@@ -185,7 +185,7 @@ export const THEME_PRESETS: readonly ThemePreset[] = [
   {
     value: 'forest',
     label: 'Forest',
-    description: 'Cream panels on a sage page with moss-green accents and bark-brown ranks.',
+    description: 'Cream panels on a sage page with moss-green accents and bark-brown stamps.',
     dark: false,
     swatches: ['#eef0e6', '#79a85a', '#232b22'],
     tokens: {

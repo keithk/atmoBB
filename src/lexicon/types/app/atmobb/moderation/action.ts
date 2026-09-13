@@ -39,6 +39,8 @@ export interface Main {
     | 'holdApplication'
     | 'gateForum'
     | 'openForum'
+    | 'awardStamp'
+    | 'revokeStamp'
     | (string & {})
   /** For acceptMember: the person who brought the subject in — the inviter, or the staffer who approved the application. Absent for founding members accepted when the forum first gated. */
   sponsor?: string
@@ -49,6 +51,8 @@ export interface Main {
   mode?: 'apply' | 'invite' | (string & {})
   /** Scopes account-level actions (e.g. a ban) to one board. Absent means forum-wide. */
   board?: string
+  /** The staff member who performed the action, when it differs from the signing forum account. */
+  actor?: string
   reason?: string
   /** When a temporary action lapses. Absent means until reversed. */
   expiresAt?: string

@@ -1,8 +1,10 @@
 <script lang="ts">
-  import type { Rank } from '$lib/rank';
   import Avatar from './Avatar.svelte';
   import MemberLink from './MemberLink.svelte';
-  import RankBadge from './RankBadge.svelte';
+  import StampRow from './StampRow.svelte';
+  import { hereSince } from '$lib/profile-card';
+  import type { TrayEntry } from '$lib/server/appview';
+  import type { Handles } from '$lib/stamps';
 
   type PostProfile = {
     avatar?: unknown;
@@ -17,26 +19,22 @@
     handle,
     profile,
     presence,
-    ranks = [],
-    posts = 0,
-    totalPosts = 0,
+    stamps = [],
+    handles = {},
   }: {
     did: string;
     handle?: string;
     profile?: PostProfile | null;
     presence?: 'online' | 'idle' | 'offline';
-    ranks?: Rank[];
-    posts?: number;
-    totalPosts?: number;
+    /** The stamps the author wears on this forum; the row caps at three. */
+    stamps?: TrayEntry[];
+    /** DID to handle, for the sponsor named on an arrival stamp. */
+    handles?: Handles;
   } = $props();
 
   const readableHandle = $derived(handle && !handle.startsWith('did:') ? handle : did.slice(8, 20));
   const displayName = $derived(profile?.displayName ?? readableHandle);
-  const joined = $derived(
-    profile?.createdAt
-      ? new Date(profile.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
-      : null,
-  );
+  const since = $derived(hereSince(profile?.createdAt));
 </script>
 
 <aside class="atm-postmeta">
@@ -47,15 +45,11 @@
     <MemberLink {did} {handle} class="atm-postmeta__name">{displayName}</MemberLink>
     <span class="atm-postmeta__handle">@{readableHandle}</span>
     {#if profile?.title}<div class="atm-usertitle">{profile.title}</div>{/if}
-    <RankBadge {ranks} {posts} />
+    <StampRow {stamps} {handles} class="atm-postmeta__stamps" />
   </div>
-  <div class="atm-postmeta__stats">
-    <span class="atm-postmeta__stat"><span>posts</span><b>{posts}</b></span>
-    {#if totalPosts > posts}
-      <span class="atm-postmeta__stat"><span>atmosphere</span><b>{totalPosts}</b></span>
-    {/if}
-    {#if joined}
-      <span class="atm-postmeta__stat"><span>joined</span><b>{joined}</b></span>
-    {/if}
-  </div>
+  {#if since}
+    <div class="atm-postmeta__stats">
+      <span class="atm-postmeta__stat"><span>here since</span><b>{since}</b></span>
+    </div>
+  {/if}
 </aside>

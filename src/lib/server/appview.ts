@@ -65,7 +65,6 @@ export interface ForumProfile {
   description?: string;
   /** Rich welcome shown in the home page hero under the description. */
   intro?: RichTextBlock[];
-  ranks?: { title: string; minPosts: number }[];
   homepage?: {
     layout?: string;
     sidebar?: boolean;
@@ -174,17 +173,11 @@ export interface LatestThreads {
   cursor?: string;
 }
 
-export interface ActivityStats {
-  posts: number;
-  topics: number;
-  replies: number;
-  lastActive?: string;
-}
-
+/** The appview also returns per-forum post counts here; the app reads only
+ *  the timestamps and the recent-topics list. */
 export interface MemberActivity {
-  local: ActivityStats;
-  global: ActivityStats & { forums: number };
-  forums: (ActivityStats & { did: string; name?: string })[];
+  local: { lastActive?: string };
+  global: { lastActive?: string };
   recentThreads: {
     uri: string;
     board: string;
@@ -196,17 +189,56 @@ export interface MemberActivity {
   }[];
 }
 
+/** How a stamp is drawn: two hex colors and one of a bounded set of shapes. */
+export interface StampLook {
+  bg: string;
+  ink: string;
+  shape: string;
+}
+
+/** What earns an admin-defined stamp; the field matching `kind` is set. */
+export interface StampTrigger {
+  kind: string;
+  board?: string;
+  before?: string;
+  via?: string;
+}
+
+/**
+ * One stamp a member holds on a forum. `id` is the stamp record's at-uri for
+ * an admin stamp or a fixed id for a generated one (`atmobb:board:<uri>`,
+ * `atmobb:arrival`, `atmobb:first-light`, `atmobb:early-days`).
+ */
+export interface TrayEntry {
+  id: string;
+  name: string;
+  /** admin (trigger matched), default (board or arrival), network, or byHand. */
+  source: string;
+  /** Present for admin and network stamps; board and arrival defaults are drawn by the app. */
+  look?: StampLook;
+  uri?: string;
+  cid?: string;
+  /** For a board default: the board and its color, when it has one. */
+  board?: string;
+  boardColor?: string;
+  /** For an arrival default: how the member was accepted and by whom. */
+  via?: string;
+  sponsor?: string;
+}
+
 export interface Members {
   members: {
     did: string;
-    posts: number;
     profile?: ActorProfile;
     lastActive?: string;
-    /** On a gated forum, the acceptance behind this row: when it opened and who brought them in. */
+    /** When the member arrived: the acceptance on a gated forum, the declaration on an open one. */
     since?: string;
+    /** On a gated forum, who brought them in. */
     sponsor?: string;
     /** invite, application, or founding. */
     via?: string;
+    /** The stamps the member wears on this forum, in order, at most three. */
+    stamps: TrayEntry[];
   }[];
   cursor?: string;
 }
@@ -257,9 +289,8 @@ export interface ThreadPage {
     cid?: string;
     author: string;
     authorProfile?: ActorProfile;
-    authorPosts: number;
-    /** Across every indexed forum. Absent for space threads, which the public counters can't see. */
-    authorTotalPosts?: number;
+    /** The stamps the author wears on the viewing forum, in order, at most three. */
+    authorStamps: TrayEntry[];
     value: {
       title: string;
       body?: RichTextBlock[];
@@ -282,8 +313,8 @@ export interface ThreadPage {
     cid?: string;
     author: string;
     authorProfile?: ActorProfile;
-    authorPosts: number;
-    authorTotalPosts?: number;
+    /** The stamps the author wears on the viewing forum, in order, at most three. */
+    authorStamps: TrayEntry[];
     value: {
       body?: RichTextBlock[];
       createdAt?: string;
@@ -535,14 +566,18 @@ export interface ModerationLog {
       via?: string;
       /** gateForum: the join mode entered. */
       mode?: string;
-      /** The accessRequest a membership decision answers. */
+      /** The accessRequest a membership decision answers, or the stamp an awardStamp / revokeStamp names. */
       ref?: { uri: string; cid: string };
+      /** The staff member who acted, when the record says so. */
+      actor?: string;
     };
     createdAt: string;
     threadTitle?: string;
     subjectForumName?: string;
     /** Display name when the account subject is a member with a profile. */
     subjectName?: string;
+    /** For awardStamp / revokeStamp: the stamp's name, while its record exists. */
+    stampName?: string;
   }[];
 }
 
@@ -554,7 +589,7 @@ export interface Standing {
 export const getStanding = (actor: string, forum = FORUM_DID()) =>
   xrpc<Standing>('GET', `${NS}.moderation.getStanding`, { params: { forum, actor } });
 
-/** moderation: hide/lock/pin/ban/warn/block and their reversals; membership: acceptances, revocations, holds, access grants and denials, gate/open. */
+/** moderation: hide/lock/pin/ban/warn/block and their reversals, plus awardStamp/revokeStamp; membership: acceptances, revocations, holds, access grants and denials, gate/open. */
 export type ModerationFamily = 'moderation' | 'membership';
 
 export const getModerationLog = (forum = FORUM_DID(), limit = 50, family?: ModerationFamily) =>
@@ -572,10 +607,27 @@ export interface Membership {
   via?: string;
   /** Currently accepted members this account sponsored. */
   sponsored: { did: string; since: string; via?: string }[];
+  /** Every stamp the actor holds on this forum. */
+  tray: TrayEntry[];
+  /** Ids from the tray the actor wears, in order, at most three. */
+  worn: string[];
 }
 
 export const getMembership = (actor: string, forum = FORUM_DID()) =>
   xrpc<Membership>('GET', `${NS}.forum.getMembership`, { params: { forum, actor } });
+
+export interface Stamps {
+  /** The forum's stamp records, minus any firstPostInBoard stamp whose board is gone. */
+  stamps: { uri: string; cid: string; name: string; look: StampLook; trigger: StampTrigger; createdAt: string }[];
+  /** The network set every forum offers: first light and early days. */
+  network: { id: string; name: string; look: StampLook }[];
+  /** Present when `actor` was given. */
+  tray?: TrayEntry[];
+  worn?: string[];
+}
+
+export const getStamps = (forum = FORUM_DID(), actor?: string) =>
+  xrpc<Stamps>('GET', `${NS}.forum.getStamps`, { params: { forum, ...(actor ? { actor } : {}) } });
 
 export interface Directory {
   forums: { did: string; name: string; description?: string; createdAt: string }[];

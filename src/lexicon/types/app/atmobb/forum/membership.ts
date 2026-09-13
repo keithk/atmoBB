@@ -17,6 +17,8 @@ const id = 'app.atmobb.forum.membership'
 export interface Main {
   $type: 'app.atmobb.forum.membership'
   forum: string
+  /** Stamp ids the member wears on this forum, in order: an admin stamp's at-uri, or the fixed id of a generated stamp (atmobb:board:<board at-uri>, atmobb:arrival, atmobb:first-light, atmobb:early-days). */
+  wearing?: string[]
   createdAt?: string
   [k: string]: unknown
 }

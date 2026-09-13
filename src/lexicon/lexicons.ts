@@ -442,7 +442,7 @@ export const schemaDict = {
       main: {
         type: 'query',
         description:
-          'One page of a thread: the thread, total reply count, and a page of replies in chronological order, with author profiles and postcounts hydrated. The thread carries its moderation flags for the viewing forum (hidden, locked, pinned).',
+          'One page of a thread: the thread, total reply count, and a page of replies in chronological order, with author profiles and worn stamps hydrated. The thread carries its moderation flags for the viewing forum (hidden, locked, pinned).',
         parameters: {
           type: 'params',
           required: ['thread', 'forum'],
@@ -485,9 +485,12 @@ export const schemaDict = {
             properties: {
               thread: {
                 type: 'unknown',
+                description:
+                  'Shaped like #postView, plus origin and the moderation flags hidden, locked, lockedAt, and pinned.',
               },
               replies: {
                 type: 'array',
+                description: 'Each item is shaped like #postView.',
                 items: {
                   type: 'unknown',
                 },
@@ -507,6 +510,59 @@ export const schemaDict = {
                   "Vote counts per option, voter total, and the viewer's votes, when the thread has a poll.",
               },
             },
+          },
+        },
+      },
+      postView: {
+        type: 'object',
+        description:
+          'The fields a thread and each reply share: the post itself and its author, hydrated.',
+        required: ['uri', 'author', 'value'],
+        properties: {
+          uri: {
+            type: 'string',
+            format: 'at-uri',
+          },
+          cid: {
+            type: 'string',
+            format: 'cid',
+          },
+          author: {
+            type: 'string',
+            format: 'did',
+          },
+          authorProfile: {
+            type: 'unknown',
+            description:
+              "The author's app.atmobb.actor.profile record, when they have one.",
+          },
+          authorPosts: {
+            type: 'integer',
+            description:
+              "Deprecated and no longer rendered: the author's post count on this forum. Kept for older clients.",
+          },
+          authorTotalPosts: {
+            type: 'integer',
+            description:
+              "Deprecated and no longer rendered: the author's post count across every indexed forum. Kept for older clients.",
+          },
+          authorStamps: {
+            type: 'array',
+            description:
+              'The stamps the author wears on the viewing forum, in order.',
+            maxLength: 3,
+            items: {
+              type: 'ref',
+              ref: 'lex:app.atmobb.forum.getStamps#trayEntry',
+            },
+          },
+          value: {
+            type: 'unknown',
+            description: 'The thread or reply record.',
+          },
+          indexedAt: {
+            type: 'string',
+            format: 'datetime',
           },
         },
       },
@@ -977,7 +1033,7 @@ export const schemaDict = {
       main: {
         type: 'query',
         description:
-          'Members of a forum ordered by postcount, with atmobb profiles.',
+          'Members of a forum ordered by arrival, with atmobb profiles and the stamps they wear.',
         parameters: {
           type: 'params',
           required: ['forum'],
@@ -1005,6 +1061,7 @@ export const schemaDict = {
             properties: {
               members: {
                 type: 'array',
+                description: 'Each item is shaped like #memberView.',
                 items: {
                   type: 'unknown',
                 },
@@ -1012,6 +1069,60 @@ export const schemaDict = {
               cursor: {
                 type: 'string',
               },
+            },
+          },
+        },
+      },
+      memberView: {
+        type: 'object',
+        description: 'One member as getMembers returns them.',
+        required: ['did'],
+        properties: {
+          did: {
+            type: 'string',
+            format: 'did',
+          },
+          profile: {
+            type: 'unknown',
+            description:
+              "The member's app.atmobb.actor.profile record, when they have one.",
+          },
+          since: {
+            type: 'string',
+            format: 'datetime',
+            description:
+              'When the member arrived: their acceptance on a gated forum, or their membership declaration on an open one.',
+          },
+          sponsor: {
+            type: 'string',
+            format: 'did',
+          },
+          via: {
+            type: 'string',
+            knownValues: ['invite', 'application', 'founding'],
+            maxLength: 32,
+          },
+          lastActive: {
+            type: 'string',
+            format: 'datetime',
+          },
+          posts: {
+            type: 'integer',
+            description:
+              'Deprecated and no longer rendered: post count on this forum. Kept for older clients.',
+          },
+          totalPosts: {
+            type: 'integer',
+            description:
+              'Deprecated and no longer rendered: post count across every indexed forum. Kept for older clients.',
+          },
+          stamps: {
+            type: 'array',
+            description: 'The stamps the member wears on this forum, in order.',
+            maxLength: 3,
+            items: {
+              type: 'ref',
+              ref: 'lex:app.atmobb.forum.getStamps#trayEntry',
             },
           },
         },
@@ -1066,6 +1177,23 @@ export const schemaDict = {
                   type: 'unknown',
                 },
               },
+              tray: {
+                type: 'array',
+                description: 'Every stamp the actor holds on this forum.',
+                items: {
+                  type: 'ref',
+                  ref: 'lex:app.atmobb.forum.getStamps#trayEntry',
+                },
+              },
+              worn: {
+                type: 'array',
+                description: 'Ids from the tray the actor wears, in order.',
+                maxLength: 3,
+                items: {
+                  type: 'string',
+                  maxLength: 300,
+                },
+              },
             },
           },
         },
@@ -1103,6 +1231,206 @@ export const schemaDict = {
                 },
               },
             },
+          },
+        },
+      },
+    },
+  },
+  AppAtmobbForumGetStamps: {
+    lexicon: 1,
+    id: 'app.atmobb.forum.getStamps',
+    defs: {
+      main: {
+        type: 'query',
+        description:
+          "A forum's stamps: the admin-defined stamp records plus the generated network set. With actor, also that member's tray (every stamp they hold on this forum) and the ids they currently wear, in order.",
+        parameters: {
+          type: 'params',
+          required: ['forum'],
+          properties: {
+            forum: {
+              type: 'string',
+              format: 'did',
+            },
+            actor: {
+              type: 'string',
+              format: 'did',
+              description: 'A member whose tray and worn list to include.',
+            },
+          },
+        },
+        output: {
+          encoding: 'application/json',
+          schema: {
+            type: 'object',
+            required: ['stamps', 'network'],
+            properties: {
+              stamps: {
+                type: 'array',
+                description:
+                  'Stamps the forum defined, as app.atmobb.forum.stamp records.',
+                items: {
+                  type: 'ref',
+                  ref: 'lex:app.atmobb.forum.getStamps#stampView',
+                },
+              },
+              network: {
+                type: 'array',
+                description:
+                  'The fixed network stamps every forum on this appview offers (first light, early days). Board and arrival defaults are per member and appear in the tray.',
+                items: {
+                  type: 'ref',
+                  ref: 'lex:app.atmobb.forum.getStamps#generatedStamp',
+                },
+              },
+              tray: {
+                type: 'array',
+                description:
+                  'Every stamp the actor holds on this forum. Present only when actor is given.',
+                items: {
+                  type: 'ref',
+                  ref: 'lex:app.atmobb.forum.getStamps#trayEntry',
+                },
+              },
+              worn: {
+                type: 'array',
+                description:
+                  'Ids from the tray the actor wears, in order. Present only when actor is given.',
+                maxLength: 3,
+                items: {
+                  type: 'string',
+                  maxLength: 300,
+                },
+              },
+            },
+          },
+        },
+      },
+      stampView: {
+        type: 'object',
+        description:
+          'An admin-defined stamp. uri and cid let a by-hand award build its strongRef.',
+        required: ['uri', 'cid', 'name', 'look', 'trigger', 'createdAt'],
+        properties: {
+          uri: {
+            type: 'string',
+            format: 'at-uri',
+          },
+          cid: {
+            type: 'string',
+            format: 'cid',
+          },
+          name: {
+            type: 'string',
+            maxLength: 240,
+            maxGraphemes: 24,
+          },
+          look: {
+            type: 'ref',
+            ref: 'lex:app.atmobb.forum.stamp#look',
+          },
+          trigger: {
+            type: 'ref',
+            ref: 'lex:app.atmobb.forum.stamp#trigger',
+          },
+          createdAt: {
+            type: 'string',
+            format: 'datetime',
+          },
+        },
+      },
+      generatedStamp: {
+        type: 'object',
+        description:
+          'A stamp the network generates rather than an admin defining. Its id is fixed: atmobb:board:<board at-uri>, atmobb:arrival, atmobb:first-light, or atmobb:early-days.',
+        required: ['id', 'name', 'look'],
+        properties: {
+          id: {
+            type: 'string',
+            maxLength: 300,
+          },
+          name: {
+            type: 'string',
+            maxLength: 240,
+            maxGraphemes: 24,
+          },
+          look: {
+            type: 'ref',
+            ref: 'lex:app.atmobb.forum.stamp#look',
+          },
+          board: {
+            type: 'string',
+            format: 'at-uri',
+            description: 'For a board stamp: the board it marks.',
+          },
+          sponsor: {
+            type: 'string',
+            format: 'did',
+            description: 'For an arrival stamp: who brought the member in.',
+          },
+          via: {
+            type: 'string',
+            knownValues: ['invite', 'application', 'founding'],
+            maxLength: 32,
+            description: 'For an arrival stamp: how the member was accepted.',
+          },
+        },
+      },
+      trayEntry: {
+        type: 'object',
+        description:
+          "One stamp a member holds. id is the stamp record's at-uri for an admin stamp or the fixed id of a generated one. uri, cid, and look are present for admin stamps and look for network stamps; a board default carries the board and its color so the app can draw it, and an arrival default carries via and sponsor.",
+        required: ['id', 'name', 'source'],
+        properties: {
+          id: {
+            type: 'string',
+            maxLength: 300,
+          },
+          name: {
+            type: 'string',
+            maxLength: 240,
+            maxGraphemes: 24,
+          },
+          look: {
+            type: 'ref',
+            ref: 'lex:app.atmobb.forum.stamp#look',
+          },
+          uri: {
+            type: 'string',
+            format: 'at-uri',
+          },
+          cid: {
+            type: 'string',
+            format: 'cid',
+          },
+          board: {
+            type: 'string',
+            format: 'at-uri',
+            description: 'For a board stamp: the board it marks.',
+          },
+          boardColor: {
+            type: 'string',
+            maxLength: 7,
+            description:
+              "For a board stamp: the board's six-digit hex color, when it has one.",
+          },
+          sponsor: {
+            type: 'string',
+            format: 'did',
+            description: 'For an arrival stamp: who brought the member in.',
+          },
+          via: {
+            type: 'string',
+            knownValues: ['invite', 'application', 'founding'],
+            maxLength: 32,
+            description: 'For an arrival stamp: how the member was accepted.',
+          },
+          source: {
+            type: 'string',
+            description:
+              'How the member came to hold it: an admin-defined trigger, a default every member gets, the network set, or a by-hand award.',
+            knownValues: ['admin', 'default', 'network', 'byHand'],
+            maxLength: 32,
           },
         },
       },
@@ -1261,6 +1589,16 @@ export const schemaDict = {
               type: 'string',
               format: 'did',
             },
+            wearing: {
+              type: 'array',
+              description:
+                "Stamp ids the member wears on this forum, in order: an admin stamp's at-uri, or the fixed id of a generated stamp (atmobb:board:<board at-uri>, atmobb:arrival, atmobb:first-light, atmobb:early-days).",
+              maxLength: 3,
+              items: {
+                type: 'string',
+                maxLength: 300,
+              },
+            },
             createdAt: {
               type: 'string',
               format: 'datetime',
@@ -1379,7 +1717,7 @@ export const schemaDict = {
             ranks: {
               type: 'array',
               description:
-                'Post-count rank ladder, ordered ascending by minPosts. Ranks are computed by appviews from indexed post counts.',
+                'Deprecated and no longer rendered: post-count ranks gave way to stamps (app.atmobb.forum.stamp). Kept so older records still validate.',
               maxLength: 50,
               items: {
                 type: 'ref',
@@ -1452,6 +1790,11 @@ export const schemaDict = {
               type: 'boolean',
               description:
                 "Hide the 'powered by atmobb' badge in the page footer. Absent means shown.",
+            },
+            hideDefaultStamps: {
+              type: 'boolean',
+              description:
+                "Hide the board and arrival default stamps on member rails. The 'here since' line always shows. Absent means shown.",
             },
             createdAt: {
               type: 'string',
@@ -1567,6 +1910,104 @@ export const schemaDict = {
       },
     },
   },
+  AppAtmobbForumStamp: {
+    lexicon: 1,
+    id: 'app.atmobb.forum.stamp',
+    defs: {
+      main: {
+        type: 'record',
+        description:
+          "A stamp a forum awards for belonging: being somewhere or arriving at some time, never for how much someone has posted. Lives in the forum account's repo. Members choose which awarded stamps to wear via the wearing list on their membership record.",
+        key: 'tid',
+        record: {
+          type: 'object',
+          required: ['name', 'look', 'trigger', 'createdAt'],
+          properties: {
+            name: {
+              type: 'string',
+              maxLength: 240,
+              maxGraphemes: 24,
+            },
+            look: {
+              type: 'ref',
+              ref: 'lex:app.atmobb.forum.stamp#look',
+            },
+            trigger: {
+              type: 'ref',
+              ref: 'lex:app.atmobb.forum.stamp#trigger',
+            },
+            createdAt: {
+              type: 'string',
+              format: 'datetime',
+            },
+          },
+        },
+      },
+      look: {
+        type: 'object',
+        description:
+          'How the stamp is drawn: two colors and one of a bounded set of shapes. No free CSS or images.',
+        required: ['bg', 'ink', 'shape'],
+        properties: {
+          bg: {
+            type: 'string',
+            maxLength: 7,
+            description:
+              'Background as a full six-digit hex color (for example #1a73e8). Writers must validate the #RRGGBB format.',
+          },
+          ink: {
+            type: 'string',
+            maxLength: 7,
+            description:
+              'Text and outline as a full six-digit hex color (for example #ffffff). Writers must validate the #RRGGBB format.',
+          },
+          shape: {
+            type: 'string',
+            knownValues: ['stamp', 'pill', 'ticket', 'pixel'],
+            maxLength: 32,
+          },
+        },
+      },
+      trigger: {
+        type: 'object',
+        description:
+          'What earns the stamp. kind names the event or place; the other fields parameterize it. Writers must validate that the parameter matching kind is present: board for firstPostInBoard, before for profileBefore, via for arrivedBy. firstPostHere and byHand take no parameter.',
+        required: ['kind'],
+        properties: {
+          kind: {
+            type: 'string',
+            knownValues: [
+              'firstPostInBoard',
+              'firstPostHere',
+              'profileBefore',
+              'arrivedBy',
+              'byHand',
+            ],
+            maxLength: 32,
+          },
+          board: {
+            type: 'string',
+            format: 'at-uri',
+            description:
+              'For firstPostInBoard: the app.atmobb.forum.board whose first post earns the stamp.',
+          },
+          before: {
+            type: 'string',
+            format: 'datetime',
+            description:
+              'For profileBefore: members whose atmobb profile predates this moment earn the stamp.',
+          },
+          via: {
+            type: 'string',
+            knownValues: ['invite', 'application', 'founding'],
+            maxLength: 32,
+            description:
+              "For arrivedBy: how the member was accepted (matches the acceptMember action's via).",
+          },
+        },
+      },
+    },
+  },
   AppAtmobbForumWatch: {
     lexicon: 1,
     id: 'app.atmobb.forum.watch',
@@ -1635,6 +2076,8 @@ export const schemaDict = {
                 'holdApplication',
                 'gateForum',
                 'openForum',
+                'awardStamp',
+                'revokeStamp',
               ],
               maxLength: 64,
             },
@@ -1654,7 +2097,7 @@ export const schemaDict = {
               type: 'ref',
               ref: 'lex:com.atproto.repo.strongRef',
               description:
-                'For acceptMember, denyAccess, or holdApplication: the accessRequest record this decision answers.',
+                'For acceptMember, denyAccess, or holdApplication: the accessRequest record this decision answers. For awardStamp or revokeStamp: the app.atmobb.forum.stamp record being awarded to or taken from the subject account.',
             },
             mode: {
               type: 'string',
@@ -1668,6 +2111,12 @@ export const schemaDict = {
               format: 'at-uri',
               description:
                 'Scopes account-level actions (e.g. a ban) to one board. Absent means forum-wide.',
+            },
+            actor: {
+              type: 'string',
+              format: 'did',
+              description:
+                'The staff member who performed the action, when it differs from the signing forum account.',
             },
             reason: {
               type: 'string',
@@ -1725,7 +2174,7 @@ export const schemaDict = {
             family: {
               type: 'string',
               description:
-                'Restrict to one family of actions: moderation (hide, lock, pin, ban, warn, block and their reversals) or membership (acceptMember, revokeMember, holdApplication, and the access grants and denials). Absent means every action.',
+                'Restrict to one family of actions: moderation (hide, lock, pin, ban, warn, block and their reversals, plus awardStamp and revokeStamp) or membership (acceptMember, revokeMember, holdApplication, and the access grants and denials). Absent means every action.',
               knownValues: ['moderation', 'membership'],
             },
           },
@@ -2510,12 +2959,14 @@ export const ids = {
   AppAtmobbForumGetMembers: 'app.atmobb.forum.getMembers',
   AppAtmobbForumGetMembership: 'app.atmobb.forum.getMembership',
   AppAtmobbForumGetStaff: 'app.atmobb.forum.getStaff',
+  AppAtmobbForumGetStamps: 'app.atmobb.forum.getStamps',
   AppAtmobbForumGetTopic: 'app.atmobb.forum.getTopic',
   AppAtmobbForumGetTopics: 'app.atmobb.forum.getTopics',
   AppAtmobbForumGetWatchers: 'app.atmobb.forum.getWatchers',
   AppAtmobbForumMembership: 'app.atmobb.forum.membership',
   AppAtmobbForumModerator: 'app.atmobb.forum.moderator',
   AppAtmobbForumProfile: 'app.atmobb.forum.profile',
+  AppAtmobbForumStamp: 'app.atmobb.forum.stamp',
   AppAtmobbForumWatch: 'app.atmobb.forum.watch',
   AppAtmobbModerationAction: 'app.atmobb.moderation.action',
   AppAtmobbModerationGetLog: 'app.atmobb.moderation.getLog',

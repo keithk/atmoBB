@@ -76,8 +76,8 @@
       handle={data.handles[data.thread.author]}
       profile={data.thread.authorProfile}
       presence={data.presence[data.thread.author]}
-      ranks={data.ranks}
-      posts={data.thread.authorPosts}
+      stamps={data.thread.authorStamps}
+      handles={data.handles}
     />
     <div class="atm-post__body">
       <div class="atm-post__meta">
@@ -109,8 +109,8 @@
         handle={data.handles[reply.author]}
         profile={reply.authorProfile}
         presence={data.presence[reply.author]}
-        ranks={data.ranks}
-        posts={reply.authorPosts}
+        stamps={reply.authorStamps}
+        handles={data.handles}
       />
       <div class="atm-post__body">
         <div class="atm-post__meta">

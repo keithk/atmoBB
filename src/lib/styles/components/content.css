@@ -76,6 +76,69 @@
 .atm-rank__pip { width: 4px; height: 4px; background: currentColor; }
 .atm-rank__pip--off { opacity: 0.28; }
 
+/* ---- Stamps (worn on the post rail, hovercard, member rows, profile) ----
+   A fixed look sets --atm-stamp-bg / --atm-stamp-ink; without them the stamp
+   falls back to the --forum-rank tokens, so owner CSS that styled ranks still
+   styles the default stamps. */
+.atm-stamps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.atm-stamps--compact { gap: 4px; }
+.atm-stamps li { display: inline-flex; max-width: 100%; }
+.atm-stamp {
+  display: inline-block;
+  max-width: 100%;
+  box-sizing: border-box;
+  font: var(--w-bold) var(--text-2xs)/1 var(--font-mono);
+  letter-spacing: var(--ls-pixel);
+  text-transform: uppercase;
+  color: var(--atm-stamp-ink, var(--forum-rank));
+  background: var(--atm-stamp-bg, var(--forum-rank-bg));
+  /* Ink mixed with the theme's line color: a hairline that holds on light and dark surfaces alike. */
+  border: var(--border-hair) solid color-mix(in oklch, var(--atm-stamp-ink, var(--forum-rank)) 55%, var(--forum-line-strong));
+  border-radius: var(--radius-sm);
+  padding: 4px 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+.atm-stamp--stamp {
+  border-width: var(--border-solid);
+  border-radius: var(--radius-xs);
+  transform: rotate(-2deg);
+}
+.atm-stamp--pill {
+  font: var(--w-semibold) var(--text-2xs)/1 var(--font-body);
+  letter-spacing: 0;
+  text-transform: none;
+  border-radius: var(--radius-round);
+  padding-inline: 9px;
+}
+.atm-stamp--ticket {
+  border-radius: 0;
+  padding-inline: 11px;
+  clip-path: polygon(
+    0 0, 100% 0,
+    100% calc(50% - 4px), calc(100% - 4px) 50%, 100% calc(50% + 4px),
+    100% 100%, 0 100%,
+    0 calc(50% + 4px), 4px 50%, 0 calc(50% - 4px)
+  );
+}
+.atm-stamp--pixel { font-family: var(--font-pixel); border-radius: var(--radius-sm); }
+.atm-stamp--compact {
+  font-size: 10px;
+  padding: 2px 5px;
+  max-width: 18ch;
+}
+.atm-stamp--compact.atm-stamp--ticket { padding-inline: 8px; }
+
 /* ---- SystemTag (rpg.actor game-system labels) ---- */
 .atm-systag {
   display: inline-flex;
