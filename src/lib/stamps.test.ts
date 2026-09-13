@@ -8,8 +8,11 @@ import {
   isLowContrast,
   lookFor,
   parseLook,
+  parseStampForm,
+  parseTrigger,
   sponsorDids,
   stampLabel,
+  triggerLabel,
   wornEntries,
   wornFromTray,
 } from './stamps';
@@ -109,5 +112,100 @@ describe('stampLabel', () => {
   it('describes board stamps as a first post for assistive tech', () => {
     expect(ariaLabel(entry('atmobb:board:at://b', { name: 'Music', board: 'at://b' }), {})).toBe('Stamp: first post in Music');
     expect(ariaLabel(arrival, { 'did:plc:x': 'keith.is' })).toBe('Stamp: brought in by @keith.is');
+  });
+});
+
+describe('parseTrigger', () => {
+  const BOARD_URI = 'at://did:plc:forum/app.atmobb.forum.board/abc';
+  const boards = [BOARD_URI];
+
+  it('accepts a board trigger for a board that exists', () => {
+    expect(parseTrigger('firstPostInBoard', { board: BOARD_URI }, boards)).toEqual({
+      ok: true,
+      trigger: { kind: 'firstPostInBoard', board: BOARD_URI },
+    });
+  });
+
+  it('rejects a board trigger with a missing or unknown board', () => {
+    expect(parseTrigger('firstPostInBoard', {}, boards).ok).toBe(false);
+    expect(parseTrigger('firstPostInBoard', { board: 'at://did:plc:forum/app.atmobb.forum.board/gone' }, boards).ok).toBe(false);
+  });
+
+  it('rejects a parameter the kind does not take', () => {
+    expect(parseTrigger('byHand', { board: BOARD_URI }).ok).toBe(false);
+    expect(parseTrigger('firstPostHere', { via: 'invite' }).ok).toBe(false);
+    expect(parseTrigger('byHand', {})).toEqual({ ok: true, trigger: { kind: 'byHand' } });
+  });
+
+  it('needs a real date for profileBefore, stored as an ISO timestamp', () => {
+    expect(parseTrigger('profileBefore', { before: 'yesterday' }).ok).toBe(false);
+    expect(parseTrigger('profileBefore', { before: '2026-09-01' })).toEqual({
+      ok: true,
+      trigger: { kind: 'profileBefore', before: '2026-09-01T00:00:00.000Z' },
+    });
+  });
+
+  it('limits arrivedBy to the known routes', () => {
+    expect(parseTrigger('arrivedBy', { via: 'founding' })).toEqual({
+      ok: true,
+      trigger: { kind: 'arrivedBy', via: 'founding' },
+    });
+    expect(parseTrigger('arrivedBy', { via: 'other' }).ok).toBe(false);
+  });
+
+  it('rejects an unknown kind', () => {
+    expect(parseTrigger('postCount', {}).ok).toBe(false);
+  });
+});
+
+describe('parseStampForm', () => {
+  const fields = { name: 'Regular', bg: '#1a73e8', ink: '#ffffff', shape: 'pill', kind: 'byHand' };
+
+  it('builds the record value from a valid form', () => {
+    expect(parseStampForm(fields)).toEqual({
+      ok: true,
+      value: { name: 'Regular', look: { bg: '#1a73e8', ink: '#ffffff', shape: 'pill' }, trigger: { kind: 'byHand' } },
+    });
+  });
+
+  it('warns on low contrast and holds the record until the admin confirms', () => {
+    const pale = { ...fields, bg: '#ffffff', ink: '#fafafa' };
+    const held = parseStampForm(pale);
+    expect(held.ok).toBe(false);
+    expect(held.warning).toMatch(/3:1/);
+    const confirmed = parseStampForm({ ...pale, confirm: 'on' });
+    expect(confirmed.ok).toBe(true);
+    expect(confirmed.warning).toMatch(/3:1/);
+  });
+
+  it('only reads the trigger parameter the chosen kind uses', () => {
+    // A no-JS submit sends every control; the stray board must not fail a byHand stamp.
+    const BOARD_URI = 'at://did:plc:forum/app.atmobb.forum.board/abc';
+    const result = parseStampForm({ ...fields, board: BOARD_URI, via: 'invite' }, [BOARD_URI]);
+    expect(result).toMatchObject({ ok: true, value: { trigger: { kind: 'byHand' } } });
+  });
+
+  it('caps names at 24 graphemes, counting emoji as one each', () => {
+    expect(parseStampForm({ ...fields, name: 'a'.repeat(25) }).ok).toBe(false);
+    const family = '👨‍👩‍👧‍👦';
+    expect(parseStampForm({ ...fields, name: family.repeat(24) })).toMatchObject({ ok: true, value: { name: family.repeat(24) } });
+    expect(parseStampForm({ ...fields, name: family.repeat(25) }).ok).toBe(false);
+    expect(parseStampForm({ ...fields, name: '   ' }).ok).toBe(false);
+  });
+
+  it('rejects abbreviated hex and unknown shapes', () => {
+    expect(parseStampForm({ ...fields, bg: '#abc' }).ok).toBe(false);
+    expect(parseStampForm({ ...fields, shape: 'hexagon' }).ok).toBe(false);
+  });
+});
+
+describe('triggerLabel', () => {
+  it('says what earns the stamp in words', () => {
+    expect(triggerLabel({ kind: 'firstPostInBoard', board: 'at://b' }, 'Music')).toBe('first post in Music');
+    expect(triggerLabel({ kind: 'firstPostInBoard', board: 'at://b' })).toBe('first post in a board that no longer exists');
+    expect(triggerLabel({ kind: 'firstPostHere' })).toBe('first post on this forum');
+    expect(triggerLabel({ kind: 'profileBefore', before: '2026-09-01T00:00:00.000Z' })).toBe('profile created before 2026-09-01');
+    expect(triggerLabel({ kind: 'arrivedBy', via: 'founding' })).toBe('founding member');
+    expect(triggerLabel({ kind: 'byHand' })).toBe('awarded by hand');
   });
 });

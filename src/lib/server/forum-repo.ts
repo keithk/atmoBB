@@ -95,6 +95,33 @@ export async function uploadForumBlob(bytes: Uint8Array, encoding: string) {
   return uploaded.data.blob;
 }
 
+/** Every record of the forum's in one collection, straight from the repo (or
+ *  the dev index), so an admin list also shows records the appview hides. */
+export async function listForumRecords(
+  collection: string,
+): Promise<{ uri: string; cid: string; value: ForumRecordValue }[]> {
+  if (forumWriteMode() === 'index') {
+    const rows = await pg()`
+      SELECT uri, cid, record FROM happyview_records
+      WHERE did = ${FORUM_DID()} AND collection = ${collection}
+      ORDER BY created_at, uri`;
+    return rows.map((row) => ({
+      uri: row.uri,
+      cid: row.cid,
+      value: typeof row.record === 'string' ? JSON.parse(row.record) : row.record,
+    }));
+  }
+  const agent = await agentFor(FORUM_DID());
+  const records: { uri: string; cid: string; value: ForumRecordValue }[] = [];
+  let cursor: string | undefined;
+  do {
+    const res = await agent.com.atproto.repo.listRecords({ repo: FORUM_DID(), collection, limit: 100, cursor });
+    records.push(...res.data.records.map((r) => ({ uri: r.uri, cid: r.cid, value: r.value as ForumRecordValue })));
+    cursor = res.data.cursor;
+  } while (cursor);
+  return records;
+}
+
 export async function deleteForumRecord(uri: string): Promise<void> {
   const p = parseAtUri(uri);
   if (!p || p.did !== FORUM_DID()) throw new Error('not a record in this forum repo');

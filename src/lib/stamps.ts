@@ -111,3 +111,191 @@ export function wornFromTray(tray: TrayEntry[], worn: string[]): TrayEntry[] {
 export function sponsorDids(worn: Pick<TrayEntry, 'id' | 'sponsor'>[]): string[] {
   return [...new Set(worn.flatMap((entry) => (entry.id === ARRIVAL_ID && entry.sponsor ? [entry.sponsor] : [])))];
 }
+
+// --- admin form validation --------------------------------------------------
+
+/** The lexicon's cap on a stamp name, in graphemes. */
+export const STAMP_NAME_MAX_GRAPHEMES = 24;
+
+export const TRIGGER_KINDS = ['firstPostInBoard', 'firstPostHere', 'profileBefore', 'arrivedBy', 'byHand'] as const;
+export type TriggerKind = (typeof TRIGGER_KINDS)[number];
+
+export const ARRIVAL_ROUTES = ['invite', 'application', 'founding'] as const;
+export type ArrivalRoute = (typeof ARRIVAL_ROUTES)[number];
+
+/** What earns a stamp: one kind, carrying exactly the parameter that kind needs. */
+export type StampTrigger =
+  | { kind: 'firstPostInBoard'; board: string }
+  | { kind: 'firstPostHere' }
+  | { kind: 'profileBefore'; before: string }
+  | { kind: 'arrivedBy'; via: ArrivalRoute }
+  | { kind: 'byHand' };
+
+export type TriggerParam = 'board' | 'before' | 'via';
+
+/** The parameter each kind carries; null for the kinds that take none. */
+export const TRIGGER_PARAM: Record<TriggerKind, TriggerParam | null> = {
+  firstPostInBoard: 'board',
+  firstPostHere: null,
+  profileBefore: 'before',
+  arrivedBy: 'via',
+  byHand: null,
+};
+
+export const TRIGGER_KIND_LABELS: Record<TriggerKind, string> = {
+  firstPostInBoard: 'first post in a board',
+  firstPostHere: 'first post on this forum',
+  profileBefore: 'profile created before a date',
+  arrivedBy: 'how they arrived',
+  byHand: 'awarded by hand',
+};
+
+const isKind = (value: unknown): value is TriggerKind => TRIGGER_KINDS.includes(value as TriggerKind);
+const isRoute = (value: unknown): value is ArrivalRoute => ARRIVAL_ROUTES.includes(value as ArrivalRoute);
+
+const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+function graphemes(text: string): number {
+  let n = 0;
+  for (const _ of segmenter.segment(text)) n++;
+  return n;
+}
+
+const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+export type TriggerResult = { ok: true; trigger: StampTrigger } | { ok: false; error: string };
+
+/**
+ * A trigger from record or form data. Strict: the kind's own parameter must be
+ * present and valid, and no other parameter may be set. `boards` lists the
+ * at-uris a firstPostInBoard trigger may point at.
+ */
+export function parseTrigger(
+  kind: unknown,
+  params: { board?: unknown; before?: unknown; via?: unknown } = {},
+  boards: readonly string[] = [],
+): TriggerResult {
+  if (!isKind(kind)) return { ok: false, error: 'Choose what earns the stamp.' };
+  const wanted = TRIGGER_PARAM[kind];
+  for (const key of ['board', 'before', 'via'] as const) {
+    if (key !== wanted && text(params[key])) {
+      return { ok: false, error: `"${TRIGGER_KIND_LABELS[kind]}" doesn't take a ${key}.` };
+    }
+  }
+  switch (kind) {
+    case 'firstPostInBoard': {
+      const board = text(params.board);
+      if (!board) return { ok: false, error: 'Choose the board whose first post earns the stamp.' };
+      if (!boards.includes(board)) return { ok: false, error: 'That board no longer exists.' };
+      return { ok: true, trigger: { kind, board } };
+    }
+    case 'profileBefore': {
+      const ms = Date.parse(text(params.before));
+      if (Number.isNaN(ms)) return { ok: false, error: 'Enter the date a profile must predate.' };
+      return { ok: true, trigger: { kind, before: new Date(ms).toISOString() } };
+    }
+    case 'arrivedBy': {
+      const via = text(params.via);
+      if (!isRoute(via)) return { ok: false, error: 'Choose how the member arrived: invite, application, or founding.' };
+      return { ok: true, trigger: { kind, via } };
+    }
+    default:
+      return { ok: true, trigger: { kind } };
+  }
+}
+
+export interface StampFormFields {
+  name?: unknown;
+  bg?: unknown;
+  ink?: unknown;
+  shape?: unknown;
+  kind?: unknown;
+  board?: unknown;
+  before?: unknown;
+  via?: unknown;
+  /** Ticked to save a look the contrast check warned about. */
+  confirm?: unknown;
+}
+
+/** The parts of a stamp record the admin form sets. */
+export interface StampValue {
+  name: string;
+  look: StampLook;
+  trigger: StampTrigger;
+}
+
+export type StampFormResult =
+  | { ok: true; value: StampValue; warning?: string }
+  | { ok: false; error: string; warning?: string };
+
+/** A trimmed, single-spaced name of 1–24 graphemes, or an error. */
+export function parseStampName(input: unknown): { ok: true; name: string } | { ok: false; error: string } {
+  const name = text(input).replace(/\s+/g, ' ');
+  if (!name) return { ok: false, error: 'Give the stamp a name.' };
+  if (graphemes(name) > STAMP_NAME_MAX_GRAPHEMES) {
+    return { ok: false, error: `Stamp names can be at most ${STAMP_NAME_MAX_GRAPHEMES} characters.` };
+  }
+  return { ok: true, name };
+}
+
+/**
+ * Validate a create/edit submission. A plain form sends every trigger control,
+ * so only the parameter the chosen kind uses is read. Low contrast is a warning:
+ * the value is held back until `confirm` is ticked, then saved with the warning.
+ */
+export function parseStampForm(fields: StampFormFields, boards: readonly string[] = []): StampFormResult {
+  const name = parseStampName(fields.name);
+  if (!name.ok) return name;
+  const bg = normalizeBoardColor(fields.bg);
+  const ink = normalizeBoardColor(fields.ink);
+  if (!bg || !ink) return { ok: false, error: 'Background and ink must be six-digit hex colors such as #1a73e8.' };
+  const look = parseLook({ bg, ink, shape: fields.shape });
+  if (!look) return { ok: false, error: 'Choose one of the stamp shapes.' };
+  const kind = text(fields.kind);
+  const wanted = isKind(kind) ? TRIGGER_PARAM[kind] : null;
+  const trigger = parseTrigger(kind, wanted ? { [wanted]: fields[wanted] } : {}, boards);
+  if (!trigger.ok) return trigger;
+  const value = { name: name.name, look, trigger: trigger.trigger };
+  if (!isLowContrast(look)) return { ok: true, value };
+  const ratio = contrastRatio(look.bg, look.ink);
+  const warning = `Ink on background is ${ratio.toFixed(1)}:1, under the ${LOW_CONTRAST}:1 that stays legible at hovercard size.`;
+  if (fields.confirm === 'on' || fields.confirm === true) return { ok: true, value, warning };
+  return { ok: false, error: 'Tick "save anyway" to keep these colors.', warning };
+}
+
+/** A trigger as stored, read leniently: unknown kinds and missing parameters still describe. */
+export interface StoredTrigger {
+  kind: string;
+  board?: string;
+  before?: string;
+  via?: string;
+}
+
+/** True when a board trigger points at a board that is gone: the stamp reads as retired. */
+export function retiredByDeletedBoard(trigger: StoredTrigger, boards: readonly string[]): boolean {
+  return trigger.kind === 'firstPostInBoard' && !(trigger.board && boards.includes(trigger.board));
+}
+
+/** What earns a stamp, in words, for the admin list. */
+export function triggerLabel(trigger: StoredTrigger, boardName?: string): string {
+  switch (trigger.kind) {
+    case 'firstPostInBoard':
+      return `first post in ${boardName ?? 'a board that no longer exists'}`;
+    case 'firstPostHere':
+      return 'first post on this forum';
+    case 'profileBefore':
+      return `profile created before ${(trigger.before ?? '').slice(0, 10) || 'an unknown date'}`;
+    case 'arrivedBy':
+      return trigger.via === 'founding'
+        ? 'founding member'
+        : trigger.via === 'application'
+          ? 'accepted by application'
+          : trigger.via === 'invite'
+            ? 'brought in by invite'
+            : 'arrived by an unknown route';
+    case 'byHand':
+      return 'awarded by hand';
+    default:
+      return trigger.kind;
+  }
+}

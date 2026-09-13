@@ -7,6 +7,7 @@
     { label: 'Profile', href: '/admin' },
     { label: 'Appearance', href: '/admin/appearance' },
     { label: 'Boards', href: '/admin/boards' },
+    { label: 'Stamps', href: '/admin/stamps' },
     { label: 'Staff', href: '/admin/staff' },
     { label: 'Members', href: '/admin/members' },
     { label: 'Topics', href: '/admin/topics' },
