@@ -1,9 +1,8 @@
 <script lang="ts">
   import { boardPath, threadPath } from '$lib/appview-paths';
-  import AtmosphereExplainer from '$lib/components/AtmosphereExplainer.svelte';
   import Avatar from '$lib/components/Avatar.svelte';
   import Card from '$lib/components/Card.svelte';
-  import LoginForm from '$lib/components/LoginForm.svelte';
+  import LoginCard from '$lib/components/LoginCard.svelte';
   import MemberLink from '$lib/components/MemberLink.svelte';
   import BoardMarker from '$lib/components/BoardMarker.svelte';
   import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
@@ -33,19 +32,7 @@
 
 <div class="stack">
   {#if !data.user && data.homepage.welcome === 'classic'}
-    <section class="atm-card atm-card--edge hero">
-      <div class="hero__grid">
-        <h2 class="atm-headline">
-          Log in with your <mark>atmosphere account</mark>.
-        </h2>
-        <div class="hero__login">
-          <LoginForm />
-        </div>
-      </div>
-      <div class="hero__more">
-        <AtmosphereExplainer />
-      </div>
-    </section>
+    <LoginCard />
   {:else if !data.user && data.homepage.welcome === 'compact'}
     <section class="atm-card atm-card--edge atm-home-welcome atm-home-welcome--compact compact-welcome">
       <div>
@@ -267,24 +254,6 @@
     gap: var(--space-5);
   }
 
-  .hero { padding: var(--space-6); overflow: visible; }
-  .hero__grid {
-    display: grid;
-    grid-template-columns: 1.2fr 1fr;
-    gap: var(--space-6);
-    align-items: center;
-  }
-  .hero__login {
-    background: var(--forum-surface-2);
-    border: var(--border-hair) solid var(--forum-line);
-    border-radius: var(--radius-md);
-    padding: var(--space-4);
-  }
-  .hero__more {
-    margin-top: var(--space-4);
-    border-top: 1px dashed var(--forum-line-strong);
-    padding-top: var(--space-4);
-  }
   .compact-welcome {
     display: flex;
     align-items: center;
@@ -425,7 +394,6 @@
   }
 
   @media (max-width: 860px) {
-    .hero__grid { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
     .atm-home-main--split { grid-template-columns: minmax(0, 1fr); }
     .panels { grid-template-columns: minmax(0, 1fr); }
     .sysop__pitch { min-width: 0; }
