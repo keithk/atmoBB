@@ -28,6 +28,16 @@ describe('safeReturnPath', () => {
     expect(safeReturnPath('/notificationsx')).toBeNull();
   });
 
+  it('accepts an invite link and nothing shaped almost like one', () => {
+    const token = 'abcdefghijklmnopqrstuvwxyz'.slice(0, 26);
+    expect(safeReturnPath(`/join/${token}`)).toBe(`/join/${token}`);
+    expect(safeReturnPath(`/join/${token}?x=1`)).toBeNull();
+    expect(safeReturnPath(`/join/${token.slice(0, 25)}`)).toBeNull();
+    expect(safeReturnPath('/join/ABCDEFGHIJKLMNOPQRSTUVWXYZ')).toBeNull();
+    expect(safeReturnPath('/join/abcdefghijklmnopqrstuvwxy1')).toBeNull();
+    expect(safeReturnPath('/join')).toBeNull();
+  });
+
   it('rejects protocol-relative, backslash, absolute, and off-list paths', () => {
     expect(safeReturnPath('//evil.example')).toBeNull();
     expect(safeReturnPath('/\\evil')).toBeNull();

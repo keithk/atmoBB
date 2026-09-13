@@ -8,6 +8,9 @@ const NOTIFICATIONS = /^\/notifications$/;
 // Entry ids are UUIDs (store.ts); the only query an open link carries is the
 // members-only alert marker.
 const NOTIFICATION_OPEN = /^\/notifications\/open\/[0-9a-f-]{36}(\?via=notify)?$/;
+// Invite tokens are 26 base32 characters (invites.ts newToken); a signed-out
+// visitor is sent through login and back to the same link.
+const JOIN = /^\/join\/[a-z2-7]{26}$/;
 
 export function safeReturnPath(raw: unknown): string | null {
   if (typeof raw !== 'string' || !raw.startsWith('/')) return null;
@@ -17,7 +20,8 @@ export function safeReturnPath(raw: unknown): string | null {
     PUBLIC_THREAD.test(raw) ||
     SPACE_THREAD.test(raw) ||
     NOTIFICATIONS.test(raw) ||
-    NOTIFICATION_OPEN.test(raw)
+    NOTIFICATION_OPEN.test(raw) ||
+    JOIN.test(raw)
   )
     return raw;
   return null;

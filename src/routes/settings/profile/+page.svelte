@@ -139,6 +139,9 @@
         <div class="avatar-row__actions">
           <a class="atm-btn atm-btn--secondary" href="/settings/avatar">Make a userpic</a>
           <a class="atm-btn atm-btn--secondary" href="/settings/notifications">Notifications</a>
+          {#if data.joinMode !== 'open'}
+            <a class="atm-btn atm-btn--secondary" href="/settings/invites">Invites</a>
+          {/if}
           {#if data.avatarBuilderUrl}
             <a class="atm-btn atm-btn--secondary" href={data.avatarBuilderUrl} rel="external">Build a cartoon avatar</a>
           {/if}
