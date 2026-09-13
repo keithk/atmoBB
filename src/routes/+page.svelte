@@ -297,6 +297,21 @@
     border-bottom: var(--border-hair) solid var(--forum-line);
     font: var(--type-meta);
   }
+  /* Topic metadata and generous row padding already separate homepage items.
+     One rule below each section label is enough structure for the feed. */
+  .atm-home-featured,
+  .atm-home-latest,
+  .atm-home-hot {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .atm-home-featured :global(.atm-threadrow),
+  .atm-home-latest :global(.atm-threadrow),
+  .atm-home-hot :global(.atm-threadrow) {
+    border-bottom: none;
+    box-shadow: none;
+  }
   .atm-home-main { display: grid; gap: var(--space-5); min-width: 0; }
   .atm-home-main--split { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
   .atm-home-categories { display: grid; gap: var(--space-5); min-width: 0; }

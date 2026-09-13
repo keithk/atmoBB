@@ -84,6 +84,7 @@
 <style>
   @layer atmobb {
     .atm-topic-list { container-type: inline-size; }
+    .atm-topic-list > :last-child { border-bottom: none; }
     .atm-threadrow { grid-template-columns: 26px minmax(0, 1fr) 70px 200px; }
     .atm-threadrow__main { min-width: 0; overflow-wrap: anywhere; }
     .atm-threadrow__last { flex-wrap: wrap; }
