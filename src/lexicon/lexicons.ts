@@ -1434,6 +1434,11 @@ export const schemaDict = {
               description:
                 'How people join. Absent means open: declaring membership is joining.',
             },
+            hideCredit: {
+              type: 'boolean',
+              description:
+                "Hide the 'powered by atmobb' badge in the page footer. Absent means shown.",
+            },
             createdAt: {
               type: 'string',
               format: 'datetime',

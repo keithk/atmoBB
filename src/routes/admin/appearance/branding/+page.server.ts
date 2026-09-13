@@ -23,10 +23,27 @@ export const load: PageServerLoad = async () => {
     faviconCid,
     faviconUrl: faviconCid ? await blobUrl(FORUM_DID(), faviconCid) : null,
     ogImageCid: blobCid(profile.ogImage),
+    hideCredit: profile.hideCredit === true,
   };
 };
 
 export const actions: Actions = {
+  saveCredit: async ({ request, locals }) => {
+    if (!(await adminActor(locals))) return fail(403, { message: 'Only admins can make this change.' });
+    const form = await request.formData();
+    const show = form.get('showCredit') === 'on';
+    let profile: ForumProfile;
+    try {
+      profile = await currentProfile();
+      if (show) delete profile.hideCredit;
+      else profile.hideCredit = true;
+      await saveProfile(profile);
+    } catch (e) {
+      return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t save the footer setting. Try again.' });
+    }
+    await profileRedirect(`${HERE}?saved=credit`, profile);
+  },
+
   uploadFavicon: async ({ request, locals }) => {
     if (!(await adminActor(locals))) return fail(403, { message: 'Only admins can make this change.' });
     const form = await request.formData();

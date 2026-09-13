@@ -40,6 +40,7 @@ export const profileRedirect = (dest: string, saved: ForumProfile) =>
       blobCid(i.forum.favicon) === blobCid(saved.favicon) &&
       blobCid(i.forum.ogImage) === blobCid(saved.ogImage) &&
       (i.forum.ogTheme ?? 'classic') === (saved.ogTheme ?? 'classic') &&
+      (i.forum.hideCredit ?? false) === (saved.hideCredit ?? false) &&
       JSON.stringify(normalizeHomepage(i.forum.homepage)) === JSON.stringify(normalizeHomepage(saved.homepage)),
   );
 

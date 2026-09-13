@@ -204,6 +204,7 @@
     {@render children()}
   </main>
 
+  {#if data.ringSize >= 2 || !data.forum.hideCredit}
   <footer class="atm-colophon">
     {#if data.ringSize >= 2}
       <div class="atm-webring">
@@ -221,8 +222,11 @@
         </nav>
       </div>
     {/if}
-    <a class="atm-colophon__badge" href="https://github.com/keithk/atmoBB">powered by atmobb</a>
+    {#if !data.forum.hideCredit}
+      <a class="atm-colophon__badge" href="https://github.com/keithk/atmoBB">powered by atmobb</a>
+    {/if}
   </footer>
+  {/if}
 </div>
 </div>
 

@@ -206,12 +206,6 @@
           </p>
         {/if}
       </Card>
-      <Card title="Forum identity">
-        <p class="idnote">
-          This forum has its own atmosphere account. Its boards, rules, and
-          moderation settings live in that account. Your posts stay in yours.
-        </p>
-      </Card>
     </div>
     <Card title="Board stats">
       <div class="stats">
@@ -231,19 +225,6 @@
       </div>
     </Card>
   </div>
-
-  <section class="atm-card atm-card--edge sysop">
-    <div class="sysop__pitch">
-      <div class="atm-eyebrow sysop__eyebrow">for sysops</div>
-      <h2 class="sysop__title">Host your own forum.</h2>
-      <p class="sysop__body">
-        Each atmobb forum has its own atmosphere account and runs on your
-        domain. You control how it looks, and members sign in with accounts
-        they already have.
-      </p>
-    </div>
-    <a class="atm-btn atm-btn--secondary" href="https://github.com/keithk/atmoBB">atmobb on GitHub →</a>
-  </section>
 </div>
 
 <style>
@@ -369,34 +350,12 @@
   }
   .stats__row b { color: var(--forum-ink); font-weight: var(--w-semibold); }
   .stats__handle { font: var(--type-handle); color: var(--forum-ink); }
-  .idnote { font: var(--type-meta); color: var(--forum-ink-soft); }
   .locked-tag { color: var(--forum-ink-faint); }
   .locked-note { color: var(--forum-ink-faint); font: var(--type-meta); font-style: italic; }
-
-  .sysop {
-    padding: var(--space-5) var(--space-6);
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-5);
-  }
-  .sysop__pitch { flex: 1; min-width: 280px; }
-  .sysop__eyebrow { margin-bottom: var(--space-2); }
-  .sysop__title {
-    font: var(--w-regular) var(--text-lg)/var(--lh-snug) var(--font-display);
-    margin: 0 0 var(--space-1);
-  }
-  .sysop__body {
-    font: var(--type-meta);
-    color: var(--forum-ink-soft);
-    margin: 0;
-    max-width: 60ch;
-  }
 
   @media (max-width: 860px) {
     .atm-home-main--split { grid-template-columns: minmax(0, 1fr); }
     .panels { grid-template-columns: minmax(0, 1fr); }
-    .sysop__pitch { min-width: 0; }
   }
   @media (max-width: 720px) {
     .compact-welcome { align-items: flex-start; }

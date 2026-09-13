@@ -78,6 +78,8 @@ export interface ForumProfile {
   ogTheme?: string;
   /** Join policy (app.atmobb.forum.profile#membership); absent means open. */
   membership?: ForumMembershipSettings;
+  /** Hide the "powered by atmobb" footer badge. Absent means shown. */
+  hideCredit?: boolean;
   [k: string]: unknown;
 }
 

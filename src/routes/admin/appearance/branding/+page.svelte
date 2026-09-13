@@ -100,8 +100,30 @@
   </div>
 </div>
 
+<div class="atm-card panel">
+  <div class="atm-card__header"><span>Footer</span></div>
+  <div class="atm-card__body">
+    <form class="credit-form" method="POST" action="?/saveCredit">
+      <label class="credit-check">
+        <input type="checkbox" name="showCredit" checked={!data.hideCredit} />
+        <span>
+          <b>Show “powered by atmobb” in the footer</b>
+          <small>A small badge linking to the atmobb project. The forum works the same either way.</small>
+        </span>
+      </label>
+      <button class="atm-btn atm-btn--primary">save footer</button>
+    </form>
+  </div>
+</div>
+
 <style>
   .panel { max-width: 80ch; margin-bottom: var(--space-4); }
+  .credit-form { display: grid; gap: var(--space-3); justify-items: start; }
+  .credit-check { display: flex; align-items: flex-start; gap: var(--space-2); font: var(--type-ui); }
+  .credit-check input { margin-top: 3px; }
+  .credit-check span { display: grid; gap: 2px; }
+  .credit-check b { font-weight: var(--w-semibold); }
+  .credit-check small { color: var(--forum-ink-soft); }
   .lede { margin: 0 0 var(--space-4); font: var(--type-ui); color: var(--forum-ink-soft); }
   .favicon-setting { display: flex; align-items: flex-start; gap: var(--space-4); }
   .favicon-preview { object-fit: contain; border: var(--border-hair) solid var(--forum-line); border-radius: var(--radius-sm); }

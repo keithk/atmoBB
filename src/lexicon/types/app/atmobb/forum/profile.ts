@@ -45,6 +45,8 @@ export interface Main {
   ogTheme?: 'classic' | 'midnight' | 'ocean' | 'forest' | 'plum' | (string & {})
   homepage?: Homepage
   membership?: Membership
+  /** Hide the 'powered by atmobb' badge in the page footer. Absent means shown. */
+  hideCredit?: boolean
   createdAt?: string
   [k: string]: unknown
 }

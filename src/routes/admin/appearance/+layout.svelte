@@ -20,6 +20,7 @@
     og: 'Social preview saved.',
     'og-theme': 'Social preview style saved.',
     'og-removed': 'Default social preview restored.',
+    credit: 'Footer setting saved.',
     css: 'CSS saved.',
     font: 'Font uploaded.',
     removed: 'Font removed.',
