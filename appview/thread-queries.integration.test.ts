@@ -529,6 +529,9 @@ run('stamp resolution SQL integration', () => {
     await award('did:plc:r1', stamp('helper'));
     await award('did:plc:r1', stamp('veteran'), F, '2026-02-02T00:00:00Z');
     await declaration('did:plc:r1', F, { wearing: [boardId(BOARD)], createdAt: '2026-01-01T00:00:00Z' }, '2026-01-01T00:00:00Z');
+    // R18: an empty wearing list means wear nothing, not never chose.
+    await posted('did:plc:bare', [BOARD], '2026-01-07T00:00:00Z');
+    await declaration('did:plc:bare', F, { wearing: [], createdAt: '2026-01-07T00:00:00Z' }, '2026-01-07T00:00:00Z');
     // AE6: wearing names a stamp whose record is gone.
     await posted('did:plc:ghost', [BOARD], '2026-01-06T00:00:00Z');
     await award('did:plc:ghost', stamp('gone'));
@@ -595,6 +598,12 @@ run('stamp resolution SQL integration', () => {
     expect(JSON.parse(helper.row.look as string)).toEqual(look);
   });
 
+  it('R18: an empty wearing list wears nothing while the tray keeps the defaults', async () => {
+    const { 'did:plc:bare': tray } = await resolve(['did:plc:bare']);
+    expect(worn(tray)).toEqual([]);
+    expect(ids(tray)).toContain(boardId(BOARD));
+  });
+
   it('AE6: a wearing entry whose stamp record was deleted is dropped from worn', async () => {
     const { 'did:plc:ghost': tray } = await resolve(['did:plc:ghost']);
     expect(worn(tray)).toEqual([boardId(BOARD)]);
@@ -654,6 +663,7 @@ run('stamp resolution SQL integration', () => {
     expect(open.map((row) => [row.did, row.since])).toEqual([
       ['did:plc:r1', '2026-01-01T00:00:00Z'], ['did:plc:ghost', '2026-01-02T00:00:00Z'], ['did:plc:nodate', '2026-01-02T12:00:00Z'],
       ['did:plc:four', '2026-01-03T00:00:00Z'], ['did:plc:applied', '2026-01-04T00:00:00Z'],
+      ['did:plc:bare', '2026-01-07T00:00:00Z'],
     ]);
     expect(Object.keys(open[0])).not.toContain('posts');
     expect(Object.keys(open[0])).not.toContain('total_posts');

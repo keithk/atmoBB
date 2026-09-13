@@ -66,7 +66,8 @@ local function resolve_stamps(forum, dids)
       -- The member's newest membership declaration for this forum.
       SELECT DISTINCT ON (d.did) d.did,
              CASE WHEN jsonb_typeof((d.record::jsonb)->'wearing') = 'array'
-                  THEN (d.record::jsonb)->'wearing' ELSE '[]'::jsonb END AS ids
+                  THEN (d.record::jsonb)->'wearing' ELSE '[]'::jsonb END AS ids,
+             jsonb_typeof((d.record::jsonb)->'wearing') = 'array' AS chose
       FROM happyview_records d
       JOIN members m ON m.did = d.did
       WHERE d.collection = 'app.atmobb.forum.membership' AND (d.record::jsonb)->>'forum' = $1
@@ -140,7 +141,7 @@ local function resolve_stamps(forum, dids)
              (SELECT MIN(e.ordinality)::int
                 FROM wearing wr, jsonb_array_elements_text(wr.ids) WITH ORDINALITY e(id, ordinality)
                WHERE wr.did = t.did AND e.id = t.id) AS wearing_pos,
-             COALESCE((SELECT jsonb_array_length(wr.ids) > 0 FROM wearing wr WHERE wr.did = t.did), false) AS chose,
+             COALESCE((SELECT wr.chose FROM wearing wr WHERE wr.did = t.did), false) AS chose,
              ROW_NUMBER() OVER (PARTITION BY t.did
                ORDER BY (t.source <> 'default'), t.earned_at DESC, t.id) AS default_rank
       FROM tray t
