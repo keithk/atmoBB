@@ -44,7 +44,7 @@ export const actions: Actions = {
     if (!name) return fail(400, { message: 'Enter a name for the forum.' });
 
     // Merge onto the current record so fields the form doesn't cover
-    // (ranks, links, avatar) survive the put.
+    // (theme, custom CSS, membership) survive the put.
     let current: ProfileRecord = {};
     try {
       const index = await getBoardIndex(FORUM_DID());

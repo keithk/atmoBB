@@ -43,7 +43,7 @@
   --forum-pin-bg: #fbf1d8;
   --forum-pin-edge: #d9b24b;
 
-  /* rank — plum secondary */
+  /* stamp default look — plum secondary */
   --forum-rank: var(--plum-1);
   --forum-rank-bg: var(--plum-bg);
 }

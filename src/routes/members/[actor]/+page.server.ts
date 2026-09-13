@@ -1,11 +1,12 @@
 import type { Actions, PageServerLoad } from './$types';
 import { error, fail } from '@sveltejs/kit';
 import { canModerate, canModerateForum, forumStaff } from '$lib/server/admin';
-import { getBoardIndex, getMembership, getStanding, FORUM_DID } from '$lib/server/appview';
+import { getBoardIndex, getMembership, getStamps, getStanding, FORUM_DID } from '$lib/server/appview';
 import { createForumRecord } from '$lib/server/forum-repo';
 import { savedRedirect } from '$lib/server/saved-redirect';
 import { revokeSpaceAccess } from '$lib/server/space-access';
 import { joinMode, sponsorDisplay } from '$lib/membership';
+import { sponsorDids, wornFromTray } from '$lib/stamps';
 import { expiryFromDays } from '$lib/standing';
 
 const NS = 'app.atmobb';
@@ -36,24 +37,29 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
   const showStanding = isYou || !!staffRole;
   const gated = joinMode(forum.membership as { mode?: string } | undefined) !== 'open';
 
-  const [profile, activity, elsewhere, standing, membership, index] = await Promise.all([
+  const [profile, activity, elsewhere, standing, membership, index, stampSet] = await Promise.all([
     getPublicProfile(id.did, id.pds),
     getAtmobbActivity(id.did, forumDid),
     getElsewhere(id.did, id.pds, id.handle),
     showStanding ? getStanding(id.did, forumDid).catch(() => null) : null,
     gated ? getMembership(id.did, forumDid).catch(() => null) : null,
     staffRole ? getBoardIndex(forumDid).catch(() => null) : null,
+    getStamps(forumDid, id.did).catch(() => null),
   ]);
   await resolveBodyImages([{ author: id.did, body: profile?.signature }]);
 
-  // Everyone sees how a member came in; only staff and the member themself
-  // see whom they brought in. Both are display only.
-  const [sponsorHandle, sponsored] = await Promise.all([
+  // Everyone sees the stamps they wear (the arrival stamp names its sponsor);
+  // staff and the member themself also see the Standing card's sponsor line
+  // and whom they brought in. All display only.
+  const stamps = wornFromTray(stampSet?.tray ?? [], stampSet?.worn ?? []);
+  const [sponsorHandle, sponsored, handleEntries] = await Promise.all([
     membership?.sponsor ? resolveHandle(membership.sponsor) : null,
     showStanding && membership
       ? Promise.all(membership.sponsored.map(async (s) => ({ ...s, handle: await resolveHandle(s.did) })))
       : null,
+    Promise.all(sponsorDids(stamps).map(async (did) => [did, await resolveHandle(did)] as const)),
   ]);
+  const handles = Object.fromEntries(handleEntries);
   const sponsor =
     membership?.accepted && membership.since
       ? sponsorDisplay(
@@ -123,6 +129,8 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
     sponsorHandle: sponsorResolved,
     sponsorText,
     sponsored,
+    stamps,
+    handles,
     boards: (index?.boards ?? []).map((b) => ({ uri: b.uri, name: b.value.name })),
   };
 };

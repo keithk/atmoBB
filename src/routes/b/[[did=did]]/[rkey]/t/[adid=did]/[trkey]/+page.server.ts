@@ -16,6 +16,7 @@ import { blocksToDoc } from '$lib/richtext/blocks-tiptap';
 import { blocksToPlainText } from '$lib/richtext/plain';
 import { postAuthor } from '$lib/appview-paths';
 import { presenceFor } from '$lib/server/profiles';
+import { sponsorDids } from '$lib/stamps';
 import { parseBBCode } from '$lib/richtext/bbcode';
 import { attachImages, resolveBodyImages } from '$lib/server/richtext';
 import { addMentionFacets } from '$lib/server/mentions';
@@ -96,10 +97,13 @@ export const load: PageServerLoad = async ({ params, locals, url, isDataRequest,
       ? blocksToDoc([{ $type: QUOTE, text: blocksToPlainText(target!.body), subject: { uri: replyTo.uri, cid: replyTo.cid } }])
       : null;
 
+  // Rail handles, reply-to and quote attributions, and the sponsor a worn
+  // arrival stamp names.
   const authors = [
     ...posts.map((p) => p.author),
     ...page.replies.flatMap((r) => (r.value.parent ? [postAuthor(r.value.parent.uri)] : [])),
     ...posts.flatMap((p) => (p.body ?? []).flatMap((b) => (b.subject ? [postAuthor(b.subject.uri)] : []))),
+    ...sponsorDids([...page.thread.authorStamps, ...page.replies.flatMap((r) => r.authorStamps)]),
   ];
   const uniqueAuthors = [...new Set(authors)];
   const handles = Object.fromEntries(

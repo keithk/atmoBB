@@ -6,6 +6,7 @@
   import RichText from '$lib/components/RichText.svelte';
   import MemberLink from '$lib/components/MemberLink.svelte';
   import SponsorLine from '$lib/components/SponsorLine.svelte';
+  import StampRow from '$lib/components/StampRow.svelte';
   import { page } from '$app/state';
   import { hereSince } from '$lib/profile-card';
 
@@ -59,13 +60,12 @@
           <span class="atm-presence atm-presence--{m.presence}">{presenceLabel}</span>
         {/if}
       </div>
-      {#if data.sponsorText}
+      {#if memberSince}
         <div class="cover__meta">
           <span>Member since {memberSince}</span>
-          <span aria-hidden="true">·</span>
-          <span><SponsorLine text={data.sponsorText} handle={data.sponsorHandle} /></span>
         </div>
       {/if}
+      <StampRow stamps={data.stamps} handles={data.handles} class="cover__stamps" />
     </div>
     <div class="cover__actions">
       {#if data.isYou}
@@ -323,6 +323,7 @@
     font: var(--type-meta); color: var(--forum-ink-soft);
   }
   .cover__meta b { color: var(--forum-ink); font-weight: var(--w-semibold); }
+  .cover__stamps { margin-top: var(--space-2); }
   .cover__actions { display: flex; gap: var(--space-2); flex: none; flex-wrap: wrap; justify-content: flex-end; }
 
   .grid {

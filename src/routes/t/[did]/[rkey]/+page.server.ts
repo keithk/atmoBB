@@ -23,6 +23,7 @@ import { createForumRecord, forumWriteErrorMessage } from '$lib/server/forum-rep
 import { savedRedirect } from '$lib/server/saved-redirect';
 import { actionFamily, isThreadAction } from '$lib/moderation';
 import { presenceFor } from '$lib/server/profiles';
+import { sponsorDids } from '$lib/stamps';
 import { parseBBCode } from '$lib/richtext/bbcode';
 import { attachImages, resolveBodyImages } from '$lib/server/richtext';
 import { addMentionFacets } from '$lib/server/mentions';
@@ -128,11 +129,13 @@ export const load: PageServerLoad = async ({ params, url, parent, locals, isData
       ? blocksToDoc([{ $type: QUOTE, text: blocksToPlainText(target!.body), subject: { uri: replyTo.uri, cid: replyTo.cid } }])
       : null;
   // The post rail shows @handle for every author, not just handle-less ones,
-  // and reply-to lines and quote attributions name their authors too.
+  // and reply-to lines and quote attributions name their authors too. A worn
+  // arrival stamp names its sponsor, so those resolve as well.
   const authors = [
     ...posts.map((p) => p.author),
     ...page.replies.flatMap((r) => (r.value.parent ? [postAuthor(r.value.parent.uri)] : [])),
     ...posts.flatMap((p) => (p.body ?? []).flatMap((b) => (b.subject ? [postAuthor(b.subject.uri)] : []))),
+    ...sponsorDids([...(page.thread?.authorStamps ?? []), ...page.replies.flatMap((r) => r.authorStamps)]),
   ];
   const uniqueAuthors = [...new Set(authors)];
   const handles = await handleMap(uniqueAuthors);

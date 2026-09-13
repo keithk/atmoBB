@@ -1,6 +1,6 @@
 <script lang="ts">
   import Avatar from './Avatar.svelte';
-  import SponsorLine from './SponsorLine.svelte';
+  import StampRow from './StampRow.svelte';
   import { hereSince, profileHref, type ProfileCard } from '$lib/profile-card';
 
   let { card }: { card: ProfileCard } = $props();
@@ -20,9 +20,7 @@
     <div class="atm-hovercard__id">
       <span class="atm-hovercard__name">{card.displayName}</span>
       <code class="atm-hovercard__handle">@{card.handle}</code>
-      {#if card.sponsor}
-        <span class="atm-hovercard__sponsor"><SponsorLine text={card.sponsor.text} handle={card.sponsor.handle} /></span>
-      {/if}
+      <StampRow stamps={card.stamps} handles={card.handles} size="compact" class="atm-hovercard__stamps" />
     </div>
   </div>
 
@@ -66,7 +64,7 @@
   .atm-hovercard__id { display: flex; flex-direction: column; gap: 3px; min-width: 0; align-items: flex-start; }
   .atm-hovercard__name { font: var(--w-bold) var(--text-md)/1.2 var(--font-display); color: var(--forum-ink); }
   .atm-hovercard__handle { font: var(--type-handle); color: var(--forum-ink-faint); }
-  .atm-hovercard__sponsor { font: var(--type-meta); color: var(--forum-ink-faint); }
+  .atm-hovercard__stamps { margin-top: 2px; }
   .atm-hovercard__stats {
     display: flex;
     flex-wrap: wrap;

@@ -1,3 +1,6 @@
+import type { TrayEntry } from './server/appview';
+import type { Handles } from './stamps';
+
 export interface ProfileCard {
   did: string;
   handle: string;
@@ -8,9 +11,10 @@ export interface ProfileCard {
   joined: string | null;
   bsky: { handle: string } | null;
   isYou: boolean;
-  /** On a gated forum, how this member came in (see sponsorLine); null elsewhere.
-   *  `handle` is the sponsor's resolved handle for the link, or null. */
-  sponsor: { text: string; handle: string | null } | null;
+  /** The stamps the member wears on this forum, in their order; the arrival stamp carries how they came in. */
+  stamps: TrayEntry[];
+  /** DID to handle for any sponsor an arrival stamp names. */
+  handles: Handles;
 }
 
 /** "Jul 2026" for the member's profile creation date, or null when there isn't one. */

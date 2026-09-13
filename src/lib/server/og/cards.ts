@@ -95,20 +95,6 @@ const onlineStat = (value: string, label: string, colors: OgSkin = skin): VNode 
 
 const vline = (h_ = 40, color = skin.lineStrong): VNode => box({ width: 1, height: h_, background: color });
 
-const rankBadge = (title: string, colors: OgSkin = skin): VNode =>
-  text(
-    {
-      fontFamily: font.mono,
-      fontSize: 14,
-      letterSpacing: '0.04em',
-      color: colors.rank,
-      background: colors.rankBg,
-      padding: '6px 12px',
-      borderRadius: 999,
-    },
-    title,
-  );
-
 const clamp = (lines: number) => ({
   display: 'block',
   lineClamp: lines,
@@ -232,7 +218,6 @@ export interface ThreadData {
   image?: string | null;
   authorHandle: string;
   avatar: VNode | null;
-  rank?: string;
   replies: number;
   started?: string;
   skin?: OgSkin;
@@ -245,7 +230,6 @@ export function threadCard({
   image,
   authorHandle,
   avatar,
-  rank,
   replies,
   started,
   skin: colors = skin,
@@ -305,13 +289,9 @@ export function threadCard({
           box(
             { alignItems: 'center', gap: 14 },
             avatar,
-            box(
-              { flexDirection: 'column', gap: 7 },
-              text(
-                { fontFamily: font.body, fontWeight: 600, fontSize: 19, color: colors.ink },
-                `@${authorHandle}`,
-              ),
-              rank ? rankBadge(rank, colors) : null,
+            text(
+              { fontFamily: font.body, fontWeight: 600, fontSize: 19, color: colors.ink },
+              `@${authorHandle}`,
             ),
           ),
           box(
@@ -343,8 +323,7 @@ export interface MemberData {
   displayName: string;
   handle: string;
   avatar: VNode | null;
-  rank?: string;
-  posts?: number | null;
+  /** The year the member's profile was created ("here since"). */
   joined?: string | null;
   signature?: string;
   skin?: OgSkin;
@@ -354,8 +333,6 @@ export function memberCard({
   displayName,
   handle,
   avatar,
-  rank,
-  posts,
   joined,
   signature,
   skin: colors = skin,
@@ -369,7 +346,7 @@ export function memberCard({
     ),
     box(
       { flex: 1, alignItems: 'center', gap: 48, padding: '40px 52px' },
-      box({ flexDirection: 'column', alignItems: 'center', gap: 14 }, avatar, rank ? rankBadge(rank, colors) : null),
+      box({ flexDirection: 'column', alignItems: 'center', gap: 14 }, avatar),
       box(
         { flex: 1, flexDirection: 'column', gap: 12 },
         text(
@@ -385,9 +362,7 @@ export function memberCard({
         text({ fontFamily: font.mono, fontSize: 20, color: colors.link }, `@${handle}`),
         box(
           { alignItems: 'center', gap: 32, marginTop: 8 },
-          ...(posts != null ? [stat(nf(posts), 'POSTS', 30, colors)] : []),
-          ...(posts != null && joined ? [vline(38, colors.lineStrong)] : []),
-          ...(joined ? [stat(joined, 'JOINED', 30, colors)] : []),
+          ...(joined ? [stat(joined, 'HERE SINCE', 30, colors)] : []),
         ),
         signature
           ? text(

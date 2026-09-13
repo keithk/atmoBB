@@ -25,10 +25,12 @@ describe('ProfileCard', () => {
       joined: '2026-07-15T12:00:00.000Z',
       bsky: null,
       isYou: false,
-      sponsor: null,
+      stamps: [],
+      handles: {},
     };
     expect(Object.keys(card)).not.toContain('posts');
     expect(Object.keys(card)).not.toContain('globalPosts');
     expect(Object.keys(card)).not.toContain('rankTitle');
+    expect(Object.keys(card)).not.toContain('sponsor');
   });
 });
