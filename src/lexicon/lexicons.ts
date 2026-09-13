@@ -1608,6 +1608,8 @@ export const schemaDict = {
                 'acceptMember',
                 'revokeMember',
                 'holdApplication',
+                'gateForum',
+                'openForum',
               ],
               maxLength: 64,
             },
@@ -1628,6 +1630,13 @@ export const schemaDict = {
               ref: 'lex:com.atproto.repo.strongRef',
               description:
                 'For acceptMember, denyAccess, or holdApplication: the accessRequest record this decision answers.',
+            },
+            mode: {
+              type: 'string',
+              description:
+                "For gateForum: the join mode entered (apply or invite). gateForum and openForum take the forum's own account as subject and mark the periods during which membership is enforced; a post written while the forum was open is served regardless of membership.",
+              knownValues: ['apply', 'invite'],
+              maxLength: 32,
             },
             board: {
               type: 'string',

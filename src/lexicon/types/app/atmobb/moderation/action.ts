@@ -37,12 +37,16 @@ export interface Main {
     | 'acceptMember'
     | 'revokeMember'
     | 'holdApplication'
+    | 'gateForum'
+    | 'openForum'
     | (string & {})
   /** For acceptMember: the person who brought the subject in — the inviter, or the staffer who approved the application. Absent for founding members accepted when the forum first gated. */
   sponsor?: string
   /** For acceptMember: how the subject was accepted. */
   via?: 'invite' | 'application' | 'founding' | (string & {})
   ref?: ComAtprotoRepoStrongRef.Main
+  /** For gateForum: the join mode entered (apply or invite). gateForum and openForum take the forum's own account as subject and mark the periods during which membership is enforced; a post written while the forum was open is served regardless of membership. */
+  mode?: 'apply' | 'invite' | (string & {})
   /** Scopes account-level actions (e.g. a ban) to one board. Absent means forum-wide. */
   board?: string
   reason?: string
