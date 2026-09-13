@@ -3,7 +3,6 @@ import { renderPng, pngResponse } from '$lib/server/og/render';
 import { threadCard, genericCard } from '$lib/server/og/cards';
 import { getThreadPage, threadUri, getBoardIndex, resolveHandle, FORUM_DID } from '$lib/server/appview';
 import { imageDataUri, profileAvatarNode } from '$lib/server/og/avatar';
-import { rankFor } from '$lib/rank';
 import { relTime } from '$lib/reltime';
 import { blocksToPlainText } from '$lib/richtext/plain';
 import { imageCid } from '$lib/richtext/blocks-tiptap';
@@ -43,7 +42,6 @@ export const GET: RequestHandler = async ({ params, url, fetch }) => {
       { size: 64, radius: 10, skin: colors },
       thread.authorProfile?.displayName ?? authorHandle,
     );
-    const rank = rankFor(index.forum?.ranks ?? [], thread.authorPosts).title;
     const excerpt = blocksToPlainText(thread.value.body).replace(/\s+/g, ' ').trim();
 
     const png = await renderPng(
@@ -54,7 +52,6 @@ export const GET: RequestHandler = async ({ params, url, fetch }) => {
         image,
         authorHandle,
         avatar,
-        rank: rank || undefined,
         replies: page.replyCount,
         started: relTime(thread.value.createdAt).replace(' ago', '') || undefined,
         skin: colors,

@@ -62,7 +62,7 @@ async function notifyReply(record: Parameters<typeof createReply>[1], replyUri: 
   });
 }
 
-export const load: PageServerLoad = async ({ params, locals, parent, url, isDataRequest, setHeaders }) => {
+export const load: PageServerLoad = async ({ params, locals, url, isDataRequest, setHeaders }) => {
   handleNotifyVisit({ url, isDataRequest, locals, setHeaders });
   const { space, uri, boardPath } = threadRef(params);
   // Membership gates the whole page; non-members bounce to the locked board.
@@ -82,8 +82,6 @@ export const load: PageServerLoad = async ({ params, locals, parent, url, isData
     { author: page.thread.author, body: page.thread.authorProfile?.signature },
     ...page.replies.map((r) => ({ author: r.author, body: r.authorProfile?.signature })),
   ]);
-  const { forum } = (await parent()) as { forum?: { ranks?: { title: string; minPosts: number }[] } };
-
   // ?to=<rkey> answers a post; ?quote=<rkey> answers it with its text quoted.
   const posts = [
     { uri, cid: page.thread.cid, author: page.thread.author, body: page.thread.value.body },
@@ -139,7 +137,6 @@ export const load: PageServerLoad = async ({ params, locals, parent, url, isData
     offerNotifications: await neverAskedAboutNotifications(locals.user.did),
     handles,
     presence,
-    ranks: forum?.ranks ?? [],
     limit: LIMIT,
     offset: 0,
     ...page,

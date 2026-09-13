@@ -1,6 +1,5 @@
 <script lang="ts">
   import Avatar from '$lib/components/Avatar.svelte';
-  import RankBadge from '$lib/components/RankBadge.svelte';
   import MemberLink from '$lib/components/MemberLink.svelte';
   import SponsorLine from '$lib/components/SponsorLine.svelte';
   import { relTime } from '$lib/reltime';
@@ -35,13 +34,6 @@
         {#if m.sponsorText}
           <div class="atm-memberrow__sponsor"><SponsorLine text={m.sponsorText} handle={m.sponsorHandle} /></div>
         {/if}
-      </div>
-      <div class="atm-memberrow__rank">
-        <RankBadge ranks={data.ranks} posts={m.posts} />
-      </div>
-      <div class="atm-memberrow__posts">
-        <b>{m.posts}</b> posts{#if m.totalPosts > m.posts}
-          · <b>{m.totalPosts}</b> in the atmosphere{/if}
       </div>
       <div class="atm-memberrow__seen">{m.lastActive ? `active ${relTime(m.lastActive)}` : ''}</div>
     </article>

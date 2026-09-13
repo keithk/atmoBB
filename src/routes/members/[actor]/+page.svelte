@@ -1,6 +1,5 @@
 <script lang="ts">
   import Avatar from '$lib/components/Avatar.svelte';
-  import RankBadge from '$lib/components/RankBadge.svelte';
   import Card from '$lib/components/Card.svelte';
   import { relTime } from '$lib/reltime';
   import { threadPath } from '$lib/appview-paths';
@@ -8,6 +7,7 @@
   import MemberLink from '$lib/components/MemberLink.svelte';
   import SponsorLine from '$lib/components/SponsorLine.svelte';
   import { page } from '$app/state';
+  import { hereSince } from '$lib/profile-card';
 
   let { data, form } = $props();
 
@@ -22,9 +22,7 @@
   const name = $derived(p?.displayName ?? m.handle);
   const local = $derived(m.activity.local);
   const global = $derived(m.activity.global);
-  const joined = $derived(
-    p?.createdAt ? new Date(p.createdAt).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : null,
-  );
+  const since = $derived(hereSince(p?.createdAt));
   const memberSince = $derived(
     data.membership?.accepted && data.membership.since
       ? new Date(data.membership.since).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
@@ -55,17 +53,9 @@
       <h1 class="cover__name">{name}</h1>
       <code class="cover__handle">@{m.handle}</code>
       <div class="cover__meta">
-        {#if joined}<span>Joined {joined}</span>{/if}
-        {#if local.posts > 0}
-          {#if joined}<span aria-hidden="true">·</span>{/if}
-          <span><b>{local.posts.toLocaleString()}</b> posts on {forumName}</span>
-        {/if}
-        {#if global.posts > 0}
-          {#if joined || local.posts > 0}<span aria-hidden="true">·</span>{/if}
-          <span><b>{global.posts.toLocaleString()}</b> public posts across atmobb</span>
-        {/if}
+        {#if since}<span>here since {since}</span>{/if}
         {#if presenceLabel}
-          {#if joined || local.posts > 0 || global.posts > 0}<span aria-hidden="true">·</span>{/if}
+          {#if since}<span aria-hidden="true">·</span>{/if}
           <span class="atm-presence atm-presence--{m.presence}">{presenceLabel}</span>
         {/if}
       </div>
@@ -247,57 +237,18 @@
     </div>
 
     <aside class="col col--rail">
-      {#if local.posts > 0}
-        <Card title={forumName}>
+      <Card title={forumName}>
+        {#if local.lastActive}
           <div class="standing">
-            <RankBadge ranks={data.ranks} posts={local.posts} />
-            <div class="standing__stats">
-              <span><b>{local.posts.toLocaleString()}</b> posts</span>
-              <span><b>{local.topics.toLocaleString()}</b> topics</span>
-              <span><b>{local.replies.toLocaleString()}</b> replies</span>
-            </div>
-            {#if local.lastActive}
-              <span class="standing__seen">active {relTime(local.lastActive)}</span>
-            {/if}
+            <span class="standing__seen">active {relTime(local.lastActive)}</span>
           </div>
-        </Card>
-      {:else}
-        <Card title={forumName}>
+        {:else}
           <p class="muted">
             {data.isYou ? "You haven't" : `${name} hasn't`} made any public posts on {forumName} yet.
             This atmosphere profile is shared across forums.
           </p>
-        </Card>
-      {/if}
-
-      {#if global.posts > 0}
-        <Card title="Across atmobb">
-          <div class="network-stats">
-            <div><b>{global.posts.toLocaleString()}</b><span>posts</span></div>
-            <div><b>{global.topics.toLocaleString()}</b><span>topics</span></div>
-            <div><b>{global.replies.toLocaleString()}</b><span>replies</span></div>
-            <div><b>{global.forums.toLocaleString()}</b><span>public {global.forums === 1 ? 'forum' : 'forums'}</span></div>
-          </div>
-          <ul class="forum-activity">
-            {#each m.activity.forums as forum}
-              <li>
-                <span class="forum-activity__name">
-                  {forum.name ?? forum.did.slice(8, 24)}
-                  {#if forum.did === data.forumDid}<span class="atm-chip">here</span>{/if}
-                </span>
-                <span class="forum-activity__count">
-                  {forum.posts.toLocaleString()} {forum.posts === 1 ? 'post' : 'posts'}
-                  <small>
-                    {forum.topics.toLocaleString()} {forum.topics === 1 ? 'topic' : 'topics'} ·
-                    {forum.replies.toLocaleString()} {forum.replies === 1 ? 'reply' : 'replies'}
-                  </small>
-                </span>
-              </li>
-            {/each}
-          </ul>
-          <p class="muted public-note">Public forums only.</p>
-        </Card>
-      {/if}
+        {/if}
+      </Card>
 
       {#if m.elsewhere.bsky || m.elsewhere.apps.length}
         <Card title="Elsewhere">
@@ -403,28 +354,7 @@
   .sig { margin-top: 0; }
 
   .standing { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
-  .standing__stats { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); font: var(--type-meta); color: var(--forum-ink-soft); }
-  .standing__stats b { color: var(--forum-ink); font-weight: var(--w-semibold); }
   .standing__seen { font: var(--type-meta); color: var(--forum-ink-faint); }
-
-  .network-stats {
-    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3);
-    padding-bottom: var(--space-3); border-bottom: var(--border-hair) solid var(--forum-line);
-  }
-  .network-stats div { display: flex; flex-direction: column; gap: 1px; }
-  .network-stats b { font: var(--w-semibold) var(--text-lg)/1.2 var(--font-display); color: var(--forum-ink); }
-  .network-stats span { font: var(--type-meta); color: var(--forum-ink-faint); }
-  .forum-activity { list-style: none; margin: 0; padding: var(--space-2) 0 0; }
-  .forum-activity li {
-    display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3);
-    padding: var(--space-2) 0; border-bottom: var(--border-hair) solid var(--forum-line);
-    font: var(--type-meta);
-  }
-  .forum-activity li:last-child { border-bottom: none; }
-  .forum-activity__name { display: flex; align-items: center; gap: var(--space-1); min-width: 0; overflow-wrap: anywhere; color: var(--forum-ink); font-weight: var(--w-semibold); }
-  .forum-activity__count { display: flex; flex-direction: column; align-items: flex-end; color: var(--forum-ink-soft); white-space: nowrap; }
-  .forum-activity__count small { font: inherit; color: var(--forum-ink-faint); }
-  .public-note { margin-top: var(--space-1); }
 
   .elsewhere { list-style: none; margin: 0 0 var(--space-2); padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
   .elsewhere li { display: flex; align-items: center; gap: var(--space-2); font: var(--type-meta); }

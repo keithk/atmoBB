@@ -31,7 +31,6 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
   if (!id) error(404, 'No member by that name.');
 
   const { forum, forumDid, staffRole } = await parent();
-  const ranks = forum.ranks ?? [];
   // Standing is shown to the member themself and to staff, who can act on it.
   const isYou = locals.user?.did === id.did;
   const showStanding = isYou || !!staffRole;
@@ -85,13 +84,9 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
   const displayName = profile?.displayName ?? id.handle;
   const canonical = `${url.origin}/members/${encodeURIComponent(id.handle)}`;
   const image = `${url.origin}/members/${encodeURIComponent(params.actor)}/og.png`;
-  const activityDescription =
-    activity.global.posts > 0
-      ? `@${id.handle} · ${activity.global.posts.toLocaleString('en-US')} public atmobb posts`
-      : `@${id.handle}`;
   const metadata = {
     title: displayName,
-    description: profile?.description?.trim() || activityDescription,
+    description: profile?.description?.trim() || `@${id.handle}`,
     image,
     imageAlt: `${displayName} (@${id.handle})`,
     type: 'profile' as const,
@@ -121,7 +116,6 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
       activity,
       elsewhere,
     },
-    ranks,
     forumSites,
     isYou,
     standing,

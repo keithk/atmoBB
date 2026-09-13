@@ -20,5 +20,5 @@ export const load: PageServerLoad = async ({ url, parent }) => {
       gated && m.since ? sponsorDisplay({ since: m.since, sponsor: m.sponsor, via: m.via }, handles) : null;
     return { ...m, sponsorText: sponsor?.text, sponsorHandle: sponsor?.handle ?? null };
   });
-  return { ...page, members, handles, ranks: forum.ranks ?? [] };
+  return { ...page, members, handles };
 };

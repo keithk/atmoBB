@@ -1,14 +1,11 @@
 <script lang="ts">
   import Avatar from './Avatar.svelte';
   import SponsorLine from './SponsorLine.svelte';
-  import { profileHref, type ProfileCard } from '$lib/profile-card';
-  import { relTime } from '$lib/reltime';
+  import { hereSince, profileHref, type ProfileCard } from '$lib/profile-card';
 
   let { card }: { card: ProfileCard } = $props();
 
-  const joined = $derived(
-    card.joined ? new Date(card.joined).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : null,
-  );
+  const since = $derived(hereSince(card.joined));
 </script>
 
 <div class="atm-hovercard">
@@ -23,7 +20,6 @@
     <div class="atm-hovercard__id">
       <span class="atm-hovercard__name">{card.displayName}</span>
       <code class="atm-hovercard__handle">@{card.handle}</code>
-      {#if card.rankTitle}<span class="atm-rank">{card.rankTitle}</span>{/if}
       {#if card.sponsor}
         <span class="atm-hovercard__sponsor"><SponsorLine text={card.sponsor.text} handle={card.sponsor.handle} /></span>
       {/if}
@@ -31,11 +27,7 @@
   </div>
 
   <div class="atm-hovercard__stats">
-    <span>
-      {card.posts != null ? card.posts : 'No'} <i>{card.posts === 1 ? 'post' : 'posts'} here</i>
-      {#if card.globalPosts != null}<i> · </i>{card.globalPosts} <i>public {card.globalPosts === 1 ? 'post' : 'posts'} across atmobb</i>{/if}
-    </span>
-    {#if joined}<span class="atm-hovercard__joined">joined {joined}</span>{/if}
+    {#if since}<span class="atm-hovercard__since">here since {since}</span>{/if}
     <span class="atm-presence atm-presence--{card.presence} atm-hovercard__presence">{card.presence}</span>
   </div>
 
@@ -85,9 +77,7 @@
     font: var(--type-meta);
     color: var(--forum-ink-soft);
   }
-  .atm-hovercard__stats i { font-style: normal; }
-  .atm-hovercard__stats span:first-child { color: var(--forum-ink); font-weight: var(--w-semibold); }
-  .atm-hovercard__joined { margin-right: auto; }
+  .atm-hovercard__since { margin-right: auto; color: var(--forum-ink); font-weight: var(--w-semibold); }
   .atm-hovercard__presence { text-transform: capitalize; }
   .atm-hovercard__bsky {
     display: flex;

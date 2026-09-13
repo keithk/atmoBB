@@ -93,7 +93,7 @@ export const load: PageServerLoad = async ({ params, url, parent, locals, isData
     }
     error(404, 'This thread lives on another forum.');
   }
-  const [{ forum, staffRole }, boardName] = await Promise.all([
+  const [{ staffRole }, boardName] = await Promise.all([
     parent(),
     page.thread
       ? getBoardThreads(page.thread.value.board, undefined, 1)
@@ -201,7 +201,6 @@ export const load: PageServerLoad = async ({ params, url, parent, locals, isData
     canModerate: page.thread ? await canModerate(locals.user?.did, page.thread.value.board) : false,
     handles,
     presence,
-    ranks: forum.ranks ?? [],
     limit: LIMIT,
     offset: Number(cursor ?? 0),
     ...page,

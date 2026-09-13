@@ -65,7 +65,6 @@ export interface ForumProfile {
   description?: string;
   /** Rich welcome shown in the home page hero under the description. */
   intro?: RichTextBlock[];
-  ranks?: { title: string; minPosts: number }[];
   homepage?: {
     layout?: string;
     sidebar?: boolean;
@@ -174,17 +173,11 @@ export interface LatestThreads {
   cursor?: string;
 }
 
-export interface ActivityStats {
-  posts: number;
-  topics: number;
-  replies: number;
-  lastActive?: string;
-}
-
+/** The appview also returns per-forum post counts here; the app reads only
+ *  the timestamps and the recent-topics list. */
 export interface MemberActivity {
-  local: ActivityStats;
-  global: ActivityStats & { forums: number };
-  forums: (ActivityStats & { did: string; name?: string })[];
+  local: { lastActive?: string };
+  global: { lastActive?: string };
   recentThreads: {
     uri: string;
     board: string;
@@ -199,7 +192,6 @@ export interface MemberActivity {
 export interface Members {
   members: {
     did: string;
-    posts: number;
     profile?: ActorProfile;
     lastActive?: string;
     /** On a gated forum, the acceptance behind this row: when it opened and who brought them in. */
@@ -257,9 +249,6 @@ export interface ThreadPage {
     cid?: string;
     author: string;
     authorProfile?: ActorProfile;
-    authorPosts: number;
-    /** Across every indexed forum. Absent for space threads, which the public counters can't see. */
-    authorTotalPosts?: number;
     value: {
       title: string;
       body?: RichTextBlock[];
@@ -282,8 +271,6 @@ export interface ThreadPage {
     cid?: string;
     author: string;
     authorProfile?: ActorProfile;
-    authorPosts: number;
-    authorTotalPosts?: number;
     value: {
       body?: RichTextBlock[];
       createdAt?: string;

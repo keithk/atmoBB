@@ -179,11 +179,7 @@ export async function readSpaceThreadPage(viewer: string, threadUri: string): Pr
     return { replies: [], replyCount: 0 };
   }
 
-  const { threads, replies } = await gatherSpace(viewer, p.space);
-  // Per-author standing within this board (threads + replies), our stand-in for
-  // the public post count, which never sees space records.
-  const posts = new Map<string, number>();
-  for (const rec of [...threads, ...replies]) posts.set(rec.author, (posts.get(rec.author) ?? 0) + 1);
+  const { replies } = await gatherSpace(viewer, p.space);
 
   const mine = replies
     .filter((r) => r.value.thread?.uri === threadUri)
@@ -197,7 +193,6 @@ export async function readSpaceThreadPage(viewer: string, threadUri: string): Pr
       cid: head.cid,
       author: head.author,
       authorProfile: profiles[head.author],
-      authorPosts: posts.get(head.author) ?? 0,
       value: {
         title: head.value.title,
         body: head.value.body,
@@ -215,7 +210,6 @@ export async function readSpaceThreadPage(viewer: string, threadUri: string): Pr
       cid: r.cid,
       author: r.author,
       authorProfile: profiles[r.author],
-      authorPosts: posts.get(r.author) ?? 0,
       value: { body: r.value.body, createdAt: r.value.createdAt, editedAt: r.value.editedAt, parent: r.value.parent },
       indexedAt: r.value.createdAt ?? '',
     })),
