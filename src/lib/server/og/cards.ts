@@ -110,10 +110,10 @@ const rankBadge = (title: string): VNode =>
   );
 
 const clamp = (lines: number) => ({
-  display: '-webkit-box',
-  WebkitBoxOrient: 'vertical',
-  WebkitLineClamp: lines,
+  display: 'block',
+  lineClamp: lines,
   overflow: 'hidden',
+  flexShrink: 0,
 });
 
 // --- 04 · GENERIC / FALLBACK -------------------------------------------------
