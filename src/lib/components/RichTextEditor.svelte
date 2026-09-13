@@ -151,6 +151,16 @@
     if (!href) return;
     editor.chain().focus().setLink({ href }).run();
   };
+
+  /** Let surrounding composer controls move the caret into this editor. */
+  export function focus() {
+    editor?.commands.focus();
+  }
+
+  /** Add block content to the current draft without replacing what was typed. */
+  export function insertContent(content: JSONContent[]) {
+    editor?.chain().focus('end').insertContent(content).run();
+  }
 </script>
 
 <div class="atm-editor">

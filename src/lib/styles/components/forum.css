@@ -97,15 +97,21 @@ a.atm-post__permalink:hover { text-decoration: underline; }
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 .atm-composer__replyto > span { min-width: 0; overflow-wrap: anywhere; }
-.atm-composer__replyto .atm-linkbtn {
+.atm-composer__replyto .atm-post__action {
   flex: none;
-  color: var(--forum-ink-soft);
-  font: var(--w-semibold) var(--text-md)/1 var(--font-body);
-  text-decoration: none;
 }
 .atm-post__own { display: inline-flex; gap: var(--space-2); margin-left: var(--space-2); }
-.atm-post__own a, .atm-post__own button { font: var(--w-medium) var(--text-2xs)/1 var(--font-mono); color: var(--forum-ink-faint); }
-.atm-post__own button:hover { color: var(--danger-1); }
+.atm-post__own form { display: contents; }
+.atm-post__action {
+  padding: 2px 6px;
+  border: var(--border-hair) solid var(--forum-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--forum-surface);
+  color: var(--forum-ink-soft);
+  cursor: pointer;
+  font: var(--w-medium) var(--text-2xs)/1 var(--font-mono);
+}
+.atm-post__action:hover { border-color: var(--forum-accent); color: var(--forum-link); }
 
 /* ---- Thread/board composer ---- */
 .atm-composer {

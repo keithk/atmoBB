@@ -12,6 +12,9 @@
   import ThreadReadingTracker from '$lib/components/ThreadReadingTracker.svelte';
   import JoinNotice from '$lib/components/JoinNotice.svelte';
   import { canPost } from '$lib/membership';
+  import { blocksToDoc } from '$lib/richtext/blocks-tiptap';
+  import type { RichTextBlock } from '$lib/richtext/bbcode';
+  import { blocksToPlainText } from '$lib/richtext/plain';
   // Simplified sibling of /t/[did]/[rkey]: private threads live in a space, so
   // reads are immediate (no firehose lag) — no waiting/polling states needed.
   let { data, form } = $props();
@@ -31,7 +34,26 @@
   // Answering a specific post (from ?to= / ?quote=); cleared once it's sent.
   let replyingTo = $state(data.replyTo);
   let composerDoc = $state(data.composerDoc);
-  const respondHref = (uri: string, kind: 'to' | 'quote') => `${page.url.pathname}?${kind}=${uri.split('/').pop()}#reply`;
+  let composerEditor = $state<{ focus: () => void; insertContent: (content: import('@tiptap/core').JSONContent[]) => void }>();
+  const startReply = (post: { uri: string; cid?: string; author: string; body?: RichTextBlock[] }, quote = false) => {
+    if (!post.cid) return;
+    replyingTo = { uri: post.uri, cid: post.cid, author: post.author };
+    if (quote) {
+      const doc = blocksToDoc([{
+        $type: 'app.atmobb.richtext.block#quote',
+        text: blocksToPlainText(post.body),
+        subject: { uri: post.uri, cid: post.cid },
+      }]);
+      composerEditor?.insertContent([...(doc.content ?? []), { type: 'paragraph' }]);
+    } else {
+      composerEditor?.focus();
+    }
+    document.getElementById('reply')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  const clearReplyTo = () => {
+    replyingTo = null;
+    composerEditor?.focus();
+  };
   const shortName = (did: string) => data.handles[did] ?? did.slice(8, 20);
 
   // A posted reply is readable at once; just re-run the load.
@@ -84,7 +106,7 @@
         <a class="atm-post__permalink" href="#{postAnchor(data.thread.uri)}">{when(data.thread.value.createdAt)}</a>
         {@render edited(data.thread.value.editedAt)}
         {@render own(data.thread.uri, data.thread.author)}
-        {@render respond(data.thread.uri)}
+        {@render respond(data.thread)}
       </div>
       {#if data.editing?.uri === data.thread.uri}
         <PostEditor uri={data.thread.uri} title={data.thread.value.title} tags={data.editing.tags} doc={data.editing.doc} cancelHref="{page.url.pathname}#{postAnchor(data.thread.uri)}" message={form?.message} allowImages={false} />
@@ -122,7 +144,7 @@
             </span>
           {/if}
           {@render own(reply.uri, reply.author)}
-          {@render respond(reply.uri)}
+          {@render respond(reply)}
         </div>
         {#if data.editing?.uri === reply.uri}
           <PostEditor uri={reply.uri} doc={data.editing.doc} cancelHref="{page.url.pathname}#{postAnchor(reply.uri)}" message={form?.message} allowImages={false} />
@@ -146,7 +168,7 @@
         {#if replyingTo}
           <p class="atm-composer__replyto">
             <span>↩ replying to <a href={postPath(data.threadUri, replyingTo.uri)}>@{shortName(replyingTo.author)}</a></span>
-            <a class="atm-linkbtn" href="{page.url.pathname}#reply" title="Reply to the thread instead" aria-label="Reply to the thread instead">×</a>
+            <button type="button" class="atm-post__action" onclick={clearReplyTo} title="Reply to the thread instead" aria-label="Reply to the thread instead">×</button>
           </p>
         {/if}
         {#if form?.posted}<p class="atm-ok" aria-live="polite">Posted ✓</p>{/if}
@@ -172,7 +194,7 @@
           <input type="hidden" name="parentUri" value={replyingTo?.uri ?? ''} />
           <input type="hidden" name="parentCid" value={replyingTo?.cid ?? ''} />
           {#key composerKey}
-            <RichTextEditor name="body" placeholder="Add to the discussion…" initial={composerDoc ?? undefined} allowImages={false} />
+            <RichTextEditor bind:this={composerEditor} name="body" placeholder="Add to the discussion…" initial={composerDoc ?? undefined} allowImages={false} />
           {/key}
           <div class="atm-composer__actions">
             <button class="atm-btn atm-btn--primary atm-composer__submit" disabled={posting}>
@@ -194,11 +216,11 @@
   <p class="atm-notice">Thread not found.</p>
 {/if}
 
-{#snippet respond(uri: string)}
+{#snippet respond(post: { uri: string; cid?: string; author: string; value: { body?: RichTextBlock[] } })}
   {#if user && mayPost}
     <span class="atm-post__own">
-      <a href={respondHref(uri, 'to')} title="Answer this post">reply</a>
-      <a href={respondHref(uri, 'quote')} title="Answer this post, quoting it">quote</a>
+      <button type="button" class="atm-post__action" onclick={() => startReply({ ...post, body: post.value.body })} title="Answer this post">reply</button>
+      <button type="button" class="atm-post__action" onclick={() => startReply({ ...post, body: post.value.body }, true)} title="Answer this post, quoting it">quote</button>
     </span>
   {/if}
 {/snippet}
@@ -210,10 +232,10 @@
 {#snippet own(uri: string, author: string)}
   {#if user?.did === author && data.editing?.uri !== uri}
     <span class="atm-post__own">
-      <a href={editHref(uri)}>edit</a>
+      <button type="button" class="atm-post__action" onclick={() => location.assign(editHref(uri))}>edit</button>
       <form method="POST" action="?/delete" onsubmit={confirmDelete}>
         <input type="hidden" name="uri" value={uri} />
-        <button class="atm-linkbtn">delete</button>
+        <button class="atm-post__action">delete</button>
       </form>
     </span>
   {/if}
