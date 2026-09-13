@@ -63,6 +63,7 @@ const docCache = new Map<string, { doc: { handle: string; pds?: string }; at: nu
 const profileCache = new Map<string, { profile: ActorProfile | null; at: number }>();
 const activityCache = new Map<string, { activity: MemberActivity; at: number }>();
 const elsewhereCache = new Map<string, { elsewhere: Elsewhere; at: number }>();
+const bskyProfileCache = new Map<string, { profile: BskyProfile | undefined; at: number }>();
 
 function fresh<T>(hit: { at: number } | undefined): hit is T & { at: number } {
   return !!hit && Date.now() - hit.at < TTL;
@@ -225,23 +226,30 @@ const KNOWN_APPS: { match: (nsid: string) => boolean; label: string; icon: strin
 ];
 
 export async function getBskyProfile(did: string): Promise<BskyProfile | undefined> {
+  const hit = bskyProfileCache.get(did);
+  if (fresh(hit)) return hit.profile;
+  let profile: BskyProfile | undefined;
   try {
     const res = await fetch(
       `${BSKY_API}/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(did)}`,
       { signal: AbortSignal.timeout(5000) },
     );
-    if (!res.ok) return undefined;
-    const j = (await res.json()) as {
-      handle?: string;
-      displayName?: string;
-      avatar?: string;
-      description?: string;
-    };
-    if (!j.handle) return undefined;
-    return { handle: j.handle, displayName: j.displayName, avatar: j.avatar, description: j.description };
+    if (res.ok) {
+      const j = (await res.json()) as {
+        handle?: string;
+        displayName?: string;
+        avatar?: string;
+        description?: string;
+      };
+      if (j.handle) {
+        profile = { handle: j.handle, displayName: j.displayName, avatar: j.avatar, description: j.description };
+      }
+    }
   } catch {
-    return undefined;
+    // Bluesky unavailable — render the normal monogram fallback for now.
   }
+  bskyProfileCache.set(did, { profile, at: Date.now() });
+  return profile;
 }
 
 /** The account's own recent Bluesky posts (no replies, no reposts). */

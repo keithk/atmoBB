@@ -9,7 +9,7 @@
   import type { RichTextBlock } from '$lib/richtext/bbcode';
   import type { PageData } from './$types';
 
-  let { data, form }: { data: PageData; form: { saved?: boolean; message?: string } | null } = $props();
+  let { data, form }: { data: PageData; form: { saved?: boolean; restoredAvatar?: boolean; message?: string } | null } = $props();
 
   // Locally track the signature so the preview updates as you type.
   let signature = $state(untrack(() => data.profile.signature));
@@ -134,6 +134,16 @@
           <span class="atm-hint">
             {avatarName || 'PNG, JPEG, WebP, or GIF; up to 1 MB. Choose a file, then save changes.'}
           </span>
+          {#if data.hasCustomAvatar && data.hasBskyAvatar}
+            <button
+              class="atm-btn atm-btn--ghost restore-avatar"
+              type="submit"
+              formaction="?/restoreAvatar"
+              disabled={saving}
+            >Restore Bluesky picture</button>
+          {:else if data.hasBskyAvatar}
+            <span class="atm-hint">Using your Bluesky profile picture by default.</span>
+          {/if}
           <span class="atm-hint">Use the userpic maker to crop the image or add a simple border.</span>
         </div>
         <div class="avatar-row__actions">
@@ -234,6 +244,7 @@
       <div class="actions">
         <span class="status" aria-live="polite">
           {#if form?.message}<span class="atm-err">{form.message}</span>
+          {:else if form?.restoredAvatar}<span class="atm-ok">Bluesky picture restored ✓</span>
           {:else if form?.saved}<span class="atm-ok">Profile saved ✓</span>
           {:else}<span class="atm-hint">Profile changes are saved to your account.</span>{/if}
         </span>
@@ -264,6 +275,7 @@
   .avatar-row__actions { display: flex; flex-direction: column; gap: var(--space-2); }
   .avatar-upload { align-self: flex-start; cursor: pointer; }
   .avatar-upload input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .restore-avatar { align-self: flex-start; padding-left: 0; }
 
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
   .atm-textarea { min-height: 60px; }

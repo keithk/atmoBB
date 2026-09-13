@@ -346,28 +346,30 @@ export interface ProfileEdit {
   signature?: unknown[];
   pronouns?: string;
   website?: string;
-  avatar?: AvatarUpload;
+  /** Upload an override, omit to preserve it, or pass null to follow Bluesky again. */
+  avatar?: AvatarUpload | null;
 }
 
 /**
  * Update the caller's actor.profile, preserving fields absent from the edit.
- * Uploading an image replaces a builder recipe so the portable blob becomes
- * the source of truth. An empty string clears a text field.
+ * Uploading an image replaces the local avatar override; null removes it so
+ * clients fall back to Bluesky. An empty string clears a text field.
  */
 export async function saveProfile(did: string, edit: ProfileEdit): Promise<void> {
   const uploaded = edit.avatar
     ? await uploadProfileBlob(did, edit.avatar.bytes, edit.avatar.mimeType)
     : null;
+  const fields: Record<string, unknown> = {};
+  if ('displayName' in edit) fields.displayName = edit.displayName || undefined;
+  if ('description' in edit) fields.description = edit.description || undefined;
+  if ('signature' in edit) fields.signature = edit.signature?.length ? edit.signature : undefined;
+  if ('pronouns' in edit) fields.pronouns = edit.pronouns || undefined;
+  if ('website' in edit) fields.website = edit.website || undefined;
+  if (uploaded) fields.avatar = uploaded;
   await patchActorProfile(
     did,
-    {
-      displayName: edit.displayName || undefined,
-      description: edit.description || undefined,
-      signature: edit.signature && edit.signature.length ? edit.signature : undefined,
-      pronouns: edit.pronouns || undefined,
-      website: edit.website || undefined,
-      ...(uploaded ? { avatar: uploaded } : {}),
-    },
+    fields,
+    edit.avatar === null ? ['avatar'] : [],
   );
 }
 

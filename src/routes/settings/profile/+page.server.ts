@@ -2,7 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import type { Actions, PageServerLoad } from './$types';
 import { getActorProfile, saveProfile } from '$lib/server/pds';
-import { blobCid, bustProfileCache } from '$lib/server/profiles';
+import { blobCid, bustProfileCache, getBskyProfile } from '$lib/server/profiles';
 import type { RichTextBlock } from '$lib/richtext/bbcode';
 import { attachImages, resolveBodyImages } from '$lib/server/richtext';
 
@@ -28,7 +28,10 @@ function imageKeys(imagesRaw: string, orderRaw: string): string[] {
 
 export const load: PageServerLoad = async ({ locals }) => {
   if (!locals.user) redirect(302, '/login');
-  const profile = await getActorProfile(locals.user.did);
+  const [profile, bskyProfile] = await Promise.all([
+    getActorProfile(locals.user.did),
+    getBskyProfile(locals.user.did),
+  ]);
   const signature = (profile?.signature ?? []) as RichTextBlock[];
   await resolveBodyImages([{ author: locals.user.did, body: signature }]);
   const sigText =
@@ -42,6 +45,8 @@ export const load: PageServerLoad = async ({ locals }) => {
     handle: locals.user.handle,
     did: locals.user.did,
     avatarProfile: profile,
+    hasCustomAvatar: !!blobCid(profile?.avatar),
+    hasBskyAvatar: !!bskyProfile?.avatar,
     avatarBuilderUrl: env.ATMOBB_AVATAR_BUILDER_URL || null,
     profile: {
       displayName: profile?.displayName ?? '',
@@ -55,6 +60,16 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
+  restoreAvatar: async ({ locals }) => {
+    if (!locals.user) return fail(401, { message: 'Log in to edit your profile.' });
+    try {
+      await saveProfile(locals.user.did, { avatar: null });
+      bustProfileCache(locals.user.did);
+      return { restoredAvatar: true };
+    } catch (e) {
+      return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t restore your Bluesky picture. Try again.' });
+    }
+  },
   save: async ({ request, locals }) => {
     if (!locals.user) return fail(401, { message: 'Log in to edit your profile.' });
     const fd = await request.formData();

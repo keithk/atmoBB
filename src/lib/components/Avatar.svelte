@@ -27,9 +27,11 @@
     presence?: 'online' | 'idle' | 'offline';
   } = $props();
 
-  const shownSrc = $derived(
-    src ?? profile?.avatarUrl ?? profileImagePath(seed, profile?.avatar) ?? null,
+  let failedSrc = $state<string | null>(null);
+  const candidateSrc = $derived(
+    src ?? profile?.avatarUrl ?? profileImagePath(seed, profile?.avatar) ?? `/avatar/${encodeURIComponent(seed)}`,
   );
+  const shownSrc = $derived(candidateSrc === failedSrc ? null : candidateSrc);
   const fallbackText = $derived.by(() => {
     const words = alt.trim().split(/\s+/).filter(Boolean);
     if (words.length) return words.slice(0, 2).map((word) => word[0]).join('').toUpperCase();
@@ -47,7 +49,14 @@
   style="width:{size}px;height:{size}px"
 >
   {#if shownSrc}
-    <img src={shownSrc} {alt} width={size} height={size} loading="lazy" />
+    <img
+      src={shownSrc}
+      {alt}
+      width={size}
+      height={size}
+      loading="lazy"
+      onerror={() => (failedSrc = shownSrc)}
+    />
   {:else}
     <span
       class="atm-avatar__fallback"
