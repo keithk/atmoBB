@@ -34,7 +34,15 @@ export interface Main {
     | 'grantAccess'
     | 'denyAccess'
     | 'revokeAccess'
+    | 'acceptMember'
+    | 'revokeMember'
+    | 'holdApplication'
     | (string & {})
+  /** For acceptMember: the person who brought the subject in — the inviter, or the staffer who approved the application. Absent for founding members accepted when the forum first gated. */
+  sponsor?: string
+  /** For acceptMember: how the subject was accepted. */
+  via?: 'invite' | 'application' | 'founding' | (string & {})
+  ref?: ComAtprotoRepoStrongRef.Main
   /** Scopes account-level actions (e.g. a ban) to one board. Absent means forum-wide. */
   board?: string
   reason?: string

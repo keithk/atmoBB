@@ -73,7 +73,46 @@
             "ref": "#homepage",
             "description": "Optional forum homepage presentation. Absent values retain the classic board index."
           },
+          "membership": {
+            "type": "ref",
+            "ref": "#membership",
+            "description": "How people join. Absent means open: declaring membership is joining."
+          },
           "createdAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    },
+    "membership": {
+      "type": "object",
+      "description": "Join policy for a forum. In the apply and invite modes only accounts the forum has accepted (an acceptMember moderation action) may post; reading stays public.",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "knownValues": ["open", "apply", "invite"],
+          "maxLength": 32
+        },
+        "prompt": {
+          "type": "string",
+          "description": "The one question shown on the application form in apply mode.",
+          "maxLength": 3000,
+          "maxGraphemes": 300
+        },
+        "inviteCap": {
+          "type": "integer",
+          "description": "Open invites an ordinary member may hold at once. 0 means only staff mint invites.",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "inviteDays": {
+          "type": "integer",
+          "description": "Days before an unredeemed invite expires.",
+          "minimum": 1,
+          "maximum": 365
+        },
+        "gatedSince": {
+          "type": "string",
+          "format": "datetime",
+          "description": "When the forum last entered a gated mode. Posts written while the forum was open are served regardless of membership."
         }
       }
     },

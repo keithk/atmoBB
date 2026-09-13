@@ -44,6 +44,7 @@ export interface Main {
   /** Visual preset used by the generated forum landing page social preview. */
   ogTheme?: 'classic' | 'midnight' | 'ocean' | 'forest' | 'plum' | (string & {})
   homepage?: Homepage
+  membership?: Membership
   createdAt?: string
   [k: string]: unknown
 }
@@ -62,6 +63,30 @@ export {
   type Main as Record,
   isMain as isRecord,
   validateMain as validateRecord,
+}
+
+/** Join policy for a forum. In the apply and invite modes only accounts the forum has accepted (an acceptMember moderation action) may post; reading stays public. */
+export interface Membership {
+  $type?: 'app.atmobb.forum.profile#membership'
+  mode?: 'open' | 'apply' | 'invite' | (string & {})
+  /** The one question shown on the application form in apply mode. */
+  prompt?: string
+  /** Open invites an ordinary member may hold at once. 0 means only staff mint invites. */
+  inviteCap?: number
+  /** Days before an unredeemed invite expires. */
+  inviteDays?: number
+  /** When the forum last entered a gated mode. Posts written while the forum was open are served regardless of membership. */
+  gatedSince?: string
+}
+
+const hashMembership = 'membership'
+
+export function isMembership<V>(v: V) {
+  return is$typed(v, id, hashMembership)
+}
+
+export function validateMembership<V>(v: V) {
+  return validate<Membership & V>(v, id, hashMembership)
 }
 
 export interface Homepage {

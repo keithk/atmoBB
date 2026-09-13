@@ -1,0 +1,32 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.forum.getMembership",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "One account's membership standing with a gated forum: whether the forum has accepted them, since when, who sponsored them, and whom they have sponsored. Derived from the forum's public acceptMember and revokeMember actions.",
+      "parameters": {
+        "type": "params",
+        "required": ["forum", "actor"],
+        "properties": {
+          "forum": { "type": "string", "format": "did" },
+          "actor": { "type": "string", "format": "did" }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["accepted", "sponsored"],
+          "properties": {
+            "accepted": { "type": "boolean" },
+            "since": { "type": "string", "format": "datetime" },
+            "sponsor": { "type": "string", "format": "did" },
+            "via": { "type": "string" },
+            "sponsored": { "type": "array", "items": { "type": "unknown" } }
+          }
+        }
+      }
+    }
+  }
+}

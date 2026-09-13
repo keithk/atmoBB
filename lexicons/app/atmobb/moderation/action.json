@@ -36,9 +36,32 @@
               "unblock",
               "grantAccess",
               "denyAccess",
-              "revokeAccess"
+              "revokeAccess",
+              "acceptMember",
+              "revokeMember",
+              "holdApplication"
             ],
             "maxLength": 64
+          },
+          "sponsor": {
+            "type": "string",
+            "format": "did",
+            "description": "For acceptMember: the person who brought the subject in — the inviter, or the staffer who approved the application. Absent for founding members accepted when the forum first gated."
+          },
+          "via": {
+            "type": "string",
+            "description": "For acceptMember: how the subject was accepted.",
+            "knownValues": [
+              "invite",
+              "application",
+              "founding"
+            ],
+            "maxLength": 32
+          },
+          "ref": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "For acceptMember, denyAccess, or holdApplication: the accessRequest record this decision answers."
           },
           "board": {
             "type": "string",

@@ -17,11 +17,15 @@ const id = 'app.atmobb.forum.getAccessRequests'
 
 export type QueryParams = {
   forum: string
+  kind?: 'board' | 'forum' | (string & {})
+  limit?: number
+  cursor?: string
 }
 export type InputSchema = undefined
 
 export interface OutputSchema {
   requests: { [_ in string]: unknown }[]
+  cursor?: string
 }
 
 export interface CallOptions {

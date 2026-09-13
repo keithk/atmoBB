@@ -4,24 +4,26 @@
   "defs": {
     "main": {
       "type": "record",
-      "description": "A request to join a members-only (space-backed) board. Lives in the requester's repo. A forum sysop resolves it by granting space membership (approve) or recording a moderation.action denyAccess (deny).",
+      "description": "A request to join a members-only (space-backed) board, or an application to join a gated forum. Lives in the requester's repo. Exactly one of board or forum is set. A forum sysop resolves a board request by granting space membership (approve) or recording a moderation.action denyAccess (deny), and a forum application with a moderation.action acceptMember, denyAccess, or holdApplication.",
       "key": "tid",
       "record": {
         "type": "object",
-        "required": [
-          "board"
-        ],
         "properties": {
           "board": {
             "type": "string",
             "format": "at-uri",
             "description": "The app.atmobb.forum.board being requested. Its authority is the forum's DID."
           },
+          "forum": {
+            "type": "string",
+            "format": "did",
+            "description": "The forum being applied to, for forum-level applications."
+          },
           "reason": {
             "type": "string",
             "maxLength": 3000,
             "maxGraphemes": 300,
-            "description": "Optional note from the requester to the moderators."
+            "description": "Optional note from the requester to the moderators. On a forum application, the answer to the forum's prompt."
           },
           "createdAt": {
             "type": "string",

@@ -10,7 +10,12 @@
         "required": ["forum"],
         "properties": {
           "forum": { "type": "string", "format": "did" },
-          "limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 }
+          "limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 },
+          "family": {
+            "type": "string",
+            "description": "Restrict to one family of actions: moderation (hide, lock, pin, ban, warn, block and their reversals) or membership (acceptMember, revokeMember, holdApplication, and the access grants and denials). Absent means every action.",
+            "knownValues": ["moderation", "membership"]
+          }
         }
       },
       "output": {

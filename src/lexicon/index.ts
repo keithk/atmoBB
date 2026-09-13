@@ -25,6 +25,7 @@ import * as AppAtmobbForumGetAccessRequests from './types/app/atmobb/forum/getAc
 import * as AppAtmobbForumGetBoardIndex from './types/app/atmobb/forum/getBoardIndex.js'
 import * as AppAtmobbForumGetDirectory from './types/app/atmobb/forum/getDirectory.js'
 import * as AppAtmobbForumGetMembers from './types/app/atmobb/forum/getMembers.js'
+import * as AppAtmobbForumGetMembership from './types/app/atmobb/forum/getMembership.js'
 import * as AppAtmobbForumGetStaff from './types/app/atmobb/forum/getStaff.js'
 import * as AppAtmobbForumGetTopic from './types/app/atmobb/forum/getTopic.js'
 import * as AppAtmobbForumGetTopics from './types/app/atmobb/forum/getTopics.js'
@@ -63,6 +64,7 @@ export * as AppAtmobbForumGetAccessRequests from './types/app/atmobb/forum/getAc
 export * as AppAtmobbForumGetBoardIndex from './types/app/atmobb/forum/getBoardIndex.js'
 export * as AppAtmobbForumGetDirectory from './types/app/atmobb/forum/getDirectory.js'
 export * as AppAtmobbForumGetMembers from './types/app/atmobb/forum/getMembers.js'
+export * as AppAtmobbForumGetMembership from './types/app/atmobb/forum/getMembership.js'
 export * as AppAtmobbForumGetStaff from './types/app/atmobb/forum/getStaff.js'
 export * as AppAtmobbForumGetTopic from './types/app/atmobb/forum/getTopic.js'
 export * as AppAtmobbForumGetTopics from './types/app/atmobb/forum/getTopics.js'
@@ -542,6 +544,18 @@ export class AppAtmobbForumNS {
   ): Promise<AppAtmobbForumGetMembers.Response> {
     return this._client.call(
       'app.atmobb.forum.getMembers',
+      params,
+      undefined,
+      opts,
+    )
+  }
+
+  getMembership(
+    params?: AppAtmobbForumGetMembership.QueryParams,
+    opts?: AppAtmobbForumGetMembership.CallOptions,
+  ): Promise<AppAtmobbForumGetMembership.Response> {
+    return this._client.call(
+      'app.atmobb.forum.getMembership',
       params,
       undefined,
       opts,

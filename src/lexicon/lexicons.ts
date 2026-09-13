@@ -668,11 +668,10 @@ export const schemaDict = {
       main: {
         type: 'record',
         description:
-          "A request to join a members-only (space-backed) board. Lives in the requester's repo. A forum sysop resolves it by granting space membership (approve) or recording a moderation.action denyAccess (deny).",
+          "A request to join a members-only (space-backed) board, or an application to join a gated forum. Lives in the requester's repo. Exactly one of board or forum is set. A forum sysop resolves a board request by granting space membership (approve) or recording a moderation.action denyAccess (deny), and a forum application with a moderation.action acceptMember, denyAccess, or holdApplication.",
         key: 'tid',
         record: {
           type: 'object',
-          required: ['board'],
           properties: {
             board: {
               type: 'string',
@@ -680,12 +679,18 @@ export const schemaDict = {
               description:
                 "The app.atmobb.forum.board being requested. Its authority is the forum's DID.",
             },
+            forum: {
+              type: 'string',
+              format: 'did',
+              description:
+                'The forum being applied to, for forum-level applications.',
+            },
             reason: {
               type: 'string',
               maxLength: 3000,
               maxGraphemes: 300,
               description:
-                'Optional note from the requester to the moderators.',
+                "Optional note from the requester to the moderators. On a forum application, the answer to the forum's prompt.",
             },
             createdAt: {
               type: 'string',
@@ -844,7 +849,7 @@ export const schemaDict = {
       main: {
         type: 'query',
         description:
-          "Open access requests for a forum's members-only boards: accessRequest records pointing at this forum's boards, minus ones already denied, with requester profile and board name for display.",
+          "Open access requests for a forum. With kind=board (the default): accessRequest records pointing at this forum's members-only boards, minus ones already denied, with requester profile and board name for display. With kind=forum: applications to join the forum itself, one per applicant, each carrying its current state (pending, waiting, or denied) from the newest decision.",
         parameters: {
           type: 'params',
           required: ['forum'],
@@ -852,6 +857,20 @@ export const schemaDict = {
             forum: {
               type: 'string',
               format: 'did',
+            },
+            kind: {
+              type: 'string',
+              knownValues: ['board', 'forum'],
+              default: 'board',
+            },
+            limit: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 100,
+              default: 50,
+            },
+            cursor: {
+              type: 'string',
             },
           },
         },
@@ -866,6 +885,9 @@ export const schemaDict = {
                 items: {
                   type: 'unknown',
                 },
+              },
+              cursor: {
+                type: 'string',
               },
             },
           },
@@ -983,6 +1005,60 @@ export const schemaDict = {
               },
               cursor: {
                 type: 'string',
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  AppAtmobbForumGetMembership: {
+    lexicon: 1,
+    id: 'app.atmobb.forum.getMembership',
+    defs: {
+      main: {
+        type: 'query',
+        description:
+          "One account's membership standing with a gated forum: whether the forum has accepted them, since when, who sponsored them, and whom they have sponsored. Derived from the forum's public acceptMember and revokeMember actions.",
+        parameters: {
+          type: 'params',
+          required: ['forum', 'actor'],
+          properties: {
+            forum: {
+              type: 'string',
+              format: 'did',
+            },
+            actor: {
+              type: 'string',
+              format: 'did',
+            },
+          },
+        },
+        output: {
+          encoding: 'application/json',
+          schema: {
+            type: 'object',
+            required: ['accepted', 'sponsored'],
+            properties: {
+              accepted: {
+                type: 'boolean',
+              },
+              since: {
+                type: 'string',
+                format: 'datetime',
+              },
+              sponsor: {
+                type: 'string',
+                format: 'did',
+              },
+              via: {
+                type: 'string',
+              },
+              sponsored: {
+                type: 'array',
+                items: {
+                  type: 'unknown',
+                },
               },
             },
           },
@@ -1346,10 +1422,54 @@ export const schemaDict = {
               description:
                 'Optional forum homepage presentation. Absent values retain the classic board index.',
             },
+            membership: {
+              type: 'ref',
+              ref: 'lex:app.atmobb.forum.profile#membership',
+              description:
+                'How people join. Absent means open: declaring membership is joining.',
+            },
             createdAt: {
               type: 'string',
               format: 'datetime',
             },
+          },
+        },
+      },
+      membership: {
+        type: 'object',
+        description:
+          'Join policy for a forum. In the apply and invite modes only accounts the forum has accepted (an acceptMember moderation action) may post; reading stays public.',
+        properties: {
+          mode: {
+            type: 'string',
+            knownValues: ['open', 'apply', 'invite'],
+            maxLength: 32,
+          },
+          prompt: {
+            type: 'string',
+            description:
+              'The one question shown on the application form in apply mode.',
+            maxLength: 3000,
+            maxGraphemes: 300,
+          },
+          inviteCap: {
+            type: 'integer',
+            description:
+              'Open invites an ordinary member may hold at once. 0 means only staff mint invites.',
+            minimum: 0,
+            maximum: 100,
+          },
+          inviteDays: {
+            type: 'integer',
+            description: 'Days before an unredeemed invite expires.',
+            minimum: 1,
+            maximum: 365,
+          },
+          gatedSince: {
+            type: 'string',
+            format: 'datetime',
+            description:
+              'When the forum last entered a gated mode. Posts written while the forum was open are served regardless of membership.',
           },
         },
       },
@@ -1485,8 +1605,29 @@ export const schemaDict = {
                 'grantAccess',
                 'denyAccess',
                 'revokeAccess',
+                'acceptMember',
+                'revokeMember',
+                'holdApplication',
               ],
               maxLength: 64,
+            },
+            sponsor: {
+              type: 'string',
+              format: 'did',
+              description:
+                'For acceptMember: the person who brought the subject in — the inviter, or the staffer who approved the application. Absent for founding members accepted when the forum first gated.',
+            },
+            via: {
+              type: 'string',
+              description: 'For acceptMember: how the subject was accepted.',
+              knownValues: ['invite', 'application', 'founding'],
+              maxLength: 32,
+            },
+            ref: {
+              type: 'ref',
+              ref: 'lex:com.atproto.repo.strongRef',
+              description:
+                'For acceptMember, denyAccess, or holdApplication: the accessRequest record this decision answers.',
             },
             board: {
               type: 'string',
@@ -1546,6 +1687,12 @@ export const schemaDict = {
               minimum: 1,
               maximum: 100,
               default: 50,
+            },
+            family: {
+              type: 'string',
+              description:
+                'Restrict to one family of actions: moderation (hide, lock, pin, ban, warn, block and their reversals) or membership (acceptMember, revokeMember, holdApplication, and the access grants and denials). Absent means every action.',
+              knownValues: ['moderation', 'membership'],
             },
           },
         },
@@ -2327,6 +2474,7 @@ export const ids = {
   AppAtmobbForumGetBoardIndex: 'app.atmobb.forum.getBoardIndex',
   AppAtmobbForumGetDirectory: 'app.atmobb.forum.getDirectory',
   AppAtmobbForumGetMembers: 'app.atmobb.forum.getMembers',
+  AppAtmobbForumGetMembership: 'app.atmobb.forum.getMembership',
   AppAtmobbForumGetStaff: 'app.atmobb.forum.getStaff',
   AppAtmobbForumGetTopic: 'app.atmobb.forum.getTopic',
   AppAtmobbForumGetTopics: 'app.atmobb.forum.getTopics',

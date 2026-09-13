@@ -4,12 +4,19 @@
   "defs": {
     "main": {
       "type": "query",
-      "description": "Open access requests for a forum's members-only boards: accessRequest records pointing at this forum's boards, minus ones already denied, with requester profile and board name for display.",
+      "description": "Open access requests for a forum. With kind=board (the default): accessRequest records pointing at this forum's members-only boards, minus ones already denied, with requester profile and board name for display. With kind=forum: applications to join the forum itself, one per applicant, each carrying its current state (pending, waiting, or denied) from the newest decision.",
       "parameters": {
         "type": "params",
         "required": ["forum"],
         "properties": {
-          "forum": { "type": "string", "format": "did" }
+          "forum": { "type": "string", "format": "did" },
+          "kind": {
+            "type": "string",
+            "knownValues": ["board", "forum"],
+            "default": "board"
+          },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 },
+          "cursor": { "type": "string" }
         }
       },
       "output": {
@@ -18,7 +25,8 @@
           "type": "object",
           "required": ["requests"],
           "properties": {
-            "requests": { "type": "array", "items": { "type": "unknown" } }
+            "requests": { "type": "array", "items": { "type": "unknown" } },
+            "cursor": { "type": "string" }
           }
         }
       }

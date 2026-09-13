@@ -17,8 +17,10 @@ const id = 'app.atmobb.forum.accessRequest'
 export interface Main {
   $type: 'app.atmobb.forum.accessRequest'
   /** The app.atmobb.forum.board being requested. Its authority is the forum's DID. */
-  board: string
-  /** Optional note from the requester to the moderators. */
+  board?: string
+  /** The forum being applied to, for forum-level applications. */
+  forum?: string
+  /** Optional note from the requester to the moderators. On a forum application, the answer to the forum's prompt. */
   reason?: string
   createdAt?: string
   [k: string]: unknown

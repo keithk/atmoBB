@@ -13,18 +13,20 @@ import {
 
 const is$typed = _is$typed,
   validate = _validate
-const id = 'app.atmobb.moderation.getLog'
+const id = 'app.atmobb.forum.getMembership'
 
 export type QueryParams = {
   forum: string
-  limit?: number
-  /** Restrict to one family of actions: moderation (hide, lock, pin, ban, warn, block and their reversals) or membership (acceptMember, revokeMember, holdApplication, and the access grants and denials). Absent means every action. */
-  family?: 'moderation' | 'membership' | (string & {})
+  actor: string
 }
 export type InputSchema = undefined
 
 export interface OutputSchema {
-  actions: { [_ in string]: unknown }[]
+  accepted: boolean
+  since?: string
+  sponsor?: string
+  via?: string
+  sponsored: { [_ in string]: unknown }[]
 }
 
 export interface CallOptions {
