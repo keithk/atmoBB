@@ -566,14 +566,18 @@ export interface ModerationLog {
       via?: string;
       /** gateForum: the join mode entered. */
       mode?: string;
-      /** The accessRequest a membership decision answers. */
+      /** The accessRequest a membership decision answers, or the stamp an awardStamp / revokeStamp names. */
       ref?: { uri: string; cid: string };
+      /** The staff member who acted, when the record says so. */
+      actor?: string;
     };
     createdAt: string;
     threadTitle?: string;
     subjectForumName?: string;
     /** Display name when the account subject is a member with a profile. */
     subjectName?: string;
+    /** For awardStamp / revokeStamp: the stamp's name, while its record exists. */
+    stampName?: string;
   }[];
 }
 
@@ -585,7 +589,7 @@ export interface Standing {
 export const getStanding = (actor: string, forum = FORUM_DID()) =>
   xrpc<Standing>('GET', `${NS}.moderation.getStanding`, { params: { forum, actor } });
 
-/** moderation: hide/lock/pin/ban/warn/block and their reversals; membership: acceptances, revocations, holds, access grants and denials, gate/open. */
+/** moderation: hide/lock/pin/ban/warn/block and their reversals, plus awardStamp/revokeStamp; membership: acceptances, revocations, holds, access grants and denials, gate/open. */
 export type ModerationFamily = 'moderation' | 'membership';
 
 export const getModerationLog = (forum = FORUM_DID(), limit = 50, family?: ModerationFamily) =>

@@ -661,3 +661,68 @@ run('stamp resolution SQL integration', () => {
     expect(source('./lua/getThreadPage.lua')).not.toContain('authorPosts');
   });
 });
+
+/** The getModerationLog query with its family filter spliced in the way the Lua does. */
+function logQuery(family?: string) {
+  const text = source('./lua/getModerationLog.lua');
+  const [before, after] = capture(
+    text,
+    /local rows = db\.raw\(\[\[([\s\S]*?)\]\] \.\. family_filter \.\. \[\[([\s\S]*?)\]\],/,
+    'moderation log rows',
+  );
+  const [families] = capture(text, /local FAMILIES = \{([\s\S]*?)\n\}/, 'log families');
+  const kinds = family
+    ? [...capture(families, new RegExp(`${family} = \\{([\\s\\S]*?)\\}`), `${family} family`)[0].matchAll(/"([^"]+)"/g)].map((m) => m[1])
+    : null;
+  const filter = kinds ? ` AND (a.record::jsonb)->>'action' IN ('${kinds.join("','")}')` : '';
+  return { sql: before + filter + after, kinds };
+}
+
+run('moderation log SQL integration', () => {
+  const sql = postgres(DATABASE_URL!, { max: 1 });
+  const STAMP = `at://${F}/${NS}.forum.stamp/helper`;
+  const action = (rkey: string, value: object, created: string) => sql`
+    INSERT INTO happyview_records ${sql({
+      uri: `at://${F}/${NS}.moderation.action/${rkey}`, did: F, collection: `${NS}.moderation.action`, rkey,
+      record: JSON.stringify(value), cid: `cid-${rkey}`, created_at: created,
+    })}`;
+  const log = async (family?: string) => {
+    const { sql: text } = logQuery(family);
+    const rows = await sql.unsafe(text, [`${NS}.moderation.action`, F, `${NS}.forum.profile`, 50, `${NS}.actor.profile`, `${NS}.forum.stamp`]);
+    // The shared fixtures seed a block on another forum; only this member's rows matter here.
+    return rows.map((row) => ({ ...row, record: JSON.parse(row.record) })).filter((row) => row.record.subject.did === 'did:plc:r1');
+  };
+
+  beforeAll(async () => {
+    await fixtures(sql);
+    await sql`INSERT INTO happyview_records ${sql({
+      uri: STAMP, did: F, collection: `${NS}.forum.stamp`, rkey: 'helper',
+      record: JSON.stringify({ name: 'helper', look: { bg: '#111111', ink: '#ffffff', shape: 'pill' }, trigger: { kind: 'byHand' }, createdAt: '2026-01-01T00:00:00Z' }),
+      cid: 'cid-helper', created_at: '2026-01-01T00:00:00Z',
+    })}`;
+    const account = (did: string) => ({ $type: `${NS}.moderation.action#account`, did });
+    await action('accept', { subject: account('did:plc:r1'), action: 'acceptMember', via: 'founding', createdAt: '2026-02-01T00:00:00Z' }, '2026-02-01T00:00:00Z');
+    await action('warn', { subject: account('did:plc:r1'), action: 'warn', reason: 'tone', createdAt: '2026-02-02T00:00:00Z' }, '2026-02-02T00:00:00Z');
+    await action('give', { subject: account('did:plc:r1'), action: 'awardStamp', ref: { uri: STAMP, cid: 'cid-helper' }, actor: 'did:plc:staff', createdAt: '2026-02-03T00:00:00Z' }, '2026-02-03T00:00:00Z');
+    await action('take', { subject: account('did:plc:r1'), action: 'revokeStamp', ref: { uri: STAMP, cid: 'cid-helper' }, actor: 'did:plc:staff', createdAt: '2026-02-04T00:00:00Z' }, '2026-02-04T00:00:00Z');
+    await action('lost', { subject: account('did:plc:r1'), action: 'awardStamp', ref: { uri: `at://${F}/${NS}.forum.stamp/deleted`, cid: 'cid-deleted' }, actor: 'did:plc:staff', createdAt: '2026-02-05T00:00:00Z' }, '2026-02-05T00:00:00Z');
+  });
+  afterAll(() => sql.end());
+
+  it('AE11: the moderation family carries stamp awards and revocations with the stamp name and the giver', async () => {
+    const rows = await log('moderation');
+    expect(rows.map((row) => row.record.action)).toEqual(['awardStamp', 'revokeStamp', 'awardStamp', 'warn']);
+    const [lost, take, give, warn] = rows;
+    expect(give.stamp_name).toBe('helper');
+    expect(give.record.actor).toBe('did:plc:staff');
+    expect(give.record.ref).toEqual({ uri: STAMP, cid: 'cid-helper' });
+    expect(take.stamp_name).toBe('helper');
+    expect(lost.stamp_name).toBeNull();
+    expect(warn.stamp_name).toBeNull();
+  });
+
+  it('the membership family leaves stamp actions out, and no family returns everything', async () => {
+    expect((await log('membership')).map((row) => row.record.action)).toEqual(['acceptMember']);
+    expect((await log()).map((row) => row.record.action)).toEqual(['awardStamp', 'revokeStamp', 'awardStamp', 'warn', 'acceptMember']);
+  });
+});

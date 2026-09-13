@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actionFamily, actionKey, INVERSE, isThreadAction } from './moderation';
+import { ACTIVE, actionFamily, actionKey, actionLabel, INVERSE, isThreadAction } from './moderation';
 
 describe('moderation helpers', () => {
   it('pairs every action with its inverse both ways', () => {
@@ -24,5 +24,30 @@ describe('moderation helpers', () => {
   it('recognizes only thread flag actions', () => {
     expect(isThreadAction('pin')).toBe(true);
     expect(isThreadAction('block')).toBe(false);
+  });
+});
+
+describe('by-hand stamp actions in the log (AE11)', () => {
+  it('labels an award and a revocation by the stamp name', () => {
+    expect(actionLabel({ action: 'awardStamp', stampName: 'helper' })).toBe('gave stamp helper');
+    expect(actionLabel({ action: 'revokeStamp', stampName: 'helper' })).toBe('revoked stamp helper');
+  });
+  it('falls back to a generic label when the stamp record is gone', () => {
+    expect(actionLabel({ action: 'awardStamp' })).toBe('gave stamp');
+    expect(actionLabel({ action: 'revokeStamp' })).toBe('revoked stamp');
+  });
+  it('prints other kinds as they are', () => {
+    expect(actionLabel({ action: 'ban' })).toBe('ban');
+    expect(actionLabel({ action: 'acceptMember' })).toBe('acceptMember');
+  });
+  it('is neither an active flag nor undoable', () => {
+    expect(ACTIVE.has('awardStamp')).toBe(false);
+    expect(ACTIVE.has('revokeStamp')).toBe(false);
+    expect(INVERSE.awardStamp).toBeUndefined();
+    expect(INVERSE.revokeStamp).toBeUndefined();
+  });
+  it('is its own family, not a reversal of anything', () => {
+    expect(actionFamily('awardStamp')).toBe('awardStamp');
+    expect(actionFamily('revokeStamp')).toBe('revokeStamp');
   });
 });

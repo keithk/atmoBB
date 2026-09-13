@@ -1,12 +1,14 @@
 -- xrpc.query:app.atmobb.moderation.getLog
 -- A forum's moderation actions, newest first, with display context: thread
--- titles for strongRef subjects, forum names for account subjects. The family
--- param narrows to thread-and-account moderation or to membership decisions.
+-- titles for strongRef subjects, forum names for account subjects, stamp
+-- names for awardStamp and revokeStamp. The family param narrows to
+-- thread-and-account moderation or to membership decisions.
 local NS = "app.atmobb"
 
 local FAMILIES = {
   moderation = { "hide", "unhide", "lock", "unlock", "pin", "unpin",
-                 "ban", "unban", "warn", "block", "unblock" },
+                 "ban", "unban", "warn", "block", "unblock",
+                 "awardStamp", "revokeStamp" },
   membership = { "acceptMember", "revokeMember", "holdApplication",
                  "grantAccess", "denyAccess", "revokeAccess",
                  "gateForum", "openForum" },
@@ -35,7 +37,8 @@ function handle()
     SELECT a.uri, a.record, a.created_at,
            s.title AS thread_title,
            (fp.record::jsonb)->>'name' AS subject_forum_name,
-           (mp.record::jsonb)->>'displayName' AS subject_name
+           (mp.record::jsonb)->>'displayName' AS subject_name,
+           (st.record::jsonb)->>'name' AS stamp_name
     FROM happyview_records a
     LEFT JOIN atmobb_thread_stats s
       ON s.thread_uri = (a.record::jsonb)->'subject'->>'uri'
@@ -45,11 +48,14 @@ function handle()
     LEFT JOIN happyview_records mp
       ON mp.did = (a.record::jsonb)->'subject'->>'did'
      AND mp.collection = $5 AND mp.rkey = 'self'
+    LEFT JOIN happyview_records st
+      ON st.uri = (a.record::jsonb)->'ref'->>'uri'
+     AND st.collection = $6
     WHERE a.collection = $1 AND a.did = $2]] .. family_filter .. [[
 
     ORDER BY a.created_at DESC
     LIMIT $4
-  ]], { NS .. ".moderation.action", forum, NS .. ".forum.profile", limit, NS .. ".actor.profile" })
+  ]], { NS .. ".moderation.action", forum, NS .. ".forum.profile", limit, NS .. ".actor.profile", NS .. ".forum.stamp" })
 
   local actions = toarray({})
   for i, row in ipairs(rows) do
@@ -61,6 +67,7 @@ function handle()
       threadTitle = row.thread_title,
       subjectForumName = row.subject_forum_name,
       subjectName = row.subject_name,
+      stampName = row.stamp_name,
     }
   end
 

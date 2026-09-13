@@ -1,7 +1,7 @@
 import type { Actions, PageServerLoad } from './$types';
 import { error, fail } from '@sveltejs/kit';
 import { canModerate, canModerateForum, forumStaff } from '$lib/server/admin';
-import { getBoardIndex, getMembership, getStamps, getStanding, FORUM_DID } from '$lib/server/appview';
+import { getBoardIndex, getMembership, getStamps, getStanding, FORUM_DID, type Stamps, type TrayEntry } from '$lib/server/appview';
 import { createForumRecord } from '$lib/server/forum-repo';
 import { savedRedirect } from '$lib/server/saved-redirect';
 import { revokeSpaceAccess } from '$lib/server/space-access';
@@ -17,6 +17,12 @@ async function actor(locals: App.Locals, board?: string) {
   const ok = board ? await canModerate(did, board) : await canModerateForum(did);
   return ok ? did! : null;
 }
+
+/** The forum's hand-awarded stamp definitions; these are the only ones staff give and take. */
+const byHandStamps = (set: Stamps | null) => (set?.stamps ?? []).filter((s) => s.trigger.kind === 'byHand');
+
+/** Whether the tray holds `uri` as a by-hand award (a matching admin trigger doesn't count). */
+const holdsByHand = (tray: TrayEntry[], uri: string) => tray.some((e) => e.source === 'byHand' && e.id === uri);
 import {
   resolveActor,
   getPublicProfile,
@@ -37,7 +43,7 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
   const showStanding = isYou || !!staffRole;
   const gated = joinMode(forum.membership as { mode?: string } | undefined) !== 'open';
 
-  const [profile, activity, elsewhere, standing, membership, index, stampSet] = await Promise.all([
+  const [profile, activity, elsewhere, standing, membership, index, stampSet, forumWide] = await Promise.all([
     getPublicProfile(id.did, id.pds),
     getAtmobbActivity(id.did, forumDid),
     getElsewhere(id.did, id.pds, id.handle),
@@ -45,6 +51,8 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
     gated ? getMembership(id.did, forumDid).catch(() => null) : null,
     staffRole ? getBoardIndex(forumDid).catch(() => null) : null,
     getStamps(forumDid, id.did).catch(() => null),
+    // Only forum-wide staff give and revoke stamps; a board-scoped moderator sees no control.
+    staffRole ? canModerateForum(locals.user?.did) : false,
   ]);
   await resolveBodyImages([{ author: id.did, body: profile?.signature }]);
 
@@ -69,6 +77,12 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
       : null;
   const sponsorText = sponsor?.text ?? null;
   const sponsorResolved = sponsor?.handle ?? null;
+
+  // The by-hand definitions with whether this member holds each, for the
+  // give/revoke control. Absent unless the viewer may act on them.
+  const stampsByHand = forumWide
+    ? byHandStamps(stampSet).map((s) => ({ uri: s.uri, name: s.name, held: holdsByHand(stampSet?.tray ?? [], s.uri) }))
+    : null;
 
   // Threads on other forums link to those forums' own sites — forum account
   // handles double as site domains. Unresolvable handles fall back to null
@@ -131,9 +145,51 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
     sponsored,
     stamps,
     handles,
+    stampsByHand,
     boards: (index?.boards ?? []).map((b) => ({ uri: b.uri, name: b.value.name })),
   };
 };
+
+/**
+ * Give or take back a by-hand stamp, as a moderation action that names the
+ * stamp record and the staffer. Only forum-wide staff, only this forum's
+ * byHand definitions, and only a change: giving a stamp they hold or revoking
+ * one they don't is refused rather than written. Never touches what they wear.
+ */
+async function stampAction(
+  params: { actor: string },
+  request: Request,
+  locals: App.Locals,
+  action: 'awardStamp' | 'revokeStamp',
+) {
+  const id = await resolveActor(params.actor);
+  if (!id) return fail(404, { message: 'No member by that name.' });
+  const viewer = await actor(locals);
+  if (!viewer) return fail(403, { message: 'Only forum-wide staff can give or revoke stamps.' });
+  const form = await request.formData();
+  const uri = String(form.get('stamp') ?? '');
+  const set = await getStamps(FORUM_DID(), id.did).catch(() => null);
+  const stamp = byHandStamps(set).find((s) => s.uri === uri);
+  if (!stamp) return fail(400, { message: "That isn't one of this forum's hand-awarded stamps." });
+  const held = holdsByHand(set?.tray ?? [], uri);
+  if (action === 'awardStamp' && held) return fail(400, { message: `They already hold ${stamp.name}.` });
+  if (action === 'revokeStamp' && !held) return fail(400, { message: `They don't hold ${stamp.name}, so there's nothing to revoke.` });
+  try {
+    await createForumRecord(`${NS}.moderation.action`, {
+      subject: { $type: `${NS}.moderation.action#account`, did: id.did },
+      action,
+      ref: { uri: stamp.uri, cid: stamp.cid },
+      actor: viewer,
+    });
+  } catch (e) {
+    return fail(502, { message: e instanceof Error ? e.message : "We couldn't record the stamp change. Try again." });
+  }
+  await savedRedirect(
+    `/members/${encodeURIComponent(params.actor)}?saved=1`,
+    () => getStamps(FORUM_DID(), id.did),
+    (s) => holdsByHand(s.tray ?? [], uri) === (action === 'awardStamp'),
+  );
+}
 
 export const actions: Actions = {
   warn: async ({ params, request, locals }) => {
@@ -240,6 +296,9 @@ export const actions: Actions = {
       (m) => !m.accepted,
     );
   },
+
+  award: ({ params, request, locals }) => stampAction(params, request, locals, 'awardStamp'),
+  revoke: ({ params, request, locals }) => stampAction(params, request, locals, 'revokeStamp'),
 
   unban: async ({ params, request, locals }) => {
     const id = await resolveActor(params.actor);

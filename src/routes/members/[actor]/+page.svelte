@@ -162,6 +162,42 @@
               </form>
             </details>
           {/if}
+          {#if data.stampsByHand}
+            {@const held = data.stampsByHand.filter((s) => s.held)}
+            {@const giveable = data.stampsByHand.filter((s) => !s.held)}
+            <details class="standing__act">
+              <summary>Give a stamp</summary>
+              {#if !data.stampsByHand.length}
+                <p class="atm-empty atm-empty--bare standing__note">
+                  No hand-awarded stamps yet — <a href="/admin/stamps">create one in Admin → Stamps</a>.
+                </p>
+              {:else}
+                {#if held.length}
+                  <ul class="standing__list standing__held">
+                    {#each held as s (s.uri)}
+                      <li class="standing__item">
+                        <span class="atm-chip">{s.name}</span>
+                        <form method="POST" action="?/revoke">
+                          <input type="hidden" name="stamp" value={s.uri} />
+                          <button class="atm-btn atm-btn--ghost atm-btn--sm">revoke</button>
+                        </form>
+                      </li>
+                    {/each}
+                  </ul>
+                {/if}
+                {#if giveable.length}
+                  <form class="standing__form" method="POST" action="?/award">
+                    <select class="atm-select" name="stamp" required>
+                      {#each giveable as s (s.uri)}<option value={s.uri}>{s.name}</option>{/each}
+                    </select>
+                    <button class="atm-btn atm-btn--sm">give stamp</button>
+                  </form>
+                {:else}
+                  <p class="atm-empty atm-empty--bare standing__note">They hold every hand-awarded stamp.</p>
+                {/if}
+              {/if}
+            </details>
+          {/if}
         </Card>
       {/if}
       {#if data.sponsored}
@@ -296,6 +332,8 @@
   .standing__form { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
   .standing__row { display: flex; align-items: center; gap: var(--space-2); font: var(--type-meta); color: var(--forum-ink-soft); }
   .standing__days { width: 6ch; }
+  .standing__note { margin-top: var(--space-2); }
+  .standing__held { margin-top: var(--space-2); }
 
   @layer atmobb {
   .profile {

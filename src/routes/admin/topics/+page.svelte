@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { relTime } from '$lib/reltime';
+  import { actionLabel, STAMP_ACTIONS } from '$lib/moderation';
 
   let { data, form } = $props();
 
@@ -131,23 +132,26 @@
   <div class="atm-card__body">
     {#each data.activeActions as a}
       <div class="act">
-        <span class="atm-chip atm-chip--danger">{a.value.action}</span>
+        <span class="atm-chip atm-chip--danger">{actionLabel({ action: a.value.action, stampName: a.stampName })}</span>
         <span class="act__what">
           {#if a.value.subject.uri}
             {a.threadTitle ?? a.value.subject.uri}
           {:else}
             {a.subjectForumName ?? a.subjectName ?? a.value.subject.did}
             {#if a.value.board}<span class="act__scope">on one board</span>{/if}
+            {#if a.value.actor}<span class="act__scope">by {a.value.actor}</span>{/if}
           {/if}
         </span>
-        <form method="POST" action="?/undo">
-          <input type="hidden" name="action" value={a.value.action} />
-          <input type="hidden" name="subjectUri" value={a.value.subject.uri ?? ''} />
-          <input type="hidden" name="subjectCid" value={a.value.subject.cid ?? ''} />
-          <input type="hidden" name="subjectDid" value={a.value.subject.did ?? ''} />
-          <input type="hidden" name="board" value={a.value.board ?? ''} />
-          <button class="atm-btn atm-btn--ghost atm-btn--sm">undo</button>
-        </form>
+        {#if !(STAMP_ACTIONS as readonly string[]).includes(a.value.action)}
+          <form method="POST" action="?/undo">
+            <input type="hidden" name="action" value={a.value.action} />
+            <input type="hidden" name="subjectUri" value={a.value.subject.uri ?? ''} />
+            <input type="hidden" name="subjectCid" value={a.value.subject.cid ?? ''} />
+            <input type="hidden" name="subjectDid" value={a.value.subject.did ?? ''} />
+            <input type="hidden" name="board" value={a.value.board ?? ''} />
+            <button class="atm-btn atm-btn--ghost atm-btn--sm">undo</button>
+          </form>
+        {/if}
       </div>
     {:else}
       <p class="atm-empty atm-empty--bare">No active hides, locks, pins, or blocks.</p>

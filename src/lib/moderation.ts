@@ -23,6 +23,16 @@ export const ACTIVE = new Set(['hide', 'lock', 'pin', 'block', 'ban']);
 /** hide/unhide -> hide, lock/unlock -> lock, and so on; others map to themselves. */
 export const actionFamily = (action: string) => action.replace(/^un/, '');
 
+/** By-hand stamp awards and revocations: logged like any action, never in force, nothing to undo. */
+export const STAMP_ACTIONS = ['awardStamp', 'revokeStamp'] as const;
+
+/** How the log names an action. Stamp actions read as a sentence with the stamp's name; other kinds print as they are. */
+export function actionLabel(a: { action: string; stampName?: string | null }): string {
+  const verb = { awardStamp: 'gave stamp', revokeStamp: 'revoked stamp' }[a.action];
+  if (!verb) return a.action;
+  return a.stampName ? `${verb} ${a.stampName}` : verb;
+}
+
 export interface ActionLike {
   subject: { uri?: string; did?: string };
   action: string;
