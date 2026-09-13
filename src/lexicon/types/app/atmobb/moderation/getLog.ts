@@ -18,8 +18,8 @@ const id = 'app.atmobb.moderation.getLog'
 export type QueryParams = {
   forum: string
   limit?: number
-  /** Restrict to one family of actions: moderation (hide, lock, pin, ban, warn, block and their reversals, plus awardStamp and revokeStamp) or membership (acceptMember, revokeMember, holdApplication, and the access grants and denials). Absent means every action. */
-  family?: 'moderation' | 'membership' | (string & {})
+  /** Restrict to one family of actions: moderation (hide, lock, pin, ban, warn, block and their reversals), membership (acceptMember, revokeMember, holdApplication, and the access grants and denials), or stamps (awardStamp and revokeStamp). Absent means every action. */
+  family?: 'moderation' | 'membership' | 'stamps' | (string & {})
 }
 export type InputSchema = undefined
 

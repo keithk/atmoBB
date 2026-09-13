@@ -7,8 +7,8 @@ local NS = "app.atmobb"
 
 local FAMILIES = {
   moderation = { "hide", "unhide", "lock", "unlock", "pin", "unpin",
-                 "ban", "unban", "warn", "block", "unblock",
-                 "awardStamp", "revokeStamp" },
+                 "ban", "unban", "warn", "block", "unblock" },
+  stamps = { "awardStamp", "revokeStamp" },
   membership = { "acceptMember", "revokeMember", "holdApplication",
                  "grantAccess", "denyAccess", "revokeAccess",
                  "gateForum", "openForum" },
