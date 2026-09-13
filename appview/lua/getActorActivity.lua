@@ -1,7 +1,9 @@
 -- xrpc.query:app.atmobb.actor.getActivity
 -- One actor's exact public participation: local to the requested forum,
 -- network-wide, broken down by origin forum, plus their recent public topics.
--- Permissioned boards and origin-hidden threads are excluded at the source.
+-- Permissioned boards and origin-hidden threads are excluded at the source,
+-- and so is anything written at a gated board without a membership window
+-- covering that moment (the board's own forum excepted).
 local NS = "app.atmobb"
 
 function handle()
@@ -30,6 +32,18 @@ function handle()
       WHERE NOT s.hidden
         AND (b.record::jsonb)->'access'->>'space' IS NULL
         AND b.did NOT IN (SELECT did FROM atmobb_delisted_forums)
+        AND (NOT EXISTS (
+            SELECT 1 FROM atmobb_forum_gating g
+            WHERE g.forum_did = split_part(s.board_uri, '/', 3)
+              AND g.gated_since <= s.created_at
+              AND (g.opened_at IS NULL OR s.created_at < g.opened_at))
+          OR s.author_did = split_part(s.board_uri, '/', 3)
+          OR EXISTS (
+            SELECT 1 FROM atmobb_member_windows w
+            WHERE w.forum_did = split_part(s.board_uri, '/', 3)
+              AND w.did = s.author_did
+              AND w.since <= s.created_at
+              AND (w.until IS NULL OR s.created_at < w.until)))
     ),
     contributions AS (
       SELECT t.forum_did, t.forum_name, t.created_at AS posted_at,
@@ -44,6 +58,18 @@ function handle()
       JOIN public_threads t
         ON t.thread_uri = (r.record::jsonb)->'thread'->>'uri'
       WHERE r.collection = $4 AND r.did = $1
+        AND (NOT EXISTS (
+            SELECT 1 FROM atmobb_forum_gating g
+            WHERE g.forum_did = split_part(t.board_uri, '/', 3)
+              AND g.gated_since <= r.created_at
+              AND (g.opened_at IS NULL OR r.created_at < g.opened_at))
+          OR r.did = split_part(t.board_uri, '/', 3)
+          OR EXISTS (
+            SELECT 1 FROM atmobb_member_windows w
+            WHERE w.forum_did = split_part(t.board_uri, '/', 3)
+              AND w.did = r.did
+              AND w.since <= r.created_at
+              AND (w.until IS NULL OR r.created_at < w.until)))
     )
     SELECT forum_did, MAX(forum_name) AS forum_name,
            COUNT(*)::int AS posts,
@@ -97,6 +123,18 @@ function handle()
     WHERE s.author_did = $1 AND NOT s.hidden
       AND (b.record::jsonb)->'access'->>'space' IS NULL
       AND b.did NOT IN (SELECT did FROM atmobb_delisted_forums)
+      AND (NOT EXISTS (
+          SELECT 1 FROM atmobb_forum_gating g
+          WHERE g.forum_did = split_part(s.board_uri, '/', 3)
+            AND g.gated_since <= s.created_at
+            AND (g.opened_at IS NULL OR s.created_at < g.opened_at))
+        OR s.author_did = split_part(s.board_uri, '/', 3)
+        OR EXISTS (
+          SELECT 1 FROM atmobb_member_windows w
+          WHERE w.forum_did = split_part(s.board_uri, '/', 3)
+            AND w.did = s.author_did
+            AND w.since <= s.created_at
+            AND (w.until IS NULL OR s.created_at < w.until)))
     ORDER BY s.created_at DESC
     LIMIT 6
   ]], { actor, NS .. ".forum.board", NS .. ".discussion.thread",

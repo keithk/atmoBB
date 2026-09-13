@@ -1,7 +1,16 @@
 -- xrpc.query:app.atmobb.moderation.getLog
 -- A forum's moderation actions, newest first, with display context: thread
--- titles for strongRef subjects, forum names for account subjects.
+-- titles for strongRef subjects, forum names for account subjects. The family
+-- param narrows to thread-and-account moderation or to membership decisions.
 local NS = "app.atmobb"
+
+local FAMILIES = {
+  moderation = { "hide", "unhide", "lock", "unlock", "pin", "unpin",
+                 "ban", "unban", "warn", "block", "unblock" },
+  membership = { "acceptMember", "revokeMember", "holdApplication",
+                 "grantAccess", "denyAccess", "revokeAccess",
+                 "gateForum", "openForum" },
+}
 
 function handle()
   local forum = params.forum
@@ -10,6 +19,17 @@ function handle()
   end
   local limit = tonumber(params.limit) or 50
   if limit > 100 then limit = 100 end
+
+  -- The family's action names are fixed above, never taken from the request,
+  -- so splicing them into the SQL as literals is safe.
+  local family_filter = ""
+  if params.family then
+    local kinds = FAMILIES[params.family]
+    if not kinds then
+      error("unknown family: " .. params.family)
+    end
+    family_filter = " AND (a.record::jsonb)->>'action' IN ('" .. table.concat(kinds, "','") .. "')"
+  end
 
   local rows = db.raw([[
     SELECT a.uri, a.record, a.created_at,
@@ -25,7 +45,8 @@ function handle()
     LEFT JOIN happyview_records mp
       ON mp.did = (a.record::jsonb)->'subject'->>'did'
      AND mp.collection = $5 AND mp.rkey = 'self'
-    WHERE a.collection = $1 AND a.did = $2
+    WHERE a.collection = $1 AND a.did = $2]] .. family_filter .. [[
+
     ORDER BY a.created_at DESC
     LIMIT $4
   ]], { NS .. ".moderation.action", forum, NS .. ".forum.profile", limit, NS .. ".actor.profile" })

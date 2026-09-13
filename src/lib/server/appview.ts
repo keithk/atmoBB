@@ -187,6 +187,11 @@ export interface Members {
     posts: number;
     profile?: ActorProfile;
     lastActive?: string;
+    /** On a gated forum, the acceptance behind this row: when it opened and who brought them in. */
+    since?: string;
+    sponsor?: string;
+    /** invite, application, or founding. */
+    via?: string;
   }[];
   cursor?: string;
 }
@@ -429,10 +434,44 @@ export interface AccessRequests {
     createdAt: string;
     requesterProfile?: ActorProfile;
   }[];
+  cursor?: string;
 }
 
-export const getAccessRequests = (forum = FORUM_DID()) =>
-  xrpc<AccessRequests>('GET', `${NS}.forum.getAccessRequests`, { params: { forum } });
+/** Applications to join the forum itself (kind=forum), one per applicant. */
+export interface ForumApplications {
+  requests: {
+    uri: string;
+    cid?: string;
+    requester: string;
+    reason?: string;
+    createdAt: string;
+    requesterProfile?: ActorProfile;
+    /** From the newest forum-level decision since the application; accepted ones are not listed. */
+    state: 'pending' | 'waiting' | 'denied';
+  }[];
+  cursor?: string;
+}
+
+export type AccessRequestKind = 'board' | 'forum';
+
+export interface AccessRequestOptions<K extends AccessRequestKind = 'board'> {
+  kind?: K;
+  limit?: number;
+  cursor?: string;
+}
+
+export const getAccessRequests = <K extends AccessRequestKind = 'board'>(
+  forum = FORUM_DID(),
+  opts: AccessRequestOptions<K> = {},
+) =>
+  xrpc<K extends 'forum' ? ForumApplications : AccessRequests>('GET', `${NS}.forum.getAccessRequests`, {
+    params: {
+      forum,
+      ...(opts.kind ? { kind: opts.kind } : {}),
+      ...(opts.limit ? { limit: String(opts.limit) } : {}),
+      ...(opts.cursor ? { cursor: opts.cursor } : {}),
+    },
+  });
 
 export interface Topic {
   topic: string;
@@ -473,6 +512,13 @@ export interface ModerationLog {
       action: string;
       board?: string;
       reason?: string;
+      /** acceptMember: who brought the subject in, and how. */
+      sponsor?: string;
+      via?: string;
+      /** gateForum: the join mode entered. */
+      mode?: string;
+      /** The accessRequest a membership decision answers. */
+      ref?: { uri: string; cid: string };
     };
     createdAt: string;
     threadTitle?: string;
@@ -490,10 +536,28 @@ export interface Standing {
 export const getStanding = (actor: string, forum = FORUM_DID()) =>
   xrpc<Standing>('GET', `${NS}.moderation.getStanding`, { params: { forum, actor } });
 
-export const getModerationLog = (forum = FORUM_DID(), limit = 50) =>
+/** moderation: hide/lock/pin/ban/warn/block and their reversals; membership: acceptances, revocations, holds, access grants and denials, gate/open. */
+export type ModerationFamily = 'moderation' | 'membership';
+
+export const getModerationLog = (forum = FORUM_DID(), limit = 50, family?: ModerationFamily) =>
   xrpc<ModerationLog>('GET', `${NS}.moderation.getLog`, {
-    params: { forum, limit: String(limit) },
+    params: { forum, limit: String(limit), ...(family ? { family } : {}) },
   });
+
+/** One account's standing with a gated forum, derived from its acceptMember / revokeMember actions. */
+export interface Membership {
+  /** An acceptance window is open right now. */
+  accepted: boolean;
+  /** From the newest window, open or closed, so a removed member still reports their last sponsor. */
+  since?: string;
+  sponsor?: string;
+  via?: string;
+  /** Currently accepted members this account sponsored. */
+  sponsored: { did: string; since: string; via?: string }[];
+}
+
+export const getMembership = (actor: string, forum = FORUM_DID()) =>
+  xrpc<Membership>('GET', `${NS}.forum.getMembership`, { params: { forum, actor } });
 
 export interface Directory {
   forums: { did: string; name: string; description?: string; createdAt: string }[];

@@ -2,7 +2,9 @@
 -- Members watching one board, for notification dispatch. Watch records live
 -- in the member's repo and point at the board; a mounted board's URI names
 -- another forum's DID, so bans are matched against both that origin and the
--- asking forum. A ban still in force hides the watcher. Offset cursor.
+-- asking forum. A ban still in force hides the watcher, and so does a gate
+-- on the board's forum unless the watcher holds an open membership window
+-- there (or is that forum). Offset cursor.
 local NS = "app.atmobb"
 
 function handle()
@@ -28,6 +30,14 @@ function handle()
           AND bn.forum_did IN (split_part($2, '/', 3), $3)
           AND (bn.board_uri IS NULL OR bn.board_uri = $2)
           AND (bn.until IS NULL OR bn.until::timestamptz > now()))
+      AND (NOT EXISTS (
+          SELECT 1 FROM atmobb_forum_gating g
+          WHERE g.forum_did = split_part($2, '/', 3) AND g.opened_at IS NULL)
+        OR w.did = split_part($2, '/', 3)
+        OR EXISTS (
+          SELECT 1 FROM atmobb_member_windows mw
+          WHERE mw.forum_did = split_part($2, '/', 3) AND mw.did = w.did
+            AND mw.until IS NULL))
     ORDER BY w.did ASC
     LIMIT $4 OFFSET $5
   ]], { NS .. ".forum.watch", board, forum, limit, offset })

@@ -35,6 +35,18 @@ function handle()
           AND (bn.board_uri IS NULL OR bn.board_uri = c.board_uri)
           AND c.created_at > bn.since
           AND (bn.until IS NULL OR c.created_at < bn.until))
+      AND (NOT EXISTS (
+          SELECT 1 FROM atmobb_forum_gating g
+          WHERE g.forum_did = split_part(c.board_uri, '/', 3)
+            AND g.gated_since <= c.created_at
+            AND (g.opened_at IS NULL OR c.created_at < g.opened_at))
+        OR c.author_did = split_part(c.board_uri, '/', 3)
+        OR EXISTS (
+          SELECT 1 FROM atmobb_member_windows w
+          WHERE w.forum_did = split_part(c.board_uri, '/', 3)
+            AND w.did = c.author_did
+            AND w.since <= c.created_at
+            AND (w.until IS NULL OR c.created_at < w.until)))
       GROUP BY c.board_uri
     ) s ON s.board_uri = b.uri
     LEFT JOIN LATERAL (
@@ -48,6 +60,18 @@ function handle()
           AND (bn.board_uri IS NULL OR bn.board_uri = t.board_uri)
           AND t.created_at > bn.since
           AND (bn.until IS NULL OR t.created_at < bn.until))
+      AND (NOT EXISTS (
+          SELECT 1 FROM atmobb_forum_gating g
+          WHERE g.forum_did = split_part(t.board_uri, '/', 3)
+            AND g.gated_since <= t.created_at
+            AND (g.opened_at IS NULL OR t.created_at < g.opened_at))
+        OR t.author_did = split_part(t.board_uri, '/', 3)
+        OR EXISTS (
+          SELECT 1 FROM atmobb_member_windows w
+          WHERE w.forum_did = split_part(t.board_uri, '/', 3)
+            AND w.did = t.author_did
+            AND w.since <= t.created_at
+            AND (w.until IS NULL OR t.created_at < w.until)))
       ORDER BY t.last_activity DESC
       LIMIT 1
     ) latest ON true
@@ -128,6 +152,18 @@ function handle()
             AND (bn.board_uri IS NULL OR bn.board_uri = s.board_uri)
             AND s.created_at > bn.since
             AND (bn.until IS NULL OR s.created_at < bn.until))
+        AND (NOT EXISTS (
+            SELECT 1 FROM atmobb_forum_gating g
+            WHERE g.forum_did = split_part(s.board_uri, '/', 3)
+              AND g.gated_since <= s.created_at
+              AND (g.opened_at IS NULL OR s.created_at < g.opened_at))
+          OR s.author_did = split_part(s.board_uri, '/', 3)
+          OR EXISTS (
+            SELECT 1 FROM atmobb_member_windows w
+            WHERE w.forum_did = split_part(s.board_uri, '/', 3)
+              AND w.did = s.author_did
+              AND w.since <= s.created_at
+              AND (w.until IS NULL OR s.created_at < w.until)))
     ) agg ON true
     LEFT JOIN LATERAL (
       SELECT s.thread_uri, s.title, s.author_did, s.last_reply_did, s.board_uri, s.last_activity
@@ -148,6 +184,18 @@ function handle()
             AND (bn.board_uri IS NULL OR bn.board_uri = s.board_uri)
             AND s.created_at > bn.since
             AND (bn.until IS NULL OR s.created_at < bn.until))
+        AND (NOT EXISTS (
+            SELECT 1 FROM atmobb_forum_gating g
+            WHERE g.forum_did = split_part(s.board_uri, '/', 3)
+              AND g.gated_since <= s.created_at
+              AND (g.opened_at IS NULL OR s.created_at < g.opened_at))
+          OR s.author_did = split_part(s.board_uri, '/', 3)
+          OR EXISTS (
+            SELECT 1 FROM atmobb_member_windows w
+            WHERE w.forum_did = split_part(s.board_uri, '/', 3)
+              AND w.did = s.author_did
+              AND w.since <= s.created_at
+              AND (w.until IS NULL OR s.created_at < w.until)))
       ORDER BY s.last_activity DESC
       LIMIT 1
     ) latest ON true
@@ -230,7 +278,19 @@ function handle()
                   AND bn.forum_did IN (split_part(c.board_uri, '/', 3), $3)
                   AND (bn.board_uri IS NULL OR bn.board_uri = c.board_uri)
                   AND c.created_at > bn.since
-                  AND (bn.until IS NULL OR c.created_at < bn.until))) AS threads,
+                  AND (bn.until IS NULL OR c.created_at < bn.until))
+              AND (NOT EXISTS (
+                  SELECT 1 FROM atmobb_forum_gating g
+                  WHERE g.forum_did = split_part(c.board_uri, '/', 3)
+                    AND g.gated_since <= c.created_at
+                    AND (g.opened_at IS NULL OR c.created_at < g.opened_at))
+                OR c.author_did = split_part(c.board_uri, '/', 3)
+                OR EXISTS (
+                  SELECT 1 FROM atmobb_member_windows w
+                  WHERE w.forum_did = split_part(c.board_uri, '/', 3)
+                    AND w.did = c.author_did
+                    AND w.since <= c.created_at
+                    AND (w.until IS NULL OR c.created_at < w.until)))) AS threads,
            (SELECT COALESCE(SUM(c.reply_count),0)::int + COUNT(*)::int
               FROM atmobb_thread_stats c WHERE c.board_uri LIKE $1 AND NOT c.hidden
               AND NOT EXISTS (
@@ -239,7 +299,19 @@ function handle()
                   AND bn.forum_did IN (split_part(c.board_uri, '/', 3), $3)
                   AND (bn.board_uri IS NULL OR bn.board_uri = c.board_uri)
                   AND c.created_at > bn.since
-                  AND (bn.until IS NULL OR c.created_at < bn.until))) AS posts,
+                  AND (bn.until IS NULL OR c.created_at < bn.until))
+              AND (NOT EXISTS (
+                  SELECT 1 FROM atmobb_forum_gating g
+                  WHERE g.forum_did = split_part(c.board_uri, '/', 3)
+                    AND g.gated_since <= c.created_at
+                    AND (g.opened_at IS NULL OR c.created_at < g.opened_at))
+                OR c.author_did = split_part(c.board_uri, '/', 3)
+                OR EXISTS (
+                  SELECT 1 FROM atmobb_member_windows w
+                  WHERE w.forum_did = split_part(c.board_uri, '/', 3)
+                    AND w.did = c.author_did
+                    AND w.since <= c.created_at
+                    AND (w.until IS NULL OR c.created_at < w.until)))) AS posts,
            (SELECT COUNT(*)::int FROM happyview_records
               WHERE collection = $2 AND (record::jsonb)->>'forum' = $3) AS members
   ]], { "at://" .. forum .. "/%", NS .. ".forum.membership", forum })

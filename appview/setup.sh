@@ -158,6 +158,7 @@ upload_lex lexicons/app/atmobb/discussion/getLatestThreads.json "{target_collect
 upload_lex lexicons/app/atmobb/forum/getMembers.json "{target_collection: \"$NS.actor.profile\"}"
 upload_lex lexicons/app/atmobb/forum/getDirectory.json "{target_collection: \"$NS.forum.profile\"}"
 upload_lex lexicons/app/atmobb/forum/getStaff.json "{target_collection: \"$NS.forum.moderator\"}"
+upload_lex lexicons/app/atmobb/forum/getMembership.json "{target_collection: \"$NS.moderation.action\"}"
 upload_lex lexicons/app/atmobb/forum/getAccessRequests.json "{target_collection: \"$NS.forum.accessRequest\"}"
 upload_lex lexicons/app/atmobb/forum/getWatchers.json "{target_collection: \"$NS.forum.watch\"}"
 upload_lex lexicons/app/atmobb/moderation/getLog.json "{target_collection: \"$NS.moderation.action\"}"
@@ -186,6 +187,7 @@ upload_script "xrpc.query:$NS.discussion.getLatestThreads" getLatestThreads.lua
 upload_script "xrpc.query:$NS.forum.getMembers" getMembers.lua
 upload_script "xrpc.query:$NS.forum.getDirectory" getDirectory.lua
 upload_script "xrpc.query:$NS.forum.getStaff" getStaff.lua
+upload_script "xrpc.query:$NS.forum.getMembership" getMembership.lua
 upload_script "xrpc.query:$NS.forum.getAccessRequests" getAccessRequests.lua
 upload_script "xrpc.query:$NS.forum.getWatchers" getWatchers.lua
 upload_script "xrpc.query:$NS.moderation.getLog" getModerationLog.lua

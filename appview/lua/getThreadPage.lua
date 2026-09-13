@@ -86,6 +86,25 @@ function handle()
     ]], { thread_author, stat.board_uri, forum, stat.created_at })
     hidden = #banned > 0
   end
+  -- A thread written at a gated board by someone its forum had not accepted
+  -- at the time is hidden on the same terms; the forum's own account is exempt.
+  if not hidden and thread and stat.board_uri then
+    local outside = db.raw([[
+      SELECT 1 AS ok
+      WHERE EXISTS (
+          SELECT 1 FROM atmobb_forum_gating g
+          WHERE g.forum_did = split_part($2, '/', 3)
+            AND g.gated_since <= $3
+            AND (g.opened_at IS NULL OR $3 < g.opened_at))
+        AND $1 <> split_part($2, '/', 3)
+        AND NOT EXISTS (
+          SELECT 1 FROM atmobb_member_windows w
+          WHERE w.forum_did = split_part($2, '/', 3) AND w.did = $1
+            AND w.since <= $3
+            AND (w.until IS NULL OR $3 < w.until))
+    ]], { thread_author, stat.board_uri, stat.created_at })
+    hidden = #outside > 0
+  end
   if not hidden and thread and forum then
     local mine = db.raw([[
       SELECT (a.record::jsonb)->>'action' AS action FROM happyview_records a
@@ -138,6 +157,18 @@ function handle()
         WHERE bn.did = p.did AND bn.forum_did IN (split_part($9, '/', 3), $4)
           AND (bn.board_uri IS NULL OR bn.board_uri = $9)
           AND p.created_at > bn.since AND (bn.until IS NULL OR p.created_at < bn.until))
+      AND (NOT EXISTS (
+          SELECT 1 FROM atmobb_forum_gating g
+          WHERE g.forum_did = split_part($9, '/', 3)
+            AND g.gated_since <= p.created_at
+            AND (g.opened_at IS NULL OR p.created_at < g.opened_at))
+        OR p.did = split_part($9, '/', 3)
+        OR EXISTS (
+          SELECT 1 FROM atmobb_member_windows w
+          WHERE w.forum_did = split_part($9, '/', 3)
+            AND w.did = p.did
+            AND w.since <= p.created_at
+            AND (w.until IS NULL OR p.created_at < w.until)))
     ORDER BY p.created_at ASC, p.uri ASC
     LIMIT $5 OFFSET $6
   ]], { thread_uri, NS .. ".discussion.reply", NS .. ".actor.profile", forum,
@@ -163,6 +194,8 @@ function handle()
   -- A single-choice poll counts each voter's latest vote; a multiple-choice
   -- poll counts each (voter, option) once. Votes after closesAt don't count.
   -- The viewer's own vote records come back so the app can change or retract.
+  -- On a gated forum a vote only counts (and only comes back) if its voter
+  -- held an acceptance window when it was cast.
   local poll = nil
   if thread and thread.poll and thread.poll.options then
     local n = #thread.poll.options
@@ -172,8 +205,20 @@ function handle()
       FROM happyview_record_refs r
       JOIN happyview_records v ON v.uri = r.source_uri AND v.collection = $2
       WHERE r.target_uri = $1
+        AND (NOT EXISTS (
+            SELECT 1 FROM atmobb_forum_gating g
+            WHERE g.forum_did = split_part($3, '/', 3)
+              AND g.gated_since <= COALESCE((v.record::jsonb)->>'createdAt', v.created_at::text)
+              AND (g.opened_at IS NULL OR COALESCE((v.record::jsonb)->>'createdAt', v.created_at::text) < g.opened_at))
+          OR v.did = split_part($3, '/', 3)
+          OR EXISTS (
+            SELECT 1 FROM atmobb_member_windows w
+            WHERE w.forum_did = split_part($3, '/', 3)
+              AND w.did = v.did
+              AND w.since <= COALESCE((v.record::jsonb)->>'createdAt', v.created_at::text)
+              AND (w.until IS NULL OR COALESCE((v.record::jsonb)->>'createdAt', v.created_at::text) < w.until)))
       ORDER BY at ASC, v.uri ASC
-    ]], { thread_uri, NS .. ".poll.vote" })
+    ]], { thread_uri, NS .. ".poll.vote", stat.board_uri or "" })
     local closes = thread.poll.closesAt
     local multiple = thread.poll.multipleChoice == true
     local by_did = {}

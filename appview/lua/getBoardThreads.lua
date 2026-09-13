@@ -44,7 +44,10 @@ function handle()
   ]]
 
   -- the viewing forum's window: origin hides (s.hidden), then this forum's
-  -- own thread hides and forum blocks, latest action winning
+  -- own thread hides and forum blocks, latest action winning. Bans and
+  -- membership are judged at the post's time: on a board whose owning forum
+  -- was gated then, the author must have held an acceptance window covering
+  -- that moment, unless the author is the forum itself.
   local window = [[
     NOT s.hidden
     AND NOT COALESCE((
@@ -69,6 +72,18 @@ function handle()
         AND (bn.board_uri IS NULL OR bn.board_uri = s.board_uri)
         AND s.created_at > bn.since
         AND (bn.until IS NULL OR s.created_at < bn.until))
+    AND (NOT EXISTS (
+        SELECT 1 FROM atmobb_forum_gating g
+        WHERE g.forum_did = split_part(s.board_uri, '/', 3)
+          AND g.gated_since <= s.created_at
+          AND (g.opened_at IS NULL OR s.created_at < g.opened_at))
+      OR s.author_did = split_part(s.board_uri, '/', 3)
+      OR EXISTS (
+        SELECT 1 FROM atmobb_member_windows w
+        WHERE w.forum_did = split_part(s.board_uri, '/', 3)
+          AND w.did = s.author_did
+          AND w.since <= s.created_at
+          AND (w.until IS NULL OR s.created_at < w.until)))
   ]]
 
   local totals = db.raw(peers_cte .. [[
@@ -143,6 +158,18 @@ function handle()
                   AND (bn.board_uri IS NULL OR bn.board_uri = s.board_uri)
                   AND rp.created_at > bn.since
                   AND (bn.until IS NULL OR rp.created_at < bn.until))
+              AND (NOT EXISTS (
+                  SELECT 1 FROM atmobb_forum_gating g
+                  WHERE g.forum_did = split_part(s.board_uri, '/', 3)
+                    AND g.gated_since <= rp.created_at
+                    AND (g.opened_at IS NULL OR rp.created_at < g.opened_at))
+                OR rp.did = split_part(s.board_uri, '/', 3)
+                OR EXISTS (
+                  SELECT 1 FROM atmobb_member_windows w
+                  WHERE w.forum_did = split_part(s.board_uri, '/', 3)
+                    AND w.did = rp.did
+                    AND w.since <= rp.created_at
+                    AND (w.until IS NULL OR rp.created_at < w.until)))
           ) candidates
           ORDER BY did, priority, last_at DESC
         ) deduped

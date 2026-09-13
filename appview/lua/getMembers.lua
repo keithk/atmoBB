@@ -1,7 +1,9 @@
 -- xrpc.query:app.atmobb.forum.getMembers
 -- Members of one forum by postcount, with profiles. Membership records are
 -- scoped to the forum; posts and activity are scoped to its own boards.
--- Offset cursor.
+-- While the forum is gated, a member is someone the forum has accepted (an
+-- open window) who also declared membership, and each row carries the
+-- acceptance's sponsor, via, and since. Offset cursor.
 local NS = "app.atmobb"
 
 function handle()
@@ -13,14 +15,37 @@ function handle()
   if limit > 100 then limit = 100 end
   local offset = tonumber(params.cursor) or 0
 
-  local rows = db.raw([[
-    WITH members AS (
-      SELECT did
-      FROM happyview_records
-      WHERE collection = $1 AND (record::jsonb)->>'forum' = $3
-      GROUP BY did
-    )
-    SELECT m.did, COALESCE(pc.posts, 0) AS posts,
+  local gated = db.raw([[
+    SELECT 1 AS ok FROM atmobb_forum_gating
+    WHERE forum_did = $1 AND opened_at IS NULL
+    LIMIT 1
+  ]], { forum })
+
+  local members_cte
+  if #gated > 0 then
+    members_cte = [[
+      WITH members AS (
+        SELECT w.did, w.since, w.sponsor, w.via
+        FROM atmobb_member_windows w
+        WHERE w.forum_did = $3 AND w.until IS NULL
+          AND EXISTS (
+            SELECT 1 FROM happyview_records d
+            WHERE d.collection = $1 AND d.did = w.did AND (d.record::jsonb)->>'forum' = $3)
+      )
+    ]]
+  else
+    members_cte = [[
+      WITH members AS (
+        SELECT did, NULL::text AS since, NULL::text AS sponsor, NULL::text AS via
+        FROM happyview_records
+        WHERE collection = $1 AND (record::jsonb)->>'forum' = $3
+        GROUP BY did
+      )
+    ]]
+  end
+
+  local rows = db.raw(members_cte .. [[
+    SELECT m.did, m.since, m.sponsor, m.via, COALESCE(pc.posts, 0) AS posts,
            COALESCE((SELECT SUM(pca.posts) FROM atmobb_post_counts pca
              WHERE pca.did = m.did), 0)::int AS total_posts,
            ap.record AS profile,
@@ -47,6 +72,9 @@ function handle()
       totalPosts = row.total_posts,
       profile = profile,
       lastActive = row.last_active,
+      since = row.since,
+      sponsor = row.sponsor,
+      via = row.via,
     }
   end
 
