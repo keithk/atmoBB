@@ -13,6 +13,9 @@ export interface ProfileCard {
   joined: string | null;
   bsky: { handle: string } | null;
   isYou: boolean;
+  /** On a gated forum, how this member came in (see sponsorLine); null elsewhere.
+   *  `handle` is the sponsor's resolved handle for the link, or null. */
+  sponsor: { text: string; handle: string | null } | null;
 }
 
 /** Canonical profile URL for a member. DIDs always resolve; handles may not. */

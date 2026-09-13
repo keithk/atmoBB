@@ -5,6 +5,8 @@
   import { relTime } from '$lib/reltime';
   import { threadPath } from '$lib/appview-paths';
   import RichText from '$lib/components/RichText.svelte';
+  import MemberLink from '$lib/components/MemberLink.svelte';
+  import SponsorLine from '$lib/components/SponsorLine.svelte';
   import { page } from '$app/state';
 
   let { data, form } = $props();
@@ -22,6 +24,11 @@
   const global = $derived(m.activity.global);
   const joined = $derived(
     p?.createdAt ? new Date(p.createdAt).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : null,
+  );
+  const memberSince = $derived(
+    data.membership?.accepted && data.membership.since
+      ? new Date(data.membership.since).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+      : null,
   );
   const presenceLabel = $derived(
     m.presence === 'online'
@@ -62,6 +69,13 @@
           <span class="atm-presence atm-presence--{m.presence}">{presenceLabel}</span>
         {/if}
       </div>
+      {#if data.sponsorText}
+        <div class="cover__meta">
+          <span>Member since {memberSince}</span>
+          <span aria-hidden="true">·</span>
+          <span><SponsorLine text={data.sponsorText} handle={data.sponsorHandle} /></span>
+        </div>
+      {/if}
     </div>
     <div class="cover__actions">
       {#if data.isYou}
@@ -120,12 +134,7 @@
                 <span class="atm-chip atm-chip--ok">member</span>
                 <span>
                   since {day(data.membership.since)}
-                  {#if data.membership.via === 'founding' || !data.membership.sponsor}
-                    · original member
-                  {:else}
-                    · {data.membership.via === 'application' ? 'approved' : 'invited'} by
-                    <a href="/members/{encodeURIComponent(data.sponsorHandle ?? data.membership.sponsor)}">{data.sponsorHandle && data.sponsorHandle !== data.membership.sponsor ? `@${data.sponsorHandle}` : data.membership.sponsor.slice(8, 20)}</a>
-                  {/if}
+                  {#if data.sponsorText}· <SponsorLine text={data.sponsorText} handle={data.sponsorHandle} />{/if}
                 </span>
                 {#if staff && !data.isYou}
                   <form method="POST" action="?/remove">
@@ -162,6 +171,24 @@
                 <button class="atm-btn atm-btn--sm atm-btn--danger">ban</button>
               </form>
             </details>
+          {/if}
+        </Card>
+      {/if}
+      {#if data.sponsored}
+        <Card title="Sponsored">
+          {#if data.sponsored.length}
+            <ul class="standing__list">
+              {#each data.sponsored as s (s.did)}
+                <li class="standing__item">
+                  <MemberLink did={s.did} handle={s.handle}>
+                    {s.handle !== s.did ? `@${s.handle}` : s.did.slice(8, 20)}
+                  </MemberLink>
+                  <span>{s.via === 'application' ? 'approved' : 'invited'} · since {day(s.since)}</span>
+                </li>
+              {/each}
+            </ul>
+          {:else}
+            <p class="atm-empty atm-empty--bare">Hasn't sponsored anyone yet.</p>
           {/if}
         </Card>
       {/if}

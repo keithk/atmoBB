@@ -5,22 +5,41 @@ import {
   getPublicProfile,
   getAtmobbActivity,
   getBskyProfile,
-  getForumRanks,
+  getForumProfile,
   presenceFor,
 } from '$lib/server/profiles';
+import { getMembership, resolveHandle } from '$lib/server/appview';
 import { rankFor } from '$lib/rank';
+import { joinMode, sponsorLine } from '$lib/membership';
 import type { ProfileCard } from '$lib/profile-card';
 
 export const GET: RequestHandler = async ({ params, locals }) => {
   const id = await resolveActor(params.actor);
   if (!id) error(404, 'Member not found.');
 
-  const [profile, activity, bsky, ranks] = await Promise.all([
+  const [profile, activity, bsky, forum] = await Promise.all([
     getPublicProfile(id.did, id.pds),
     getAtmobbActivity(id.did),
     getBskyProfile(id.did),
-    getForumRanks(),
+    getForumProfile(),
   ]);
+  const ranks = forum?.ranks ?? [];
+
+  // On a gated forum the card names the sponsor, the same line the member
+  // list shows. No open acceptance (or an appview error) just leaves it off.
+  let sponsor: ProfileCard['sponsor'] = null;
+  if (joinMode(forum?.membership) !== 'open') {
+    const membership = await getMembership(id.did).catch(() => null);
+    if (membership?.accepted && membership.since) {
+      const window = { since: membership.since, sponsor: membership.sponsor, via: membership.via };
+      const handle = window.sponsor ? await resolveHandle(window.sponsor) : null;
+      const resolved = handle && handle !== window.sponsor ? handle : null;
+      sponsor = {
+        text: sponsorLine(window, () => (resolved ? `@${resolved}` : undefined)),
+        handle: resolved,
+      };
+    }
+  }
 
   const posts = activity.local.posts || null;
   const card: ProfileCard = {
@@ -35,6 +54,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
     joined: profile?.createdAt ?? null,
     bsky: bsky ? { handle: bsky.handle } : null,
     isYou: locals.user?.did === id.did,
+    sponsor,
   };
 
   return json(card, { headers: { 'cache-control': 'private, max-age=60' } });

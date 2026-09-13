@@ -1,5 +1,6 @@
 <script lang="ts">
   import Avatar from './Avatar.svelte';
+  import SponsorLine from './SponsorLine.svelte';
   import { profileHref, type ProfileCard } from '$lib/profile-card';
   import { relTime } from '$lib/reltime';
 
@@ -23,6 +24,9 @@
       <span class="atm-hovercard__name">{card.displayName}</span>
       <code class="atm-hovercard__handle">@{card.handle}</code>
       {#if card.rankTitle}<span class="atm-rank">{card.rankTitle}</span>{/if}
+      {#if card.sponsor}
+        <span class="atm-hovercard__sponsor"><SponsorLine text={card.sponsor.text} handle={card.sponsor.handle} /></span>
+      {/if}
     </div>
   </div>
 
@@ -70,6 +74,7 @@
   .atm-hovercard__id { display: flex; flex-direction: column; gap: 3px; min-width: 0; align-items: flex-start; }
   .atm-hovercard__name { font: var(--w-bold) var(--text-md)/1.2 var(--font-display); color: var(--forum-ink); }
   .atm-hovercard__handle { font: var(--type-handle); color: var(--forum-ink-faint); }
+  .atm-hovercard__sponsor { font: var(--type-meta); color: var(--forum-ink-faint); }
   .atm-hovercard__stats {
     display: flex;
     flex-wrap: wrap;

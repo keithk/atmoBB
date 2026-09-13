@@ -335,6 +335,7 @@ a.atm-post__permalink:hover { text-decoration: underline; }
 }
 a.atm-memberrow__name:hover { color: var(--forum-link); text-decoration: none; }
 .atm-memberrow__handle { font: var(--type-handle); color: var(--forum-ink-faint); }
+.atm-memberrow__sponsor { font: var(--type-meta); color: var(--forum-ink-faint); }
 .atm-memberrow__rank { min-width: 0; }
 .atm-memberrow__posts {
   text-align: right;

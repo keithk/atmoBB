@@ -3,6 +3,7 @@ import {
   getBoardIndex,
   FORUM_DID,
   type ActorProfile,
+  type ForumProfile,
   type MemberActivity,
 } from './appview';
 import { presenceSnapshot } from './presence';
@@ -333,20 +334,23 @@ export async function getElsewhere(did: string, pds?: string, handle?: string): 
 
 // --- presence ---------------------------------------------------------------
 
-// This forum's rank ladder, cached so hovercards don't re-hit the board index.
-let ranksCache: { ranks: Rank[]; at: number } | null = null;
+// This forum's profile, cached so hovercards don't re-hit the board index.
+let forumCache: { forum: ForumProfile | undefined; at: number } | null = null;
+
+export async function getForumProfile(): Promise<ForumProfile | undefined> {
+  if (forumCache && Date.now() - forumCache.at < TTL) return forumCache.forum;
+  let forum: ForumProfile | undefined;
+  try {
+    forum = (await getBoardIndex(FORUM_DID())).forum;
+  } catch {
+    // board index unreachable — no profile means no rank and no gate, which is fine
+  }
+  forumCache = { forum, at: Date.now() };
+  return forum;
+}
 
 export async function getForumRanks(): Promise<Rank[]> {
-  if (ranksCache && Date.now() - ranksCache.at < TTL) return ranksCache.ranks;
-  let ranks: Rank[] = [];
-  try {
-    const index = await getBoardIndex(FORUM_DID());
-    ranks = index.forum?.ranks ?? [];
-  } catch {
-    // board index unreachable — no ladder means no rank, which is fine
-  }
-  ranksCache = { ranks, at: Date.now() };
-  return ranks;
+  return (await getForumProfile())?.ranks ?? [];
 }
 
 export function presenceFor(did: string): Presence {

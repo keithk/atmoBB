@@ -5,7 +5,7 @@ import { getBoardIndex, getMembership, getStanding, FORUM_DID } from '$lib/serve
 import { createForumRecord } from '$lib/server/forum-repo';
 import { savedRedirect } from '$lib/server/saved-redirect';
 import { revokeSpaceAccess } from '$lib/server/space-access';
-import { joinMode } from '$lib/membership';
+import { joinMode, sponsorLine } from '$lib/membership';
 import { expiryFromDays } from '$lib/standing';
 
 const NS = 'app.atmobb';
@@ -42,10 +42,25 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
     getAtmobbActivity(id.did, forumDid),
     getElsewhere(id.did, id.pds, id.handle),
     showStanding ? getStanding(id.did, forumDid).catch(() => null) : null,
-    showStanding && gated ? getMembership(id.did, forumDid).catch(() => null) : null,
+    gated ? getMembership(id.did, forumDid).catch(() => null) : null,
     staffRole ? getBoardIndex(forumDid).catch(() => null) : null,
   ]);
   await resolveBodyImages([{ author: id.did, body: profile?.signature }]);
+
+  // Everyone sees how a member came in; only staff and the member themself
+  // see whom they brought in. Both are display only.
+  const sponsorHandle = membership?.sponsor ? await resolveHandle(membership.sponsor) : null;
+  const sponsorResolved = sponsorHandle && sponsorHandle !== membership?.sponsor ? sponsorHandle : null;
+  const sponsorText =
+    membership?.accepted && membership.since
+      ? sponsorLine({ since: membership.since, sponsor: membership.sponsor, via: membership.via }, () =>
+          sponsorResolved ? `@${sponsorResolved}` : undefined,
+        )
+      : null;
+  const sponsored =
+    showStanding && membership
+      ? await Promise.all(membership.sponsored.map(async (s) => ({ ...s, handle: await resolveHandle(s.did) })))
+      : null;
 
   // Threads on other forums link to those forums' own sites — forum account
   // handles double as site domains. Unresolvable handles fall back to null
@@ -108,7 +123,9 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
     isYou,
     standing,
     membership,
-    sponsorHandle: membership?.sponsor ? await resolveHandle(membership.sponsor) : null,
+    sponsorHandle: sponsorResolved,
+    sponsorText,
+    sponsored,
     boards: (index?.boards ?? []).map((b) => ({ uri: b.uri, name: b.value.name })),
   };
 };

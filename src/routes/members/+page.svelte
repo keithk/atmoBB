@@ -2,6 +2,7 @@
   import Avatar from '$lib/components/Avatar.svelte';
   import RankBadge from '$lib/components/RankBadge.svelte';
   import MemberLink from '$lib/components/MemberLink.svelte';
+  import SponsorLine from '$lib/components/SponsorLine.svelte';
   import { relTime } from '$lib/reltime';
 
   let { data } = $props();
@@ -30,6 +31,9 @@
         {/if}
         {#if m.profile?.title}
           <div class="atm-usertitle">{m.profile.title}</div>
+        {/if}
+        {#if m.sponsorText}
+          <div class="atm-memberrow__sponsor"><SponsorLine text={m.sponsorText} handle={m.sponsorHandle} /></div>
         {/if}
       </div>
       <div class="atm-memberrow__rank">
