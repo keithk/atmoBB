@@ -7,6 +7,7 @@
   import { Spoiler } from '$lib/richtext/spoiler-mark';
   import { ForumImage } from '$lib/richtext/image-node';
   import { Quote } from '$lib/richtext/quote-node';
+  import { MentionDecorations } from '$lib/richtext/mention-decorations';
   import { docToBBCode, collectImages } from '$lib/richtext/tiptap-bbcode';
   import ImageIcon from '$lib/components/ImageIcon.svelte';
 
@@ -65,6 +66,7 @@
         Quote.extend({ content: 'paragraph+' }),
         Spoiler,
         ForumImage,
+        MentionDecorations,
         Placeholder.configure({ placeholder }),
       ],
       content: initial ?? value,
@@ -298,6 +300,33 @@
   .atm-prose :global(em) { font-style: italic; }
   .atm-prose :global(s) { text-decoration: line-through; }
   .atm-prose :global(a) { color: var(--forum-link); }
+  .atm-prose :global(.atm-editor-mention) {
+    color: var(--forum-link);
+    font-weight: var(--w-semibold);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+  }
+  .atm-prose :global(.atm-editor-mention__avatar) {
+    display: inline-flex;
+    width: 1.15em;
+    height: 1.15em;
+    margin-right: 0.2em;
+    align-items: center;
+    justify-content: center;
+    vertical-align: -0.18em;
+    overflow: hidden;
+    border: var(--border-hair) solid var(--forum-line-strong);
+    border-radius: 50%;
+    background: var(--forum-surface-2);
+    color: var(--forum-ink-soft);
+    font: var(--w-bold) 0.65em/1 var(--font-ui);
+  }
+  .atm-prose :global(.atm-editor-mention__avatar img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
   .atm-prose :global(span[data-spoiler]) {
     background: var(--forum-surface-2);
     border: 1px dashed var(--forum-line-strong);

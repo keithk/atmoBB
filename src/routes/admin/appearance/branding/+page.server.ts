@@ -5,7 +5,6 @@ import { adminActor } from '$lib/server/admin';
 import { uploadForumBlob } from '$lib/server/forum-repo';
 import { blobCid, blobUrl } from '$lib/server/profiles';
 import {
-  OG_THEMES,
   currentProfile,
   imageMime,
   isOgPng,
@@ -24,7 +23,6 @@ export const load: PageServerLoad = async () => {
     faviconCid,
     faviconUrl: faviconCid ? await blobUrl(FORUM_DID(), faviconCid) : null,
     ogImageCid: blobCid(profile.ogImage),
-    ogTheme: OG_THEMES.has(profile.ogTheme ?? '') ? profile.ogTheme : 'classic',
   };
 };
 
@@ -67,25 +65,6 @@ export const actions: Actions = {
       return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t restore the default favicon. Try again.' });
     }
     await profileRedirect(`${HERE}?saved=favicon-removed`, profile);
-  },
-
-  saveOgTheme: async ({ request, locals }) => {
-    if (!(await adminActor(locals))) return fail(403, { message: 'Only admins can make this change.' });
-    const form = await request.formData();
-    const ogTheme = String(form.get('ogTheme') ?? '');
-    if (!OG_THEMES.has(ogTheme)) return fail(400, { message: 'Choose a social preview style.' });
-
-    let profile: ForumProfile;
-    try {
-      profile = await currentProfile();
-      if (ogTheme === 'classic') delete profile.ogTheme;
-      else profile.ogTheme = ogTheme;
-      delete profile.ogImage;
-      await saveProfile(profile);
-    } catch (e) {
-      return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t save the social preview style. Try again.' });
-    }
-    await profileRedirect(`${HERE}?saved=og-theme`, profile);
   },
 
   uploadOgImage: async ({ request, locals }) => {

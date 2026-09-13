@@ -14,20 +14,31 @@ export interface MentionSpan {
   byteEnd: number;
 }
 
-/** Find @handle spans in `text`, as UTF-8 byte offsets over the '@handle' run. */
-export function detectMentions(text: string): MentionSpan[] {
-  const out: MentionSpan[] = [];
+export interface MentionCharacterSpan {
+  handle: string;
+  start: number;
+  end: number;
+}
+
+/** Find @handle spans using JavaScript string offsets, for editor decorations. */
+export function detectMentionCharacters(text: string): MentionCharacterSpan[] {
+  const out: MentionCharacterSpan[] = [];
   let m: RegExpExecArray | null;
   MENTION.lastIndex = 0;
   while ((m = MENTION.exec(text))) {
-    const at = m.index + m[1].length; // index of '@'
-    out.push({
-      handle: m[2],
-      byteStart: byteLen(text.slice(0, at)),
-      byteEnd: byteLen(text.slice(0, at + 1 + m[2].length)),
-    });
+    const start = m.index + m[1].length;
+    out.push({ handle: m[2], start, end: start + 1 + m[2].length });
   }
   return out;
+}
+
+/** Find @handle spans in `text`, as UTF-8 byte offsets over the '@handle' run. */
+export function detectMentions(text: string): MentionSpan[] {
+  return detectMentionCharacters(text).map(({ handle, start, end }) => ({
+    handle,
+    byteStart: byteLen(text.slice(0, start)),
+    byteEnd: byteLen(text.slice(0, end)),
+  }));
 }
 
 /** Build a #mention facet for a resolved handle at the given byte range. */

@@ -42,8 +42,8 @@ const frame = (header: VNode, body: VNode, colors: OgSkin = skin): VNode =>
         width: '100%',
         background: colors.surface,
         border: `1px solid ${colors.edge}`,
-        borderRadius: 8,
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.85), 0 2px 10px rgba(0,0,0,0.06)',
+        borderRadius: colors.radius,
+        boxShadow: `inset 0 1px 0 ${colors.bevel}, ${colors.shadow}`,
         overflow: 'hidden',
       },
       header,
@@ -95,14 +95,14 @@ const onlineStat = (value: string, label: string, colors: OgSkin = skin): VNode 
 
 const vline = (h_ = 40, color = skin.lineStrong): VNode => box({ width: 1, height: h_, background: color });
 
-const rankBadge = (title: string): VNode =>
+const rankBadge = (title: string, colors: OgSkin = skin): VNode =>
   text(
     {
       fontFamily: font.mono,
       fontSize: 14,
       letterSpacing: '0.04em',
-      color: skin.rank,
-      background: skin.rankBg,
+      color: colors.rank,
+      background: colors.rankBg,
       padding: '6px 12px',
       borderRadius: 999,
     },
@@ -110,10 +110,10 @@ const rankBadge = (title: string): VNode =>
   );
 
 const clamp = (lines: number) => ({
-  display: '-webkit-box',
-  WebkitBoxOrient: 'vertical',
-  WebkitLineClamp: lines,
+  display: 'block',
+  lineClamp: lines,
   overflow: 'hidden',
+  flexShrink: 0,
 });
 
 // --- 04 · GENERIC / FALLBACK -------------------------------------------------
@@ -235,6 +235,7 @@ export interface ThreadData {
   rank?: string;
   replies: number;
   started?: string;
+  skin?: OgSkin;
 }
 
 export function threadCard({
@@ -247,12 +248,14 @@ export function threadCard({
   rank,
   replies,
   started,
+  skin: colors = skin,
 }: ThreadData): VNode {
   return frame(
     headerBar(
-      monoLabel(boardPath, skin.inkSoft),
-      box({ alignItems: 'center', gap: 10 }, logo(26), wordmark(19)),
+      monoLabel(boardPath, colors.inkSoft),
+      box({ alignItems: 'center', gap: 10 }, logo(26, colors.accent, colors.surface), wordmark(19, colors.ink)),
       22,
+      colors,
     ),
     box(
       { flex: 1 },
@@ -263,7 +266,7 @@ export function threadCard({
           padding: image ? '34px 38px 32px 42px' : '38px 48px',
         },
         text(
-          { fontFamily: font.mono, fontSize: 15, letterSpacing: '0.1em', color: skin.link },
+          { fontFamily: font.mono, fontSize: 15, letterSpacing: '0.1em', color: colors.link },
           'THREAD',
         ),
         text(
@@ -271,7 +274,7 @@ export function threadCard({
             fontFamily: font.display,
             fontSize: image ? 42 : 48,
             letterSpacing: '-0.01em',
-            color: skin.ink,
+            color: colors.ink,
             lineHeight: 1.05,
             marginTop: 10,
             ...clamp(2),
@@ -284,7 +287,7 @@ export function threadCard({
                 fontFamily: font.body,
                 fontSize: image ? 23 : 25,
                 lineHeight: 1.35,
-                color: skin.body,
+                color: colors.body,
                 marginTop: 20,
                 ...clamp(image ? 5 : 4),
               },
@@ -296,7 +299,7 @@ export function threadCard({
           {
             alignItems: 'center',
             justifyContent: 'space-between',
-            borderTop: `1px solid ${skin.line}`,
+            borderTop: `1px solid ${colors.line}`,
             paddingTop: 18,
           },
           box(
@@ -305,16 +308,16 @@ export function threadCard({
             box(
               { flexDirection: 'column', gap: 7 },
               text(
-                { fontFamily: font.body, fontWeight: 600, fontSize: 19, color: skin.ink },
+                { fontFamily: font.body, fontWeight: 600, fontSize: 19, color: colors.ink },
                 `@${authorHandle}`,
               ),
-              rank ? rankBadge(rank) : null,
+              rank ? rankBadge(rank, colors) : null,
             ),
           ),
           box(
             { alignItems: 'center', gap: 24 },
-            stat(nf(replies), 'REPLIES', 25),
-            ...(started ? [vline(32), stat(started, 'STARTED', 25)] : []),
+            stat(nf(replies), 'REPLIES', 25, colors),
+            ...(started ? [vline(32, colors.lineStrong), stat(started, 'STARTED', 25, colors)] : []),
           ),
         ),
       ),
@@ -322,14 +325,15 @@ export function threadCard({
         ? box(
             {
               width: 480,
-              background: skin.surface2,
-              borderLeft: `1px solid ${skin.line}`,
+              background: colors.surface2,
+              borderLeft: `1px solid ${colors.line}`,
               overflow: 'hidden',
             },
             img(image, { width: 480, height: '100%', objectFit: 'cover' }),
           )
         : null,
     ),
+    colors,
   );
 }
 
@@ -343,6 +347,7 @@ export interface MemberData {
   posts?: number | null;
   joined?: string | null;
   signature?: string;
+  skin?: OgSkin;
 }
 
 export function memberCard({
@@ -353,16 +358,18 @@ export function memberCard({
   posts,
   joined,
   signature,
+  skin: colors = skin,
 }: MemberData): VNode {
   return frame(
     headerBar(
-      monoLabel('MEMBER PROFILE', skin.inkSoft),
-      box({ alignItems: 'center', gap: 10 }, logo(26), wordmark(19)),
+      monoLabel('MEMBER PROFILE', colors.inkSoft),
+      box({ alignItems: 'center', gap: 10 }, logo(26, colors.accent, colors.surface), wordmark(19, colors.ink)),
       22,
+      colors,
     ),
     box(
       { flex: 1, alignItems: 'center', gap: 48, padding: '40px 52px' },
-      box({ flexDirection: 'column', alignItems: 'center', gap: 14 }, avatar, rank ? rankBadge(rank) : null),
+      box({ flexDirection: 'column', alignItems: 'center', gap: 14 }, avatar, rank ? rankBadge(rank, colors) : null),
       box(
         { flex: 1, flexDirection: 'column', gap: 12 },
         text(
@@ -370,17 +377,17 @@ export function memberCard({
             fontFamily: font.display,
             fontSize: 56,
             letterSpacing: '-0.015em',
-            color: skin.ink,
+            color: colors.ink,
             ...clamp(1),
           },
           displayName,
         ),
-        text({ fontFamily: font.mono, fontSize: 20, color: skin.link }, `@${handle}`),
+        text({ fontFamily: font.mono, fontSize: 20, color: colors.link }, `@${handle}`),
         box(
           { alignItems: 'center', gap: 32, marginTop: 8 },
-          ...(posts != null ? [stat(nf(posts), 'POSTS', 30)] : []),
-          ...(posts != null && joined ? [vline(38)] : []),
-          ...(joined ? [stat(joined, 'JOINED', 30)] : []),
+          ...(posts != null ? [stat(nf(posts), 'POSTS', 30, colors)] : []),
+          ...(posts != null && joined ? [vline(38, colors.lineStrong)] : []),
+          ...(joined ? [stat(joined, 'JOINED', 30, colors)] : []),
         ),
         signature
           ? text(
@@ -389,8 +396,8 @@ export function memberCard({
                 fontStyle: 'italic',
                 fontSize: 24,
                 lineHeight: 1.4,
-                color: skin.inkSoft,
-                borderLeft: `3px solid ${skin.accent}`,
+                color: colors.inkSoft,
+                borderLeft: `3px solid ${colors.accent}`,
                 padding: '6px 0 6px 18px',
                 marginTop: 14,
                 maxWidth: 560,
@@ -401,5 +408,6 @@ export function memberCard({
           : null,
       ),
     ),
+    colors,
   );
 }

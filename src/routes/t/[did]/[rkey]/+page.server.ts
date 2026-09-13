@@ -19,7 +19,7 @@ interface Post {
   body?: RichTextBlock[];
 }
 import { boardModerator, canModerate } from '$lib/server/admin';
-import { createForumRecord } from '$lib/server/forum-repo';
+import { createForumRecord, forumWriteErrorMessage } from '$lib/server/forum-repo';
 import { savedRedirect } from '$lib/server/saved-redirect';
 import { actionFamily, isThreadAction } from '$lib/moderation';
 import { presenceFor } from '$lib/server/profiles';
@@ -374,7 +374,9 @@ export const actions: Actions = {
         action,
       });
     } catch (e) {
-      return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t moderate this thread. Try again.' });
+      return fail(502, {
+        message: forumWriteErrorMessage(e, 'We couldn\'t moderate this thread. Try again.'),
+      });
     }
     const flag = { hide: 'hidden', lock: 'locked', pin: 'pinned' }[actionFamily(action)] as 'hidden' | 'locked' | 'pinned';
     const want = !action.startsWith('un');

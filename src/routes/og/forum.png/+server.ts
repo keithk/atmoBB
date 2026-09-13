@@ -25,8 +25,8 @@ async function customImage(image: unknown): Promise<Uint8Array<ArrayBuffer> | nu
 export const GET: RequestHandler = async ({ url }) => {
   try {
     const index = await getBoardIndex(FORUM_DID());
-    const previewTheme = url.searchParams.get('previewTheme');
-    const custom = previewTheme ? null : await customImage(index.forum?.ogImage);
+    const generatedPreview = url.searchParams.has('generated');
+    const custom = generatedPreview ? null : await customImage(index.forum?.ogImage);
     if (custom) return pngResponse(custom, 300);
     const snap = presenceSnapshot();
     const online = snap.members.filter((m) => m.presence === 'online').length + snap.guests;
@@ -38,7 +38,7 @@ export const GET: RequestHandler = async ({ url }) => {
         members: index.stats?.members ?? 0,
         boards: index.boards?.length ?? 0,
         online,
-        skin: ogSkin(previewTheme ?? index.forum?.ogTheme),
+        skin: ogSkin(index.forum?.theme, index.forum?.customCss),
       }),
     );
     return pngResponse(png, 300);

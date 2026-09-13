@@ -18,6 +18,21 @@ export interface ProfileCard {
   sponsor: { text: string; handle: string | null } | null;
 }
 
+const cardCache = new Map<string, Promise<ProfileCard | null>>();
+
+/** Load a profile card once per actor, shared by mentions and hover cards. */
+export function loadProfileCard(actor: string): Promise<ProfileCard | null> {
+  const key = actor.toLowerCase();
+  let hit = cardCache.get(key);
+  if (!hit) {
+    hit = fetch(`/members/${encodeURIComponent(actor)}/card.json`)
+      .then((response) => (response.ok ? (response.json() as Promise<ProfileCard>) : null))
+      .catch(() => null);
+    cardCache.set(key, hit);
+  }
+  return hit;
+}
+
 /** Canonical profile URL for a member. DIDs always resolve; handles may not. */
 export function profileHref(didOrActor: string): string {
   return `/members/${encodeURIComponent(didOrActor)}`;

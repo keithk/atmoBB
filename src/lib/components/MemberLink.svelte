@@ -1,31 +1,17 @@
-<script module lang="ts">
-  import type { ProfileCard } from '$lib/profile-card';
-  // One in-flight/settled fetch per member, shared across every link on the page.
-  const cardCache = new Map<string, Promise<ProfileCard | null>>();
-
-  function loadCard(actor: string): Promise<ProfileCard | null> {
-    let hit = cardCache.get(actor);
-    if (!hit) {
-      hit = fetch(`/members/${encodeURIComponent(actor)}/card.json`)
-        .then((r) => (r.ok ? (r.json() as Promise<ProfileCard>) : null))
-        .catch(() => null);
-      cardCache.set(actor, hit);
-    }
-    return hit;
-  }
-</script>
-
 <script lang="ts">
+  import { onMount } from 'svelte';
   import type { Snippet } from 'svelte';
+  import Avatar from './Avatar.svelte';
   import ProfileHovercard from './ProfileHovercard.svelte';
-  import { profileHref } from '$lib/profile-card';
+  import { loadProfileCard, profileHref, type ProfileCard } from '$lib/profile-card';
 
   let {
     did,
     handle,
+    showAvatar = false,
     class: klass = '',
     children,
-  }: { did?: string; handle?: string; class?: string; children: Snippet } = $props();
+  }: { did?: string; handle?: string; showAvatar?: boolean; class?: string; children: Snippet } = $props();
 
   // A handle is enough (the card endpoint resolves it), so @-mentions that only
   // know the handle work too. Prefer the readable handle in the URL.
@@ -39,6 +25,10 @@
 
   const CARD_W = 320;
   const CARD_H = 200;
+
+  onMount(async () => {
+    if (showAvatar) card = await loadProfileCard(actor);
+  });
 
   function place(el: HTMLElement) {
     const r = el.getBoundingClientRect();
@@ -54,7 +44,7 @@
     showTimer = setTimeout(async () => {
       place(el);
       open = true;
-      if (!card) card = await loadCard(actor);
+      if (!card) card = await loadProfileCard(actor);
     }, 220);
   }
 
@@ -76,7 +66,12 @@
     onmouseleave={scheduleHide}
     onfocus={scheduleShow}
     onblur={scheduleHide}
-  >{@render children()}</a>
+  >
+    {#if showAvatar && card}
+      <span class="atm-memberlink__avatar">
+        <Avatar seed={card.did} profile={card.profile} size={18} alt="" />
+      </span>
+    {/if}{@render children()}</a>
 
   {#if open && card}
     <div
@@ -94,6 +89,11 @@
 <style>
   @layer atmobb {
   .atm-memberlink { position: relative; }
+  .atm-memberlink__avatar {
+    display: inline-flex;
+    margin-right: 0.2em;
+    vertical-align: -0.2em;
+  }
   .atm-memberlink__pop {
     position: fixed;
     z-index: 60;

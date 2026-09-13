@@ -8,6 +8,7 @@ import { relTime } from '$lib/reltime';
 import { blocksToPlainText } from '$lib/richtext/plain';
 import { imageCid } from '$lib/richtext/blocks-tiptap';
 import { blobUrl } from '$lib/server/profiles';
+import { ogSkin } from '$lib/server/og/palette';
 
 export const GET: RequestHandler = async ({ params, url, fetch }) => {
   const uri = threadUri(params.did, params.rkey);
@@ -34,11 +35,12 @@ export const GET: RequestHandler = async ({ params, url, fetch }) => {
       imageUrl ? imageDataUri(fetch, imageUrl) : null,
     ]);
     const authorHandle = handle.startsWith('did:') ? thread.author.slice(8, 20) : handle;
+    const colors = ogSkin(index.forum?.theme, index.forum?.customCss);
     const avatar = await profileAvatarNode(
       thread.authorProfile,
       thread.author,
       fetch,
-      { size: 64, radius: 10 },
+      { size: 64, radius: 10, skin: colors },
       thread.authorProfile?.displayName ?? authorHandle,
     );
     const rank = rankFor(index.forum?.ranks ?? [], thread.authorPosts).title;
@@ -55,6 +57,7 @@ export const GET: RequestHandler = async ({ params, url, fetch }) => {
         rank: rank || undefined,
         replies: page.replyCount,
         started: relTime(thread.value.createdAt).replace(' ago', '') || undefined,
+        skin: colors,
       }),
     );
     return pngResponse(png, 300);

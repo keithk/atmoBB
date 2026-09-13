@@ -3,15 +3,6 @@
 
   let faviconName = $state('');
   let ogImageName = $state('');
-  let selectedOgTheme = $state<string>();
-  const ogTheme = $derived(selectedOgTheme ?? data.ogTheme);
-  const ogThemes = [
-    { value: 'classic', label: 'Classic', colors: ['#eceae7', '#f79b7a', '#2b2a2e'] },
-    { value: 'midnight', label: 'Midnight', colors: ['#171821', '#ffb454', '#f5f1ff'] },
-    { value: 'ocean', label: 'Ocean', colors: ['#dcecf1', '#35b6d4', '#14313d'] },
-    { value: 'forest', label: 'Forest', colors: ['#e4eadf', '#79a85a', '#243326'] },
-    { value: 'plum', label: 'Plum', colors: ['#eee4ed', '#d56aaf', '#382636'] },
-  ];
 </script>
 
 {#if form?.message}<p class="atm-err">{form.message}</p>{/if}
@@ -60,43 +51,32 @@
   <div class="atm-card__header"><span>Social preview</span></div>
   <div class="atm-card__body">
     <p class="lede">
-      Pick a style and atmoBB builds the image from the forum profile and live stats. No design
-      software needed—the preview updates as you choose.
+      atmoBB builds social images from the forum profile, live stats, and the same theme tokens used
+      by public pages. Theme changes and <code>:root</code> token overrides in Custom CSS update every
+      generated forum, thread, and member image automatically.
     </p>
     {#if data.ogImageCid}
-      <p class="atm-ok">A finished image is currently active. Choosing a style below will replace it.</p>
+      <p class="atm-ok">A finished image is currently active. The generated version is shown below for comparison.</p>
     {/if}
     <img
       class="og-preview"
-      src="/og/forum.png?previewTheme={ogTheme}"
-      alt="Current forum social preview"
+      src="/og/forum.png?generated"
+      alt="Generated forum social preview using the current forum appearance"
       width="1200"
       height="630"
     />
-    <form class="theme-builder" method="POST" action="?/saveOgTheme">
-      <fieldset class="theme-options">
-        <legend class="atm-label">Style</legend>
-        {#each ogThemes as theme}
-          <label class:theme-option--selected={ogTheme === theme.value} class="theme-option">
-            <input
-              type="radio"
-              name="ogTheme"
-              value={theme.value}
-              checked={ogTheme === theme.value}
-              onchange={() => (selectedOgTheme = theme.value)}
-            />
-            <span class="swatches" aria-hidden="true">
-              {#each theme.colors as color}<i style:background={color}></i>{/each}
-            </span>
-            <span>{theme.label}</span>
-          </label>
-        {/each}
-      </fieldset>
-      <button class="atm-btn atm-btn--primary">use this style</button>
-    </form>
+    <p class="atm-hint appearance-note">
+      The image renderer supports the shared color, presence, radius, and shadow tokens. Custom CSS
+      rules that target page elements or classes still apply only to browser pages.
+    </p>
+    {#if data.ogImageCid}
+      <form class="generated-action" method="POST" action="?/removeOgImage">
+        <button class="atm-btn atm-btn--primary">use generated preview</button>
+      </form>
+    {/if}
     <details class="custom-image">
       <summary>Advanced: use a finished image instead</summary>
-      <p class="atm-hint">A custom image replaces the generated card until you choose a style again.</p>
+      <p class="atm-hint">A custom image replaces the generated forum card until you switch back above.</p>
       <div class="og-actions">
         <form class="og-upload" method="POST" action="?/uploadOgImage" enctype="multipart/form-data">
           <label class="atm-btn atm-btn--secondary file-button">
@@ -112,11 +92,6 @@
           </label>
           <button class="atm-btn atm-btn--primary" disabled={data.writeMode === 'index'}>save preview</button>
         </form>
-        {#if data.ogImageCid}
-          <form method="POST" action="?/removeOgImage">
-            <button class="atm-btn atm-btn--ghost">restore default</button>
-          </form>
-        {/if}
       </div>
       <p class="atm-hint">
         1200 × 630 PNG, up to 2 MB.{#if data.writeMode === 'index'} Uploads require a connected forum account and PDS.{/if}
@@ -132,15 +107,9 @@
   .favicon-preview { object-fit: contain; border: var(--border-hair) solid var(--forum-line); border-radius: var(--radius-sm); }
   .favicon-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-2); }
   .og-preview { display: block; width: 100%; height: auto; border: var(--border-hair) solid var(--forum-line); }
-  .theme-builder { display: grid; gap: var(--space-3); margin-top: var(--space-3); }
-  .theme-options { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: 0; border: 0; }
-  .theme-options legend { width: 100%; margin-bottom: var(--space-1); }
-  .theme-option { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2); border: var(--border-hair) solid var(--forum-line); background: var(--forum-surface); cursor: pointer; }
-  .theme-option--selected { border-color: var(--forum-accent); box-shadow: 0 0 0 1px var(--forum-accent); }
-  .theme-option input { position: absolute; opacity: 0; pointer-events: none; }
-  .swatches { display: flex; overflow: hidden; border: var(--border-hair) solid var(--forum-line); border-radius: var(--radius-sm); }
-  .swatches i { width: 16px; height: 24px; }
-  .theme-builder .atm-btn { justify-self: start; }
+  .lede code { font-family: var(--font-mono); }
+  .appearance-note { margin-top: var(--space-2); }
+  .generated-action { margin-top: var(--space-3); }
   .custom-image { margin-top: var(--space-4); border-top: var(--border-hair) solid var(--forum-line); padding-top: var(--space-3); }
   .custom-image summary { cursor: pointer; font: var(--type-ui); color: var(--forum-link); }
   .og-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-3); }

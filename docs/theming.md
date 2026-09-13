@@ -61,6 +61,13 @@ Reach for tokens on colors and typography, because every shared component reads 
 | Ranks and titles | `--forum-rank`, `--forum-rank-bg` |
 | Font families | `--font-display`, `--font-wordmark`, `--font-body`, `--font-serif`, `--font-mono` |
 
+Generated Open Graph images use this same token cascade. The selected built-in
+theme is applied first, followed by `:root` overrides from Custom CSS. Color,
+presence, `--radius-lg`, and `--shadow-sm` tokens are supported by the image
+renderer. Selector rules such as `.atm-masthead { ... }` remain browser-only:
+the lightweight image renderer does not run a browser or apply CSS classes.
+Admin → Appearance → Branding shows the resulting generated card.
+
 `src/lib/styles/tokens/` also defines spacing, radii, type sizes, shadows, and layout widths. I'll keep `--forum-*` and `--font-*` stable. The rest can move.
 
 ## Stable class hooks

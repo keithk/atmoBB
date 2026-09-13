@@ -75,7 +75,7 @@
   {#if has(seg.features, 'spoiler')}
     <SpoilerSpan>{@render styled(seg)}</SpoilerSpan>
   {:else if did}
-    <MemberLink {did} class="rt-mention">{@render styled(seg)}</MemberLink>
+    <MemberLink {did} showAvatar class="rt-mention">{@render styled(seg)}</MemberLink>
   {:else if href}
     <a {href} target="_blank" rel="noopener noreferrer">{@render styled(seg)}</a>
   {:else}
