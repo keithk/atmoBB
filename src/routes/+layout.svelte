@@ -137,7 +137,7 @@
         ><span aria-hidden="true">☰</span></button>
       {/if}
       <a class="atm-masthead__brand" href="/">
-        <Logo size={24} />
+        <Logo size={24} wordmark={false} />
         <span class="atm-masthead__slash" aria-hidden="true">/</span>
         <span class="atm-masthead__forum">{data.forum.name}</span>
       </a>
