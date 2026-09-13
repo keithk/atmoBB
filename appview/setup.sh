@@ -97,6 +97,30 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_atmobb_forum_gating_open
   ON atmobb_forum_gating (forum_did) WHERE opened_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_atmobb_forum_gating_forum
   ON atmobb_forum_gating (forum_did, gated_since);
+-- First-seen posts, one row per member and board plus one per member and
+-- forum (board_uri NULL), written the first time a served post is indexed and
+-- never removed: deleting or hiding the post later does not take the stamp
+-- back. first_at is the post's createdAt, like atmobb_thread_stats.
+CREATE TABLE IF NOT EXISTS atmobb_firsts (
+  forum_did  text NOT NULL,
+  did        text NOT NULL,
+  board_uri  text,
+  first_at   text NOT NULL,
+  source_uri text NOT NULL,
+  UNIQUE NULLS NOT DISTINCT (forum_did, did, board_uri)
+);
+-- By-hand stamp awards from awardStamp actions signed by the stamp's own
+-- forum. actor_did is the staffer who gave it when the action names one.
+-- revokeStamp sets revoked_at and a later awardStamp clears it.
+CREATE TABLE IF NOT EXISTS atmobb_stamp_awards (
+  forum_did  text NOT NULL,
+  did        text NOT NULL,
+  stamp_uri  text NOT NULL,
+  actor_did  text,
+  created_at text NOT NULL,
+  revoked_at text,
+  PRIMARY KEY (forum_did, did, stamp_uri)
+);
 
 -- Migrate the original global post-count table, then rebuild it from indexed
 -- records so existing installs immediately get accurate per-forum totals.
@@ -128,7 +152,7 @@ echo "== record + def lexicons via network resolution"
 for nsid in \
   $NS.richtext.facet $NS.richtext.block \
   $NS.actor.profile \
-  $NS.forum.profile $NS.forum.board $NS.forum.category $NS.forum.moderator $NS.forum.membership $NS.forum.accessRequest $NS.forum.watch \
+  $NS.forum.profile $NS.forum.board $NS.forum.category $NS.forum.moderator $NS.forum.membership $NS.forum.accessRequest $NS.forum.watch $NS.forum.stamp \
   $NS.moderation.action \
   $NS.discussion.thread $NS.discussion.reply \
   $NS.poll.vote
@@ -165,6 +189,7 @@ upload_lex lexicons/app/atmobb/moderation/getLog.json "{target_collection: \"$NS
 upload_lex lexicons/app/atmobb/moderation/getStanding.json "{target_collection: \"$NS.moderation.action\"}"
 upload_lex lexicons/app/atmobb/forum/getTopic.json "{target_collection: \"$NS.forum.board\"}"
 upload_lex lexicons/app/atmobb/forum/getTopics.json "{target_collection: \"$NS.forum.board\"}"
+upload_lex lexicons/app/atmobb/forum/getStamps.json "{target_collection: \"$NS.forum.stamp\"}"
 upload_lex lexicons/app/atmobb/discussion/createThread.json "{target_collection: \"$NS.discussion.thread\", action: \"create\"}"
 upload_lex lexicons/app/atmobb/discussion/createReply.json "{target_collection: \"$NS.discussion.reply\", action: \"create\"}"
 

@@ -15,6 +15,11 @@
 -- out-of-order backfill run infra/rebuild-stats.sql. Optional fields are
 -- passed as '' and NULLIFed in SQL because db.raw stops binding at the first
 -- nil parameter.
+--
+-- By-hand stamp awards are keyed by the signing forum too, and only taken
+-- when the referenced stamp lives in that forum's repo. The newest award for
+-- a (forum, member, stamp) stands, a revokeStamp after it closes it, and a
+-- later awardStamp reopens it.
 function handle()
   if not (record and record.subject) then
     return record
@@ -86,6 +91,22 @@ function handle()
         WHERE forum_did = $1::text AND opened_at IS NULL
           AND (gated_since, action_uri) < ($2::text, $3::text)
       ]], { did, at, uri })
+    elseif a == "awardStamp" and record.ref and record.ref.uri then
+      db.raw([[
+        INSERT INTO atmobb_stamp_awards (forum_did, did, stamp_uri, actor_did, created_at, revoked_at)
+        SELECT $1::text, $2::text, $3::text, NULLIF($4::text, ''), $5::text, NULL
+        WHERE split_part($3::text, '/', 3) = $1::text
+        ON CONFLICT (forum_did, did, stamp_uri) DO UPDATE
+        SET actor_did = EXCLUDED.actor_did, created_at = EXCLUDED.created_at, revoked_at = NULL
+        WHERE atmobb_stamp_awards.created_at <= EXCLUDED.created_at
+      ]], { did, member, record.ref.uri, record.actor or "", at })
+    elseif a == "revokeStamp" and record.ref and record.ref.uri then
+      db.raw([[
+        UPDATE atmobb_stamp_awards SET revoked_at = $4::text
+        WHERE forum_did = $1::text AND did = $2::text AND stamp_uri = $3::text
+          AND split_part($3::text, '/', 3) = $1::text
+          AND created_at <= $4::text
+      ]], { did, member, record.ref.uri, at })
     end
     return record
   end

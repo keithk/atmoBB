@@ -35,6 +35,33 @@ function capture(text: string, pattern: RegExp, label: string): string[] {
   return match.slice(1);
 }
 
+/** The db.raw([[ ... ]], { statement in a Lua source that mentions marker. */
+function statement(text: string, marker: string, label: string): string {
+  const bodies = [...text.matchAll(/db\.raw\(\[\[([\s\S]*?)\]\], \{/g)].map((match) => match[1]);
+  const found = bodies.find((body) => body.includes(marker));
+  if (!found) throw new Error(`Could not extract ${label} from Lua source`);
+  return found;
+}
+
+/** The semicolon-terminated block of infra/rebuild-stats.sql that mentions marker. */
+function rebuildBlock(marker: string): string {
+  const found = source('../infra/rebuild-stats.sql').split(/;\s*\n/).find((block) => block.includes(marker));
+  if (!found) throw new Error(`Could not extract ${marker} block from rebuild-stats.sql`);
+  return found;
+}
+
+function stampStatements() {
+  const action = source('./lua/onModerationAction.lua');
+  return {
+    threadFirsts: statement(source('./lua/onThreadCreate.lua'), 'INSERT INTO atmobb_firsts', 'thread firsts'),
+    replyFirsts: statement(source('./lua/onReplyCreate.lua'), 'INSERT INTO atmobb_firsts', 'reply firsts'),
+    award: statement(action, 'INSERT INTO atmobb_stamp_awards', 'stamp award'),
+    revoke: statement(action, 'UPDATE atmobb_stamp_awards', 'stamp revoke'),
+    rebuildFirsts: rebuildBlock('INSERT INTO atmobb_firsts'),
+    rebuildAwards: rebuildBlock('INSERT INTO atmobb_stamp_awards'),
+  };
+}
+
 function exactQueries() {
   const latest = source('./lua/getLatestThreads.lua');
   const board = source('./lua/getBoardThreads.lua');
@@ -83,6 +110,15 @@ async function fixtures(sql: Sql) {
     );
     CREATE TEMP TABLE atmobb_forum_gating (
       action_uri text PRIMARY KEY, forum_did text, gated_since text, opened_at text, mode text
+    );
+    CREATE TEMP TABLE atmobb_firsts (
+      forum_did text NOT NULL, did text NOT NULL, board_uri text, first_at text NOT NULL, source_uri text NOT NULL,
+      UNIQUE NULLS NOT DISTINCT (forum_did, did, board_uri)
+    );
+    CREATE TEMP TABLE atmobb_stamp_awards (
+      forum_did text NOT NULL, did text NOT NULL, stamp_uri text NOT NULL, actor_did text,
+      created_at text NOT NULL, revoked_at text,
+      PRIMARY KEY (forum_did, did, stamp_uri)
     );
   `);
 
@@ -220,5 +256,179 @@ run('thread list SQL integration', () => {
     expect(allUris.some((uri) => uri.includes('blocked') || uri.includes('delisted'))).toBe(false);
     const second = await sql.unsafe(queries.boardRows, boardParams('', '', 1, 1));
     expect(second.map((row) => row.thread_uri)).toEqual([SEARCH]);
+  });
+});
+
+// Stamps: the first-seen rows the create triggers write, the by-hand awards
+// the moderation trigger indexes, and the rebuild that reproduces both.
+run('stamp trigger SQL integration', () => {
+  const sql = postgres(DATABASE_URL!, { max: 1 });
+  const queries = stampStatements();
+  const SECOND = `at://${F}/${NS}.forum.board/second`;
+  const SECOND_THREAD = `at://did:plc:author/${NS}.discussion.thread/second`;
+  const HUSHED = `at://did:plc:hushed/${NS}.discussion.thread/hushed`;
+  const LONE = `at://did:plc:lone/${NS}.discussion.thread/lone`;
+  const STAMP = `at://${F}/${NS}.forum.stamp/helper`;
+  const reply = (rkey: string) => `at://did:plc:newbie/${NS}.discussion.reply/${rkey}`;
+  const plain = <T extends object>(rows: readonly T[]) => rows.map((row) => ({ ...row }));
+
+  const threadFirsts = (uri: string, board: string, author: string, at: string) =>
+    sql.unsafe(queries.threadFirsts, [uri, board, author, at, `${NS}.forum.board`]);
+  const replyFirsts = (uri: string, thread: string, author: string, at: string) =>
+    sql.unsafe(queries.replyFirsts, [uri, thread, author, at, `${NS}.forum.board`]);
+  const award = (forum: string, member: string, actor: string, at: string) =>
+    sql.unsafe(queries.award, [forum, member, STAMP, actor, at]);
+  const revoke = (forum: string, member: string, at: string) =>
+    sql.unsafe(queries.revoke, [forum, member, STAMP, at]);
+  const firsts = async (did: string) => plain(await sql`
+    SELECT board_uri, first_at, source_uri FROM atmobb_firsts
+    WHERE forum_did = ${F} AND did = ${did} ORDER BY board_uri NULLS FIRST`);
+  const allFirsts = async () => plain(await sql`
+    SELECT forum_did, did, board_uri, first_at, source_uri FROM atmobb_firsts
+    ORDER BY forum_did, did, board_uri NULLS FIRST`);
+  const awards = async () => plain(await sql`
+    SELECT forum_did, did, stamp_uri, actor_did, created_at, revoked_at FROM atmobb_stamp_awards
+    ORDER BY forum_did, did, stamp_uri`);
+
+  beforeAll(async () => {
+    await fixtures(sql);
+    // A second public board on F with one thread, and a fresh author whose
+    // only thread the forum hid after the fact.
+    await sql`INSERT INTO happyview_records ${sql({
+      uri: SECOND, did: F, collection: `${NS}.forum.board`, rkey: 'second',
+      record: boardRecord('Second', { topic: 'own' }), cid: 'b6', created_at: '2020-01-01T00:00:00Z',
+    })}`;
+    for (const [uri, board, author, title, created, hidden] of [
+      [SECOND_THREAD, SECOND, 'did:plc:author', 'Second board thread', '2026-01-09T00:00:00Z', false],
+      [HUSHED, BOARD, 'did:plc:hushed', 'Hidden since', '2026-01-08T00:00:00Z', true],
+    ] as const) {
+      await sql`INSERT INTO happyview_records ${sql({
+        uri, did: author, collection: `${NS}.discussion.thread`, rkey: uri.split('/').at(-1)!,
+        record: threadRecord(board, title), cid: `c-${title}`, created_at: created,
+      })}`;
+      await sql`INSERT INTO atmobb_thread_stats ${sql({
+        thread_uri: uri, board_uri: board, author_did: author, title, created_at: created,
+        reply_count: 0, last_activity: created, last_reply_did: null, hidden, locked: false, locked_at: null, pinned: false,
+      })}`;
+    }
+  });
+  afterAll(() => sql.end());
+
+  it('AE3: a first reply in a board writes one board row and one forum row, and the next writes nothing', async () => {
+    await replyFirsts(reply('one'), SEARCH, 'did:plc:newbie', '2026-01-10T00:00:00Z');
+    const expected = [
+      { board_uri: null, first_at: '2026-01-10T00:00:00Z', source_uri: reply('one') },
+      { board_uri: BOARD, first_at: '2026-01-10T00:00:00Z', source_uri: reply('one') },
+    ];
+    expect(await firsts('did:plc:newbie')).toEqual(expected);
+    await replyFirsts(reply('two'), SEARCH, 'did:plc:newbie', '2026-01-11T00:00:00Z');
+    expect(await firsts('did:plc:newbie')).toEqual(expected);
+  });
+
+  it('a reply in a second board writes a board row only', async () => {
+    await replyFirsts(reply('three'), SECOND_THREAD, 'did:plc:newbie', '2026-01-12T00:00:00Z');
+    expect(await firsts('did:plc:newbie')).toEqual([
+      { board_uri: null, first_at: '2026-01-10T00:00:00Z', source_uri: reply('one') },
+      { board_uri: BOARD, first_at: '2026-01-10T00:00:00Z', source_uri: reply('one') },
+      { board_uri: SECOND, first_at: '2026-01-12T00:00:00Z', source_uri: reply('three') },
+    ]);
+  });
+
+  it('deleting the qualifying thread leaves the firsts rows in place', async () => {
+    expect(source('./lua/onThreadDelete.lua')).not.toContain('atmobb_firsts');
+    expect(source('./lua/onReplyDelete.lua')).not.toContain('atmobb_firsts');
+    await sql`INSERT INTO atmobb_thread_stats ${sql({
+      thread_uri: LONE, board_uri: BOARD, author_did: 'did:plc:lone', title: 'Lone', created_at: '2026-01-13T00:00:00Z',
+      reply_count: 0, last_activity: '2026-01-13T00:00:00Z', last_reply_did: null, hidden: false, locked: false, locked_at: null, pinned: false,
+    })}`;
+    await threadFirsts(LONE, BOARD, 'did:plc:lone', '2026-01-13T00:00:00Z');
+    const expected = [
+      { board_uri: null, first_at: '2026-01-13T00:00:00Z', source_uri: LONE },
+      { board_uri: BOARD, first_at: '2026-01-13T00:00:00Z', source_uri: LONE },
+    ];
+    expect(await firsts('did:plc:lone')).toEqual(expected);
+    await sql`DELETE FROM atmobb_thread_stats WHERE thread_uri = ${LONE}`;
+    expect(await firsts('did:plc:lone')).toEqual(expected);
+  });
+
+  it('a thread in a space board or on a delisted forum writes nothing', async () => {
+    await threadFirsts(PRIVATE_THREAD, PRIVATE, 'did:plc:spacer', '2026-01-03T00:00:00Z');
+    expect(await firsts('did:plc:spacer')).toEqual([]);
+    await threadFirsts(`at://did:plc:delisted-author/${NS}.discussion.thread/delisted`, DELISTED, 'did:plc:delisted-author', '2026-01-07T00:00:00Z');
+    expect(await sql`SELECT 1 FROM atmobb_firsts WHERE forum_did = 'did:plc:delisted'`).toHaveLength(0);
+  });
+
+  it('on a gated forum, a post outside the author\'s membership window writes nothing', async () => {
+    await threadFirsts(GATED_OUTSIDER, BOARD, 'did:plc:outsider', '2021-02-01T00:00:00Z');
+    expect(await firsts('did:plc:outsider')).toEqual([]);
+    await threadFirsts(GATED_FORMER, BOARD, 'did:plc:former', '2021-10-01T00:00:00Z');
+    expect(await firsts('did:plc:former')).toEqual([]);
+    await threadFirsts(BETWEEN_GATES, BOARD, 'did:plc:outsider', '2021-07-01T00:00:00Z');
+    expect((await firsts('did:plc:outsider')).map((row) => row.source_uri)).toEqual([BETWEEN_GATES, BETWEEN_GATES]);
+    await threadFirsts(GATED_MEMBER, BOARD, 'did:plc:member', '2021-02-01T00:00:00Z');
+    expect((await firsts('did:plc:member')).map((row) => row.source_uri)).toEqual([GATED_MEMBER, GATED_MEMBER]);
+    await threadFirsts(GATED_FORUM, BOARD, F, '2021-10-02T00:00:00Z');
+    expect((await firsts(F)).map((row) => row.source_uri)).toEqual([GATED_FORUM, GATED_FORUM]);
+  });
+
+  it('AE11: awardStamp records the actor, revokeStamp closes it, and a later awardStamp reopens it', async () => {
+    await award(F, 'did:plc:r1', 'did:plc:staff', '2026-02-01T00:00:00Z');
+    expect(await awards()).toEqual([
+      { forum_did: F, did: 'did:plc:r1', stamp_uri: STAMP, actor_did: 'did:plc:staff', created_at: '2026-02-01T00:00:00Z', revoked_at: null },
+    ]);
+    await revoke(F, 'did:plc:r1', '2026-02-02T00:00:00Z');
+    expect((await awards())[0].revoked_at).toBe('2026-02-02T00:00:00Z');
+    await award(F, 'did:plc:r1', '', '2026-02-03T00:00:00Z');
+    expect(await awards()).toEqual([
+      { forum_did: F, did: 'did:plc:r1', stamp_uri: STAMP, actor_did: null, created_at: '2026-02-03T00:00:00Z', revoked_at: null },
+    ]);
+  });
+
+  it('an awardStamp or revokeStamp signed by a DID other than the stamp\'s repo does nothing', async () => {
+    await award('did:plc:peer', 'did:plc:r2', 'did:plc:staff', '2026-02-04T00:00:00Z');
+    await revoke('did:plc:peer', 'did:plc:r1', '2026-02-04T00:00:00Z');
+    expect(await awards()).toEqual([
+      { forum_did: F, did: 'did:plc:r1', stamp_uri: STAMP, actor_did: null, created_at: '2026-02-03T00:00:00Z', revoked_at: null },
+    ]);
+  });
+
+  it('rebuilding from indexed records reproduces live indexing, minus threads hidden since', async () => {
+    await sql`TRUNCATE atmobb_firsts, atmobb_stamp_awards`;
+    const threads = await sql`SELECT thread_uri, board_uri, author_did, created_at FROM atmobb_thread_stats ORDER BY created_at, thread_uri`;
+    for (const t of threads) await threadFirsts(t.thread_uri, t.board_uri, t.author_did, t.created_at);
+    const replies = await sql`
+      SELECT uri, did, created_at, (record::jsonb)->'thread'->>'uri' AS thread FROM happyview_records
+      WHERE collection = ${`${NS}.discussion.reply`} ORDER BY created_at, uri`;
+    for (const r of replies) await replyFirsts(r.uri, r.thread, r.did, r.created_at);
+    const actions: [string, string, string, string | null, string][] = [
+      [F, 'did:plc:r1', 'awardStamp', 'did:plc:staff', '2026-02-01T00:00:00Z'],
+      [F, 'did:plc:r1', 'revokeStamp', null, '2026-02-02T00:00:00Z'],
+      [F, 'did:plc:r1', 'awardStamp', null, '2026-02-03T00:00:00Z'],
+      [F, 'did:plc:r2', 'awardStamp', 'did:plc:staff', '2026-02-01T00:00:00Z'],
+      [F, 'did:plc:r2', 'revokeStamp', 'did:plc:staff', '2026-02-05T00:00:00Z'],
+      ['did:plc:peer', 'did:plc:r3', 'awardStamp', null, '2026-02-01T00:00:00Z'],
+    ];
+    for (const [i, [forum, member, action, actor, at]] of actions.entries()) {
+      if (action === 'awardStamp') await award(forum, member, actor ?? '', at);
+      else await revoke(forum, member, at);
+      await sql`INSERT INTO happyview_records ${sql({
+        uri: `at://${forum}/${NS}.moderation.action/stamp-${i}`, did: forum, collection: `${NS}.moderation.action`, rkey: `stamp-${i}`,
+        record: JSON.stringify({ action, subject: { did: member }, ref: { uri: STAMP, cid: 's1' }, ...(actor ? { actor } : {}), createdAt: at }),
+        cid: `a-stamp-${i}`, created_at: at,
+      })}`;
+    }
+    const liveFirsts = await allFirsts();
+    const liveAwards = await awards();
+    expect(liveFirsts.filter((row) => row.did === 'did:plc:hushed')).toHaveLength(2);
+    expect(liveAwards).toEqual([
+      { forum_did: F, did: 'did:plc:r1', stamp_uri: STAMP, actor_did: null, created_at: '2026-02-03T00:00:00Z', revoked_at: null },
+      { forum_did: F, did: 'did:plc:r2', stamp_uri: STAMP, actor_did: 'did:plc:staff', created_at: '2026-02-01T00:00:00Z', revoked_at: '2026-02-05T00:00:00Z' },
+    ]);
+
+    await sql`TRUNCATE atmobb_firsts, atmobb_stamp_awards`;
+    await sql.unsafe(queries.rebuildFirsts);
+    await sql.unsafe(queries.rebuildAwards);
+    expect(await allFirsts()).toEqual(liveFirsts.filter((row) => row.did !== 'did:plc:hushed'));
+    expect(await awards()).toEqual(liveAwards);
   });
 });

@@ -98,12 +98,6 @@ console.time("seed");
 await insert([makeRow(FORUM_DID, `${NS}.forum.profile`, "self", {
   name: "atmobb dev forum",
   description: "Synthetic forum for local development. Nothing here is real.",
-  ranks: [
-    { title: "New member", minPosts: 0 },
-    { title: "Regular", minPosts: 10 },
-    { title: "Frequent poster", minPosts: 50 },
-    { title: "Veteran", minPosts: 200 },
-  ],
   ...(GATED ? {
     membership: {
       mode: "apply",
@@ -260,6 +254,35 @@ await insert([
     expiresAt: iso(NOW + 10 * 60 * 1000),
   }, NOW - 3000),
 ]);
+
+// Stamps — the forum's own definitions: one earned by a first post on the
+// first board, one given by hand. The seeded moderator awards the by-hand
+// one to a member; the rebuild below indexes that award the way setup's
+// trigger would have, and derives the first-post rows from the threads and
+// replies seeded further down.
+const stampRows = [
+  makeRow(FORUM_DID, `${NS}.forum.stamp`, null, {
+    name: "Spoke in General",
+    look: { bg: "#1a73e8", ink: "#ffffff", shape: "stamp" },
+    trigger: { kind: "firstPostInBoard", board: boardRows[0].uri },
+    createdAt: iso(NOW - SPAN + 10000),
+  }, NOW - SPAN + 10000),
+  makeRow(FORUM_DID, `${NS}.forum.stamp`, null, {
+    name: "Helping hand",
+    look: { bg: "#fbbc04", ink: "#202124", shape: "ticket" },
+    trigger: { kind: "byHand" },
+    createdAt: iso(NOW - SPAN + 11000),
+  }, NOW - SPAN + 11000),
+];
+await insert(stampRows);
+await insert([makeRow(FORUM_DID, `${NS}.moderation.action`, null, {
+  subject: { did: authors[1] },
+  action: "awardStamp",
+  ref: { uri: stampRows[1].uri, cid: stampRows[1].cid },
+  actor: authors[0],
+  reason: "seeded test: given by hand by the moderator",
+  createdAt: iso(NOW - 2000),
+}, NOW - 2000)]);
 
 // Threads
 const TOPICS = [

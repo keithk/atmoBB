@@ -9,7 +9,8 @@
 --     < infra/rebuild-stats.sql
 
 TRUNCATE atmobb_thread_stats, atmobb_post_counts, atmobb_bans,
-         atmobb_member_windows, atmobb_forum_gating;
+         atmobb_member_windows, atmobb_forum_gating,
+         atmobb_firsts, atmobb_stamp_awards;
 
 INSERT INTO atmobb_thread_stats
   (thread_uri, board_uri, author_did, title, created_at,
@@ -168,3 +169,97 @@ SELECT o.uri, o.forum_did, o.at, c.at, o.mode
 FROM opens o
 LEFT JOIN numbered c
   ON c.forum_did = o.forum_did AND c.is_close AND c.closes_before = o.closes_before;
+
+-- First-seen posts: each member's earliest served thread or reply per board,
+-- plus one per forum (board_uri NULL). Served is what getActorActivity
+-- serves: a board that exists without a space, on a forum that is not
+-- delisted, not hidden at its origin, and on a gated forum inside the
+-- author's membership window (the forum account excepted). The create
+-- triggers write these rows as posts arrive and nothing removes them, so a
+-- rebuild differs only for posts hidden or deleted since, whose stamps it
+-- takes back. Runs after the gating block so the windows it reads are there.
+WITH served_threads AS (
+  SELECT s.thread_uri, s.board_uri, s.author_did, s.created_at, b.did AS forum_did
+  FROM atmobb_thread_stats s
+  JOIN happyview_records t
+    ON t.uri = s.thread_uri AND t.collection = 'app.atmobb.discussion.thread'
+  JOIN happyview_records b
+    ON b.uri = s.board_uri AND b.collection = 'app.atmobb.forum.board'
+  WHERE NOT s.hidden
+    AND (b.record::jsonb)->'access'->>'space' IS NULL
+    AND b.did NOT IN (SELECT did FROM atmobb_delisted_forums)
+    AND (NOT EXISTS (
+        SELECT 1 FROM atmobb_forum_gating g
+        WHERE g.forum_did = b.did
+          AND g.gated_since <= s.created_at
+          AND (g.opened_at IS NULL OR s.created_at < g.opened_at))
+      OR s.author_did = b.did
+      OR EXISTS (
+        SELECT 1 FROM atmobb_member_windows w
+        WHERE w.forum_did = b.did
+          AND w.did = s.author_did
+          AND w.since <= s.created_at
+          AND (w.until IS NULL OR s.created_at < w.until)))
+), replies AS (
+  SELECT t.forum_did, r.did, t.board_uri,
+         COALESCE((r.record::jsonb)->>'createdAt', r.created_at) AS posted_at, r.uri
+  FROM happyview_records r
+  JOIN served_threads t
+    ON t.thread_uri = (r.record::jsonb)->'thread'->>'uri'
+  WHERE r.collection = 'app.atmobb.discussion.reply'
+), posts AS (
+  SELECT forum_did, author_did AS did, board_uri, created_at AS posted_at, thread_uri AS uri
+  FROM served_threads
+  UNION ALL
+  SELECT r.forum_did, r.did, r.board_uri, r.posted_at, r.uri
+  FROM replies r
+  WHERE (NOT EXISTS (
+        SELECT 1 FROM atmobb_forum_gating g
+        WHERE g.forum_did = r.forum_did
+          AND g.gated_since <= r.posted_at
+          AND (g.opened_at IS NULL OR r.posted_at < g.opened_at))
+      OR r.did = r.forum_did
+      OR EXISTS (
+        SELECT 1 FROM atmobb_member_windows w
+        WHERE w.forum_did = r.forum_did
+          AND w.did = r.did
+          AND w.since <= r.posted_at
+          AND (w.until IS NULL OR r.posted_at < w.until)))
+)
+INSERT INTO atmobb_firsts (forum_did, did, board_uri, first_at, source_uri)
+SELECT DISTINCT ON (forum_did, did, board_uri) forum_did, did, board_uri, posted_at, uri
+FROM (
+  SELECT forum_did, did, board_uri, posted_at, uri FROM posts
+  UNION ALL
+  SELECT forum_did, did, NULL, posted_at, uri FROM posts
+) scoped
+ORDER BY forum_did, did, board_uri, posted_at, uri;
+
+-- By-hand stamp awards: per (forum, member, stamp) the newest awardStamp,
+-- revoked when a revokeStamp follows it. Only actions whose stamp lives in
+-- the signing forum's repo count, as in the trigger.
+WITH events AS (
+  SELECT a.uri, a.did AS forum_did,
+         (a.record::jsonb)->'subject'->>'did' AS member,
+         (a.record::jsonb)->'ref'->>'uri' AS stamp_uri,
+         (a.record::jsonb)->>'action' = 'awardStamp' AS is_award,
+         (a.record::jsonb)->>'actor' AS actor,
+         COALESCE((a.record::jsonb)->>'createdAt', a.created_at) AS at
+  FROM happyview_records a
+  WHERE a.collection = 'app.atmobb.moderation.action'
+    AND (a.record::jsonb)->>'action' IN ('awardStamp', 'revokeStamp')
+    AND (a.record::jsonb)->'subject'->>'did' IS NOT NULL
+    AND split_part((a.record::jsonb)->'ref'->>'uri', '/', 3) = a.did
+), latest AS (
+  SELECT DISTINCT ON (forum_did, member, stamp_uri) forum_did, member, stamp_uri, actor, at, uri
+  FROM events
+  WHERE is_award
+  ORDER BY forum_did, member, stamp_uri, at DESC, uri DESC
+)
+INSERT INTO atmobb_stamp_awards (forum_did, did, stamp_uri, actor_did, created_at, revoked_at)
+SELECT l.forum_did, l.member, l.stamp_uri, l.actor, l.at,
+       (SELECT max(r.at) FROM events r
+         WHERE NOT r.is_award
+           AND r.forum_did = l.forum_did AND r.member = l.member AND r.stamp_uri = l.stamp_uri
+           AND (r.at, r.uri) > (l.at, l.uri))
+FROM latest l;

@@ -156,7 +156,8 @@ async function indexPut(
     ON CONFLICT (uri) DO UPDATE SET record = EXCLUDED.record, indexed_at = EXCLUDED.indexed_at`;
   // Mimic the onModerationAction trigger (jetstream never sees index writes):
   // origin hide/lock/pin flip the stats flags when the signer owns the board;
-  // account actions maintain bans, membership windows, and gating periods.
+  // account actions maintain bans, membership windows, gating periods, and
+  // by-hand stamp awards.
   const action = record as {
     action?: string;
     subject?: { uri?: string; did?: string };
@@ -167,6 +168,8 @@ async function indexPut(
     sponsor?: string;
     via?: string;
     mode?: string;
+    ref?: { uri?: string };
+    actor?: string;
   };
   if (collection === `${NS}.moderation.action` && action.subject?.did) {
     const member = action.subject.did;
@@ -229,6 +232,20 @@ async function indexPut(
         UPDATE atmobb_forum_gating SET opened_at = ${at}
         WHERE forum_did = ${did} AND opened_at IS NULL
           AND (gated_since, action_uri) < (${at}::text, ${uri}::text)`;
+    } else if (action.action === 'awardStamp' && action.ref?.uri) {
+      await sql`
+        INSERT INTO atmobb_stamp_awards (forum_did, did, stamp_uri, actor_did, created_at, revoked_at)
+        SELECT ${did}::text, ${member}::text, ${action.ref.uri}::text, ${action.actor ?? null}::text, ${at}::text, NULL
+        WHERE split_part(${action.ref.uri}::text, '/', 3) = ${did}::text
+        ON CONFLICT (forum_did, did, stamp_uri) DO UPDATE
+        SET actor_did = EXCLUDED.actor_did, created_at = EXCLUDED.created_at, revoked_at = NULL
+        WHERE atmobb_stamp_awards.created_at <= EXCLUDED.created_at`;
+    } else if (action.action === 'revokeStamp' && action.ref?.uri) {
+      await sql`
+        UPDATE atmobb_stamp_awards SET revoked_at = ${at}
+        WHERE forum_did = ${did} AND did = ${member} AND stamp_uri = ${action.ref.uri}
+          AND split_part(${action.ref.uri}::text, '/', 3) = ${did}::text
+          AND created_at <= ${at}::text`;
     }
   }
   if (collection === `${NS}.moderation.action` && action.subject?.uri) {
