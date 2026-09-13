@@ -244,20 +244,51 @@
   }
   .compact-welcome p { margin: var(--space-1) 0 0; color: var(--forum-ink-soft); font: var(--type-ui); }
 
+  /* A view switcher, not site navigation: a segmented control in the same
+     material as the pager and webring nav, so it doesn't read as a third
+     row of tabs under the masthead. */
   .atm-home-nav {
-    display: flex;
-    gap: var(--space-1);
-    border-bottom: var(--border-hair) solid var(--forum-line-strong);
+    display: inline-flex;
+    justify-self: start;
+    max-width: 100%;
+    background: var(--forum-surface);
+    border: var(--border-hair) solid var(--forum-line-strong);
+    border-radius: var(--radius-md);
+    box-shadow: inset 0 1px 0 var(--forum-bevel);
+    overflow: hidden;
   }
   .atm-home-nav__item {
-    padding: var(--space-2) var(--space-3);
+    position: relative;
+    padding: 7px 14px;
     color: var(--forum-ink-soft);
-    font: var(--w-semibold) var(--text-sm)/1.4 var(--font-body);
+    font: var(--w-semibold) var(--text-sm)/1 var(--font-body);
     text-decoration: none;
-    border-bottom: 3px solid transparent;
+    border-right: var(--border-hair) solid var(--forum-line);
+    transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
   }
-  .atm-home-nav__item:hover { color: var(--forum-link); text-decoration: none; }
-  .atm-home-nav__item--active { color: var(--forum-link); border-bottom-color: var(--forum-accent); }
+  .atm-home-nav__item:last-child { border-right: none; }
+  .atm-home-nav__item:hover {
+    background: var(--forum-cat-bg);
+    color: var(--forum-link);
+    text-decoration: none;
+  }
+  .atm-home-nav__item:active { background: var(--forum-surface-2); }
+  /* The container clips overflow, so the ring sits inside the segment. */
+  .atm-home-nav__item:focus-visible {
+    z-index: 1;
+    outline: 2px solid var(--forum-accent);
+    outline-offset: -2px;
+  }
+  .atm-home-nav__item--active,
+  .atm-home-nav__item--active:hover {
+    background: var(--forum-accent);
+    color: var(--forum-accent-ink);
+    border-right-color: color-mix(in oklch, var(--forum-accent) 78%, #000);
+    box-shadow: var(--shadow-well);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atm-home-nav__item { transition: none; }
+  }
   .atm-home-section-note {
     margin: 0;
     padding: var(--space-2) var(--space-4);
