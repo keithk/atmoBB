@@ -1,6 +1,6 @@
 # How atmobb uses Happyview
 
-[Happyview](https://github.com/gamesgamesgamesgamesgames/happyview) is a Rust and Postgres atproto appview engine. It eats Jetstream, indexes whatever record collections you register with it, and serves XRPC endpoints you write in Lua. Everything forum-specific about atmobb lives in its lexicons, `appview/lua/`, and two derived tables. I don't patch the engine.
+[Happyview](https://github.com/gamesgamesgamesgamesgames/happyview) is a Rust and Postgres atproto appview engine. It eats Jetstream, indexes whatever record collections you register with it, and serves XRPC endpoints you write in Lua. Everything forum-specific about atmobb lives in its lexicons, `appview/lua/`, and a few derived tables. I don't patch the engine.
 
 ## The pinned upstream image
 
@@ -17,7 +17,7 @@ A Happyview bump is always its own atmobb release ([Releasing](releasing.md)). T
 
 `appview/setup.sh` configures a running instance through the admin API. Rerunning it is safe, and it works against remote instances through the `HV` and `PG_EXEC` variables. `appview/bootstrap-admin.sh` creates the operator key it needs.
 
-- **Derived tables:** `atmobb_thread_stats` holds each thread's board, title, reply count, and last activity. `atmobb_post_counts` holds post totals by forum and DID.
+- **Derived tables:** `atmobb_thread_stats` holds each thread's board, title, reply count, and last activity. `atmobb_post_counts` holds post totals by forum and DID; the appview still maintains it, but the app no longer reads it. `atmobb_firsts` holds each member's first served post per forum and board, plus one forum-level row, written when the post arrives and never removed by a trigger. `atmobb_stamp_awards` holds by-hand stamp awards from `awardStamp` actions, with the staffer who gave one and the time a `revokeStamp` closed it.
 - **Record lexicons:** setup registers each record collection through `POST /admin/network-lexicons`. Happyview then resolves the published schema and starts indexing that collection off Jetstream. [Lexicons](lexicons.md) covers the resolution chain.
 - **Query and procedure lexicons:** setup uploads the instance's XRPC schemas directly from `lexicons/`, including the read API and the `createThread` and `createReply` procedures. atmobb never calls those procedures itself, since its writes go through its own OAuth client.
 - **Lua scripts:** every query has a Lua implementation. Record triggers keep thread and post statistics current as threads and replies are created, edited, and deleted, and apply moderation actions as they arrive.
@@ -66,6 +66,22 @@ Moving an instance that predates membership takes three steps, in this order:
 3. **Backfill and rebuild.** The trigger only sees actions that arrive after it's installed. With both tables empty the index knows no gating period and no acceptance, so it enforces nothing and every post is served, whatever the forum's profile says. Run `appview/backfill.sh` (see [Backfill](#backfill)); it ends by running `infra/rebuild-stats.sql`, which fills both tables from every indexed action. On an instance where no forum has gated yet the rebuild finds nothing to insert, but it's cheap, so run it anyway.
 
 Until step 2 runs, the app has no membership query to ask, and the gated modes stay hidden on Admin → Members. That's deliberate: a forum can't gate itself on an index that wouldn't enforce it.
+
+## Stamps
+
+Stamps are resolved when a page is read. `getStamps`, `getMembers`, `getMembership`, and `getThreadPage` match the forum's `app.atmobb.forum.stamp` records against `atmobb_firsts`, `atmobb_member_windows`, profile dates, and `atmobb_stamp_awards`, so a stamp authored after the fact goes to everyone who already qualifies. The same SQL is copied into each of those scripts, because Lua scripts can't share code; the integration test checks the copies still match.
+
+`atmobb_firsts` is written by the thread and reply create triggers, and only for a served post: a board that exists and has no space, on a forum that isn't delisted, inside the author's membership window if the forum is gated. The trigger can't know whether a post will later be hidden, and nothing removes a row, so deleting or hiding the post keeps the stamp. `infra/rebuild-stats.sql` starts from the records instead, so a rebuild drops firsts whose posts have been deleted or hidden since; that is the one place a stamp gets taken back.
+
+The "early days" cutoff and the "first light" test live in the Lua, so each appview issues its own network set to every forum it serves.
+
+### Taking stamps to production
+
+Same shape as membership, in this order:
+
+1. **Publish the schemas** from the authority account: `goat lex publish` for `lexicons/app/atmobb/forum/stamp.json` and `lexicons/app/atmobb/forum/getStamps.json`, and `goat lex publish --update` for `membership.json`, `profile.json`, and `moderation/action.json`. Self-hosters skip this.
+2. **Rerun `appview/setup.sh`.** It creates `atmobb_firsts` and `atmobb_stamp_awards`, registers the stamp collection, uploads the `getStamps` query and the updated `getMembers`, `getMembership`, `getThreadPage`, and `getLog` schemas, and installs the Lua.
+3. **Backfill and rebuild.** The triggers only see posts and actions that arrive after they're installed, and both tables start empty, so nobody holds a first-post or by-hand stamp until `appview/backfill.sh` runs and `infra/rebuild-stats.sql` fills them from history.
 
 ## Delisting a forum
 

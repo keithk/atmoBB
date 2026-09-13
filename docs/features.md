@@ -22,11 +22,22 @@ Everything an atmobb forum does today. What I haven't built is listed at the [bo
 - **Avatars.** Upload an image (1 MB), or fall back to a generated monogram with a hue seeded from the DID. Blobs are fetched by resolving the DID's *current* PDS, so avatars survive migrations.
 - **The userpic maker.** A built-in 100 × 100 forum-icon builder: crop and zoom a photo, then leave it plain or add a simple border. The finished icon is a real avatar blob, so it works on forums that never heard of the maker.
 - **Avatars from anywhere.** The avatar is a plain blob on the profile record, so any app the member authorizes can write one. Set `ATMOBB_AVATAR_BUILDER_URL` to link a builder from profile settings.
-- **Post counts, here and everywhere.** Every post rail shows the member's count on this forum and, when it's higher, their count across every indexed atmobb forum.
-- **Rank ladders.** Each forum defines its own title-by-post-count ladder (up to 50 rungs) in its forum profile record; ranks show up in post rails, the member list, and hovercards.
 - **Member profiles.** `/members/<handle>` shows bio, recent topics (linked to their origin forum), recent Bluesky posts, signature, per-forum activity across the network, and an "Elsewhere" panel that detects other atproto apps in their repo: WhiteWind, Linkat, PinkSea, Smoke Signal, Frontpage, and friends.
-- **Hovercards.** Hover any member link for avatar, rank, both post counts, join date, and presence.
+- **Hovercards.** Hover any member link for avatar, worn stamps, "here since", and presence.
 - **Who's online.** Members by DID, guests counted anonymously (salted hash, never identified), online/idle dots on avatars, and an all-time high-water mark on the home page. Very phpBB.
+
+### Stamps
+
+There are no post counts and no rank ladders. A stamp says where a member has been or when they arrived. The post rail, hovercards, the members list, and profiles show the stamps a member wears and the month their atmobb profile was created, as "here since".
+
+- **A stamp is a record.** `app.atmobb.forum.stamp`, in the forum's repo: a name of up to 24 graphemes, a look, and one trigger. The look is a background color, an ink color, and a shape (stamp, pill, ticket, or pixel); it can't take free CSS or an image. The trigger is one of: first post in a given board, first post on this forum, profile created before a date, arrived by invite, application, or founding, or given by hand.
+- **Authoring.** Admin → Stamps, with a preview on a light and a dark theme, a warning when ink on background falls under 3:1, and a retire button that deletes the record after a confirmation. A first-post stamp whose board has been deleted reads as retired until it's pointed at another board or retired for good.
+- **Retroactive.** Triggers are matched when a page is read, against first posts, membership windows, profile dates, and by-hand awards already in the index, so a stamp authored today goes to everyone who already qualifies, with nothing to backfill.
+- **Firsts stick.** The appview records a member's first served post per board and per forum as it arrives and never takes the row back, so deleting the post keeps the stamp. Members-only boards never fire a first-post stamp; their posts are outside the public index.
+- **The defaults.** A forum that authors nothing still hands out an arrival stamp ("brought in by @sponsor" for invite and application, "original member" for founding) and one first-post stamp per board, in the board's color. A switch on Admin → Stamps hides both; "here since" always shows.
+- **The network set.** Two stamps every forum on an appview offers: "first light" for a first post anywhere that appview indexes, and "early days" for a profile created before 2026-10-01. A hosted tenant gets the shared appview's set; a self-hosted appview issues its own.
+- **Wearing.** Every stamp a member holds sits in a tray at `/settings/stamps`, and they wear up to three of them, in their own order. The choice is saved as `wearing` on their `app.atmobb.forum.membership` record, so it's per forum and leaves with the declaration. A member who never chose wears their three newest defaults.
+- **By hand.** Forum-wide staff give and revoke by-hand stamps from the member's profile page. Each is an `awardStamp` or `revokeStamp` action in the mod log, naming the stamp and the staffer who did it.
 
 ## Membership
 
@@ -53,7 +64,7 @@ Joining a forum is an `app.atmobb.forum.membership` record in the member's own r
 - **Topic federation.** Give a board a topic slug and it merges thread streams with every board in the atmosphere sharing that slug, either open to all or restricted to an allowlist of forum DIDs. Merged threads carry a "via" label and link back to their origin forum's own site.
 - **The directory and webring.** The appview tracks every atmobb forum it has seen, in founding order. That powers a forum directory and a real webring: `/ring/next`, `/ring/prev`, `/ring/random`.
 - **Domain-verified forum identity.** Every deployment serves its forum DID at `/.well-known/atproto-did`, so the forum account can claim the site's domain as its handle with no DNS fiddling. Handle-as-domain is what makes cross-forum links and the webring work: `https://<forum-handle>` is the forum.
-- **Cross-forum profiles and counts.** A member's profile page breaks their activity down per forum across the network, and atmosphere-wide post counts sum across every indexed forum.
+- **Cross-forum profiles.** A member's profile page breaks their activity down per forum across the network. Stamps stay with the forum that issued them, except the network set, which reads the same on every forum the appview serves.
 
 ## Notifications
 
@@ -86,6 +97,7 @@ Custom CSS never applies to `/admin`, so a broken theme is always repairable.
 - **Boards.** Create, edit, delete, categorize, nest, reorder with up/down arrows, toggle members-only, with destructive-action confirmations where they're needed.
 - **Staff.** Grant and revoke admin and moderator roles.
 - **Members.** Join mode, application prompt, invite cap and lifetime, the application queue, staff invites, the members-only board request queue, and the roster with removal.
+- **Stamps.** Author, preview, and retire the forum's stamps, and hide the default board and arrival stamps.
 - **Topics.** Set a board's topic slug, choose open or allowlist federation, preview what a topic would merge with before committing, and browse every topic in the atmosphere.
 - **Connection.** OAuth-connect the forum's own account. Whoever connects it first gets bootstrapped as admin; connecting the wrong account is detected and revoked.
 
