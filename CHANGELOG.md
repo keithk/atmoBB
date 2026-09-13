@@ -6,6 +6,10 @@ means. Every entry names the Happyview release it was tested against.
 
 ## Unreleased
 
+## 0.2.0
+
+Tested against Happyview 2.14.0.
+
 - Built-in color themes: Classic, Sky, Bubblegum, Midnight (dark), and Forest, chosen from Admin → Appearance → Theme with a live preview. The choice is stored as an optional `theme` on `app.atmobb.forum.profile`; custom CSS still loads afterwards and overrides it. Publish the updated profile schema before deploying.
 - Generated forum, thread, and member Open Graph images now inherit the forum's built-in theme and supported `:root` design-token overrides from Custom CSS. Admin → Appearance → Branding previews the generated result while retaining the finished-PNG override.
 - Admin → Appearance is split into Theme, Homepage, Branding (favicon and social preview), and Custom CSS (stylesheet and fonts) sub-tabs.
@@ -36,7 +40,6 @@ means. Every entry names the Happyview release it was tested against.
 - Stamps replace post counts and rank ladders. Per-member post counts and the rank ladder are gone from the post rail, hovercards, the members list, the admin roster, profile pages, meta descriptions, and Open Graph images; the join date stays as "here since". A stamp is an `app.atmobb.forum.stamp` record in the forum's repo (a name, a two-color look with a shape preset, and one trigger: first post in a board, first post on this forum, profile created before a date, arrived by invite, application, or founding, or given by hand), authored on the new Admin → Stamps page with a light and dark preview, a contrast warning under 3:1, and retire. Triggers are matched at read time, so a new stamp is retroactive. A forum that authors nothing gets an arrival stamp and one first-post stamp per board in the board's color, hideable with `hideDefaultStamps` on the forum profile; every appview issues a network set ("first light", "early days"). Members wear up to three from their tray at `/settings/stamps`, saved as `wearing` on their membership record. Forum-wide staff give and revoke by-hand stamps from the member's profile page as `awardStamp` and `revokeStamp` moderation actions. Members-only boards never fire first-post stamps.
 - Schemas, all additive: `app.atmobb.forum.stamp` and `app.atmobb.forum.getStamps` are new; `app.atmobb.forum.membership` gains optional `wearing`; `app.atmobb.moderation.action` gains the `awardStamp` and `revokeStamp` kinds and optional `actor`; `app.atmobb.forum.profile` gains optional `hideDefaultStamps` and deprecates `ranks`, which is no longer read. `getMembers`, `getMembership`, `getThreadPage`, and `moderation.getLog` gain optional output fields, `getLog` gains a `stamps` family, and their post-count fields are deprecated. `app.atmobb.authForum` is unchanged, so nobody re-consents.
 - Operators: a minor release, and a backfill is required. Publish the two new schemas with `goat lex publish` and the three changed record schemas with `goat lex publish --update` (maintainers of the namespace only), rerun `appview/setup.sh` for the `atmobb_firsts` and `atmobb_stamp_awards` tables, the stamp collection, the new query, and the Lua, then run `appview/backfill.sh` so the rebuild fills both tables from history; until it runs nobody holds a first-post or by-hand stamp. The appview still keeps `atmobb_post_counts`; the app no longer reads it. Hosted tenants need no per-tenant step. [Happyview](docs/happyview.md#taking-stamps-to-production) has the order.
-- Tested against Happyview 2.14.0.
 
 ## 0.1.0
 

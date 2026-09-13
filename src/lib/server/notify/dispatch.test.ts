@@ -275,7 +275,11 @@ describe('cool-down and sender identity', () => {
 
   it('does not start the cool-down when the relay refuses the alert', async () => {
     const deps = fakeDeps();
-    vi.mocked(deps.send!).mockResolvedValueOnce({ ok: false, status: 502, error: 'Bad gateway' });
+    vi.mocked(deps.send!).mockImplementation(async (input) =>
+      input.recipient === alice && input.uri.includes('/r1')
+        ? { ok: false, status: 502, error: 'Bad gateway' }
+        : result({ ok: true, status: 200, delivered: 1 }),
+    );
     await notifyForPost(publicReply, deps);
     clock += 60_000;
     await notifyForPost({ ...publicReply, uri: `at://${bob}/${NS}.discussion.reply/r2` }, deps);
