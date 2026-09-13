@@ -27,6 +27,24 @@ export function isThreadUri(value: string): boolean {
   return parseAtUri(value)?.collection === 'app.atmobb.discussion.thread';
 }
 
+/** Accept the stored at-URI or a public topic link copied from the forum. */
+export function threadUriFromReference(value: string): string | null {
+  const reference = value.trim();
+  if (isThreadUri(reference)) return reference;
+
+  try {
+    const parts = new URL(reference, 'https://forum.invalid').pathname
+      .split('/')
+      .filter(Boolean)
+      .map(decodeURIComponent);
+    if (parts[0] !== 't' || !parts[1] || !parts[2]) return null;
+    const uri = `at://${parts[1]}/app.atmobb.discussion.thread/${parts[2]}`;
+    return isThreadUri(uri) ? uri : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Normalize indexed records at the read boundary so old and malformed records stay safe. */
 export function normalizeHomepage(value: unknown): HomepageSettings {
   if (!value || typeof value !== 'object') return { ...DEFAULT_HOMEPAGE };

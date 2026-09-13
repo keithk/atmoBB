@@ -6,9 +6,23 @@ import {
   normalizeHomepage,
   rankHotThreads,
   selectFeaturedThreads,
+  threadUriFromReference,
 } from './homepage';
 
 const thread = (rkey: string) => `at://did:plc:alice/app.atmobb.discussion.thread/${rkey}`;
+
+describe('threadUriFromReference', () => {
+  it('accepts at-URIs and public forum topic URLs', () => {
+    expect(threadUriFromReference(` ${thread('3kaaa')} `)).toBe(thread('3kaaa'));
+    expect(threadUriFromReference('https://forum.example/t/did%3Aplc%3Aalice/3kaaa?from=admin')).toBe(thread('3kaaa'));
+    expect(threadUriFromReference('/t/did:plc:alice/3kaaa')).toBe(thread('3kaaa'));
+  });
+
+  it('rejects other links and non-thread records', () => {
+    expect(threadUriFromReference('https://forum.example/members/alice')).toBeNull();
+    expect(threadUriFromReference('at://did:plc:alice/app.atmobb.discussion.reply/3kaaa')).toBeNull();
+  });
+});
 
 describe('normalizeHomepage', () => {
   it('keeps classic defaults for old records', () => {

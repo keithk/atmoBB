@@ -7,8 +7,8 @@ import {
   HOMEPAGE_LAYOUTS,
   HOMEPAGE_WELCOME_STYLES,
   homepageRecord,
-  isThreadUri,
   normalizeHomepage,
+  threadUriFromReference,
   type HomepageLayout,
   type HomepageWelcome,
 } from '$lib/homepage';
@@ -34,9 +34,15 @@ export const actions: Actions = {
     if (!HOMEPAGE_WELCOME_STYLES.includes(welcome as HomepageWelcome)) {
       return fail(400, { message: 'Choose a welcome panel style.' });
     }
-    const featuredThreads = form.getAll('featuredThread').map(String).map((uri) => uri.trim()).filter(Boolean);
-    if (featuredThreads.length > 3 || featuredThreads.some((uri) => !isThreadUri(uri))) {
-      return fail(400, { message: 'Featured topics must be up to three thread at-URIs.' });
+    const featuredReferences = form.get('featuredEnabled') === 'on'
+      ? form.getAll('featuredThread').map(String).map((reference) => reference.trim()).filter(Boolean)
+      : [];
+    const featuredThreads = featuredReferences.map(threadUriFromReference);
+    if (featuredReferences.length > 3 || featuredThreads.some((uri) => uri === null)) {
+      return fail(400, { message: 'Choose up to three recent topics or paste valid topic URLs.' });
+    }
+    if (form.get('featuredEnabled') === 'on' && featuredThreads.length === 0) {
+      return fail(400, { message: 'Choose at least one featured topic, or turn featured topics off.' });
     }
     if (new Set(featuredThreads).size !== featuredThreads.length) {
       return fail(400, { message: 'Choose each featured topic only once.' });
@@ -49,7 +55,7 @@ export const actions: Actions = {
         layout: layout as HomepageLayout,
         sidebar: form.get('sidebar') === 'on',
         welcome: welcome as HomepageWelcome,
-        featuredThreads,
+        featuredThreads: featuredThreads as string[],
       });
       if (homepage) profile.homepage = homepage;
       else delete profile.homepage;

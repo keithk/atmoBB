@@ -1,5 +1,21 @@
 <script lang="ts">
   let { data, form } = $props();
+
+  const customTopic = '__custom__';
+  const recentTopicUris = new Set(data.recentThreads.map((thread) => thread.uri));
+  let featuredEnabled = $state(data.homepage.featuredThreads.length > 0);
+  let featuredChoices = $state(
+    [0, 1, 2].map((index) => {
+      const uri = data.homepage.featuredThreads[index] ?? '';
+      return uri && !recentTopicUris.has(uri) ? customTopic : uri;
+    }),
+  );
+  let customTopics = $state(
+    [0, 1, 2].map((index) => {
+      const uri = data.homepage.featuredThreads[index] ?? '';
+      return uri && !recentTopicUris.has(uri) ? uri : '';
+    }),
+  );
 </script>
 
 {#if form?.message}<p class="atm-err">{form.message}</p>{/if}
@@ -39,30 +55,55 @@
           <small>Keep forum navigation and board links close at hand.</small>
         </span>
       </label>
-      <fieldset class="featured-fields">
-        <legend class="atm-label">Featured topics (optional, in order)</legend>
-        {#each [0, 1, 2] as index}
-          <label class="atm-field featured-field">
-            <span class="featured-field__number">{index + 1}</span>
-            <input
-              class="atm-input"
-              name="featuredThread"
-              value={data.homepage.featuredThreads[index] ?? ''}
-              list="recent-topics"
-              placeholder="at://did:…/app.atmobb.discussion.thread/…"
-              autocapitalize="none"
-              autocorrect="off"
-              spellcheck="false"
-            />
-          </label>
-        {/each}
-        <datalist id="recent-topics">
-          {#each data.recentThreads as thread}
-            <option value={thread.uri}>{thread.title}</option>
-          {/each}
-        </datalist>
-        <span class="atm-hint">Paste a thread at-URI or choose a recent topic. Clear all three to hide the section.</span>
-      </fieldset>
+      <div class="featured-settings">
+        <label class="homepage-check">
+          <input type="checkbox" name="featuredEnabled" bind:checked={featuredEnabled} />
+          <span>
+            <b>Show featured topics</b>
+            <small>Highlight up to three topics above the homepage lists.</small>
+          </span>
+        </label>
+        {#if featuredEnabled}
+          <fieldset class="featured-fields">
+            <legend class="atm-label">Topics (in order)</legend>
+            {#each [0, 1, 2] as index}
+              <div class="featured-field">
+                <span class="featured-field__number" aria-hidden="true">{index + 1}</span>
+                <label class="atm-field">
+                  <span class="sr-only">Featured topic {index + 1}</span>
+                  <select
+                    class="atm-select"
+                    name={featuredChoices[index] === customTopic ? undefined : 'featuredThread'}
+                    bind:value={featuredChoices[index]}
+                  >
+                    <option value="">Choose a recent topic…</option>
+                    {#each data.recentThreads as thread}
+                      <option value={thread.uri}>{thread.title}{thread.boardName ? ` — ${thread.boardName}` : ''}</option>
+                    {/each}
+                    <option value={customTopic}>Paste a topic URL…</option>
+                  </select>
+                </label>
+                {#if featuredChoices[index] === customTopic}
+                  <label class="atm-field featured-url">
+                    <span class="sr-only">Topic {index + 1} URL</span>
+                    <input
+                      class="atm-input"
+                      name="featuredThread"
+                      bind:value={customTopics[index]}
+                      placeholder="https://forum.example/t/…"
+                      required
+                      autocapitalize="none"
+                      autocorrect="off"
+                      spellcheck="false"
+                    />
+                  </label>
+                {/if}
+              </div>
+            {/each}
+            <span class="atm-hint">Choose from the latest topics, or paste any topic’s URL.</span>
+          </fieldset>
+        {/if}
+      </div>
       <button class="atm-btn atm-btn--primary">save homepage</button>
     </form>
   </div>
@@ -78,19 +119,19 @@
   .homepage-check span { display: grid; gap: 2px; }
   .homepage-check b { font-weight: var(--w-semibold); }
   .homepage-check small { color: var(--forum-ink-soft); }
-  .featured-fields { display: grid; gap: var(--space-2); padding: 0; border: 0; }
+  .featured-settings { display: grid; gap: var(--space-3); padding-top: var(--space-1); }
+  .featured-fields { display: grid; gap: var(--space-2); padding: 0 0 0 var(--space-4); border: 0; }
   .featured-fields legend { margin-bottom: var(--space-1); }
-  .featured-field { position: relative; }
+  .featured-field { position: relative; display: grid; gap: var(--space-2); }
   .featured-field__number {
     position: absolute;
     z-index: 1;
-    left: var(--space-3);
-    top: 50%;
-    transform: translateY(-50%);
+    right: calc(100% + var(--space-2));
+    top: var(--space-3);
     color: var(--forum-ink-faint);
     font: var(--type-meta);
   }
-  .featured-field .atm-input { padding-left: var(--space-6); font-family: var(--font-mono); font-size: var(--text-xs); }
+  .featured-url .atm-input { font-size: var(--text-sm); }
   @media (max-width: 640px) {
     .homepage-grid { grid-template-columns: 1fr; }
   }
