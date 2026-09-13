@@ -74,6 +74,19 @@ export const schemaDict = {
         record: {
           type: 'object',
           properties: {
+            theme: {
+              type: 'string',
+              description:
+                "Personal color theme across forums. Omit to follow each forum's default styling.",
+              knownValues: [
+                'classic',
+                'sky',
+                'bubblegum',
+                'midnight',
+                'forest',
+              ],
+              maxLength: 64,
+            },
             displayName: {
               type: 'string',
               maxLength: 640,

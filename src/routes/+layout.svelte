@@ -25,7 +25,7 @@
   const sidebarGroups = $derived(groupBoards(data.sidebarBoards, data.sidebarCategories));
   let sidebarDrawer = $state<ForumSidebarDrawer>();
 
-  // Built-in theme first, then fonts, then owner CSS. The theme preset is
+  // Built-in theme first, then fonts, owner CSS, and personal theme tokens. The theme preset is
   // curated and cannot break the admin, so it applies everywhere; owner CSS
   // stays off admin pages so a broken stylesheet is always repairable.
   const appearanceCss = $derived(
@@ -33,6 +33,7 @@
       themeCss(data.forumTheme),
       data.forumFontCss,
       page.url.pathname.startsWith('/admin') ? '' : data.forumCustomCss,
+      data.personalThemeCss,
     ].filter(Boolean).join('\n'),
   );
 

@@ -343,6 +343,7 @@ export interface AvatarUpload {
 export interface ProfileEdit {
   displayName?: string;
   description?: string;
+  theme?: import('$lib/themes').ForumTheme | '';
   signature?: unknown[];
   pronouns?: string;
   website?: string;
@@ -365,6 +366,7 @@ export async function saveProfile(did: string, edit: ProfileEdit): Promise<void>
   if ('signature' in edit) fields.signature = edit.signature?.length ? edit.signature : undefined;
   if ('pronouns' in edit) fields.pronouns = edit.pronouns || undefined;
   if ('website' in edit) fields.website = edit.website || undefined;
+  if ('theme' in edit) fields.theme = edit.theme || undefined;
   if (uploaded) fields.avatar = uploaded;
   await patchActorProfile(
     did,

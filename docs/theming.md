@@ -4,6 +4,8 @@ Forum owners pick a built-in color theme, and can add CSS and WOFF/WOFF2 fonts, 
 
 ## Built-in themes
 
+Users can choose a personal theme in **Edit profile → Theme**, then save changes. The preference lives on their `app.atmobb.actor.profile` record and follows their account across forums. **Forum default** (no preference) uses the admin-selected theme and custom CSS. A personal preset, including Classic, applies its color tokens after owner custom CSS, preserving forum layout adjustments and fixes; it does not change anyone else's view. Normal CSS specificity and `!important` still apply: later theme tokens override equally specific declarations, not every possible custom rule.
+
 **Admin → Appearance → Theme** offers five presets: Classic (the greige-and-coral default), Sky (white and blue), Bubblegum (pink and teal), Midnight (dark navy and amber), and Forest (sage and moss). A preview on that page shows the masthead, a category bar, topic rows, and buttons in the selected colors before you save.
 
 A theme is nothing more than a full set of `--forum-*` values written to `:root` ahead of your custom CSS. It lives in `src/lib/themes.ts` and is stored on the forum profile as `theme`; an absent value means Classic. Because your CSS comes later in the same style tag, you can start from a preset and override just the tokens you care about:

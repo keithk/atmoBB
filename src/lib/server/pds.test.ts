@@ -10,7 +10,7 @@ vi.mock('./atproto-oauth', () => ({
   agentFor: async () => ({ com: { atproto: { repo } } }),
 }));
 
-import { saveProfile } from './pds';
+import { getOwnAvatarProfile, saveProfile } from './pds';
 
 beforeEach(() => {
   repo.getRecord.mockReset();
@@ -19,6 +19,22 @@ beforeEach(() => {
 });
 
 describe('profile avatars', () => {
+  it('saves and clears a personal theme without losing other profile fields, updating the layout cache', async () => {
+    const existing = { displayName: 'Theme user', theme: 'forest', extension: 'preserved' };
+    repo.getRecord.mockImplementation(async () => ({ data: { value: existing } }));
+    repo.putRecord.mockImplementation(async ({ record }) => Object.assign(existing, record));
+    const did = 'did:plc:theme-test';
+    await saveProfile(did, { theme: 'classic' });
+    expect(repo.putRecord.mock.calls[0][0].record).toMatchObject({ theme: 'classic', extension: 'preserved' });
+    expect((await getOwnAvatarProfile(did)).theme).toBe('classic');
+    await saveProfile(did, { displayName: 'Renamed' });
+    expect(repo.putRecord.mock.calls[1][0].record.theme).toBe('classic');
+    await saveProfile(did, { theme: '' });
+    expect(repo.putRecord.mock.calls[2][0].record).not.toHaveProperty('theme');
+    expect(await getOwnAvatarProfile(did)).toMatchObject({ displayName: 'Renamed', extension: 'preserved' });
+    expect((await getOwnAvatarProfile(did)).theme).toBeUndefined();
+  });
+
   it('removes only the local avatar override when restoring the Bluesky default', async () => {
     repo.getRecord.mockResolvedValue({
       data: {

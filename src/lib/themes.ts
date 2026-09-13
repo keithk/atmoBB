@@ -243,11 +243,11 @@ export function themeInlineStyle(theme: ForumTheme): string {
     .join(';');
 }
 
-/** Stylesheet text for the public pages. Empty for classic, whose tokens are already the built-in defaults. */
-export function themeCss(theme: ForumTheme): string {
+/** Stylesheet text. Explicit mode emits Classic too, so personal choices override owner tokens. */
+export function themeCss(theme: ForumTheme, explicit = false): string {
   const preset = themePreset(theme);
-  if (!Object.keys(preset.tokens).length) return '';
-  const declarations = Object.entries(preset.tokens).map(([name, value]) => `${name}:${value};`);
+  if (!explicit && !Object.keys(preset.tokens).length) return '';
+  const declarations = Object.entries(themeTokens(theme)).map(([name, value]) => `${name}:${value};`);
   declarations.push(`color-scheme:${preset.dark ? 'dark' : 'light'};`);
   return `:root{${declarations.join('')}}`;
 }

@@ -17,6 +17,9 @@ const id = 'app.atmobb.actor.profile'
 
 export interface Main {
   $type: 'app.atmobb.actor.profile'
+  /** Personal color theme across forums. Omit to follow each forum's default styling. */
+  theme?:
+    'classic' | 'sky' | 'bubblegum' | 'midnight' | 'forest' | (string & {})
   displayName?: string
   /** Free-text bio, shown on the profile's About panel. Global across forums. */
   description?: string
