@@ -134,6 +134,11 @@ describe('stampLabel', () => {
     expect(sponsorDids([arrival, entry('other', { sponsor: 'did:plc:ignored' })])).toEqual(['did:plc:x']);
   });
 
+  it('tolerates a missing stamp list from an appview that predates stamps', () => {
+    expect(sponsorDids(undefined)).toEqual([]);
+    expect(sponsorDids([undefined, arrival])).toEqual(['did:plc:x']);
+  });
+
   it('describes board stamps as a first post for assistive tech', () => {
     expect(ariaLabel(entry('atmobb:board:at://b', { name: 'Music', board: 'at://b' }), {})).toBe('Stamp: first post in Music');
     expect(ariaLabel(arrival, { 'did:plc:x': 'keith.is' })).toBe('Stamp: brought in by @keith.is');

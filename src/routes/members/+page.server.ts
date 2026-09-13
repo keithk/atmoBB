@@ -9,7 +9,7 @@ export const load: PageServerLoad = async ({ url }) => {
   // alongside the members'. An unresolvable DID stays a DID and the stamp
   // reads as plain "brought in".
   const dids = new Set(page.members.map((m) => m.did));
-  for (const m of page.members) for (const did of sponsorDids(m.stamps)) dids.add(did);
+  for (const m of page.members) for (const did of sponsorDids(m.stamps ?? [])) dids.add(did);
   const handles = Object.fromEntries(
     await Promise.all([...dids].map(async (did) => [did, await resolveHandle(did)] as const)),
   );

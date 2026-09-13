@@ -123,9 +123,15 @@ export function parseWearing(input: string[], tray: Pick<TrayEntry, 'id'>[]): We
   return { ok: true, ids };
 }
 
-/** Sponsor DIDs named by worn arrival stamps, so loaders can resolve their handles. */
-export function sponsorDids(worn: Pick<TrayEntry, 'id' | 'sponsor'>[]): string[] {
-  return [...new Set(worn.flatMap((entry) => (entry.id === ARRIVAL_ID && entry.sponsor ? [entry.sponsor] : [])))];
+/**
+ * Sponsor DIDs named by worn arrival stamps, so loaders can resolve their
+ * handles. Tolerates a missing list: an appview that predates stamps answers
+ * without the field.
+ */
+export function sponsorDids(worn: (Pick<TrayEntry, 'id' | 'sponsor'> | undefined)[] | undefined): string[] {
+  return [
+    ...new Set((worn ?? []).flatMap((entry) => (entry?.id === ARRIVAL_ID && entry.sponsor ? [entry.sponsor] : []))),
+  ];
 }
 
 // --- admin form validation --------------------------------------------------
