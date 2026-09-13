@@ -24,26 +24,29 @@ function handle()
     -- the thread's stats row. Kept for good once written.
     db.raw([[
       INSERT INTO atmobb_firsts (forum_did, did, board_uri, first_at, source_uri)
-      SELECT b.did, $3::text, l.board_uri, $4::text, $1::text
+      SELECT b.did, $3::text, l.board_uri, p.at, $1::text
       FROM atmobb_thread_stats s
       JOIN happyview_records b
         ON b.uri = s.board_uri AND b.collection = $5::text
       CROSS JOIN LATERAL (VALUES (b.uri), (NULL::text)) AS l(board_uri)
+      CROSS JOIN LATERAL (SELECT COALESCE(NULLIF($4::text, ''),
+        (SELECT r.created_at::text FROM happyview_records r WHERE r.uri = $1::text),
+        to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')) AS at) p
       WHERE s.thread_uri = $2::text
         AND (b.record::jsonb)->'access'->>'space' IS NULL
         AND b.did NOT IN (SELECT did FROM atmobb_delisted_forums)
         AND (NOT EXISTS (
             SELECT 1 FROM atmobb_forum_gating g
             WHERE g.forum_did = b.did
-              AND g.gated_since <= $4::text
-              AND (g.opened_at IS NULL OR $4::text < g.opened_at))
+              AND g.gated_since <= p.at
+              AND (g.opened_at IS NULL OR p.at < g.opened_at))
           OR $3::text = b.did
           OR EXISTS (
             SELECT 1 FROM atmobb_member_windows w
             WHERE w.forum_did = b.did
               AND w.did = $3::text
-              AND w.since <= $4::text
-              AND (w.until IS NULL OR $4::text < w.until)))
+              AND w.since <= p.at
+              AND (w.until IS NULL OR p.at < w.until)))
       ON CONFLICT (forum_did, did, board_uri) DO NOTHING
     ]], { uri, record.thread.uri, did, record.createdAt or "", NS .. ".forum.board" })
   end

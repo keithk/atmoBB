@@ -179,7 +179,7 @@ LEFT JOIN numbered c
 -- rebuild differs only for posts hidden or deleted since, whose stamps it
 -- takes back. Runs after the gating block so the windows it reads are there.
 WITH served_threads AS (
-  SELECT s.thread_uri, s.board_uri, s.author_did, s.created_at, b.did AS forum_did
+  SELECT s.thread_uri, s.board_uri, s.author_did, COALESCE(NULLIF(s.created_at, ''), t.created_at::text) AS created_at, b.did AS forum_did
   FROM atmobb_thread_stats s
   JOIN happyview_records t
     ON t.uri = s.thread_uri AND t.collection = 'app.atmobb.discussion.thread'
@@ -191,15 +191,15 @@ WITH served_threads AS (
     AND (NOT EXISTS (
         SELECT 1 FROM atmobb_forum_gating g
         WHERE g.forum_did = b.did
-          AND g.gated_since <= s.created_at
-          AND (g.opened_at IS NULL OR s.created_at < g.opened_at))
+          AND g.gated_since <= COALESCE(NULLIF(s.created_at, ''), t.created_at::text)
+          AND (g.opened_at IS NULL OR COALESCE(NULLIF(s.created_at, ''), t.created_at::text) < g.opened_at))
       OR s.author_did = b.did
       OR EXISTS (
         SELECT 1 FROM atmobb_member_windows w
         WHERE w.forum_did = b.did
           AND w.did = s.author_did
-          AND w.since <= s.created_at
-          AND (w.until IS NULL OR s.created_at < w.until)))
+          AND w.since <= COALESCE(NULLIF(s.created_at, ''), t.created_at::text)
+          AND (w.until IS NULL OR COALESCE(NULLIF(s.created_at, ''), t.created_at::text) < w.until)))
 ), replies AS (
   SELECT t.forum_did, r.did, t.board_uri,
          COALESCE((r.record::jsonb)->>'createdAt', r.created_at) AS posted_at, r.uri

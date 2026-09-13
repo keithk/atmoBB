@@ -358,6 +358,27 @@ run('stamp trigger SQL integration', () => {
     expect(await sql`SELECT 1 FROM atmobb_firsts WHERE forum_did = 'did:plc:delisted'`).toHaveLength(0);
   });
 
+  it('a post with no createdAt is placed at its index time, so it cannot skip the window check', async () => {
+    // Two threads by a newcomer with no createdAt on their records: one indexed
+    // while the forum was gated, one while it was open.
+    const during = `at://did:plc:undated/${NS}.discussion.thread/during`;
+    const between = `at://did:plc:undated/${NS}.discussion.thread/between`;
+    for (const [uri, rkey, created] of [[during, 'during', '2021-02-01T00:00:00Z'], [between, 'between', '2021-07-01T00:00:00Z']] as const) {
+      await sql`INSERT INTO happyview_records ${sql({
+        uri, did: 'did:plc:undated', collection: `${NS}.discussion.thread`, rkey,
+        record: JSON.stringify({ board: BOARD, title: 'Undated' }), cid: `cid-${rkey}`, created_at: created,
+      })}`;
+    }
+    await threadFirsts(during, BOARD, 'did:plc:undated', '');
+    expect(await firsts('did:plc:undated')).toEqual([]);
+    await threadFirsts(between, BOARD, 'did:plc:undated', '');
+    const rows = await firsts('did:plc:undated');
+    expect(rows.map((row) => row.source_uri)).toEqual([between, between]);
+    expect(rows.every((row) => row.first_at === '2021-07-01T00:00:00Z')).toBe(true);
+    await sql`DELETE FROM atmobb_firsts WHERE did = 'did:plc:undated'`;
+    await sql`DELETE FROM happyview_records WHERE did = 'did:plc:undated'`;
+  });
+
   it('on a gated forum, a post outside the author\'s membership window writes nothing', async () => {
     await threadFirsts(GATED_OUTSIDER, BOARD, 'did:plc:outsider', '2021-02-01T00:00:00Z');
     expect(await firsts('did:plc:outsider')).toEqual([]);
@@ -719,19 +740,21 @@ run('moderation log SQL integration', () => {
   });
   afterAll(() => sql.end());
 
-  it('AE11: the moderation family carries stamp awards and revocations with the stamp name and the giver', async () => {
-    const rows = await log('moderation');
-    expect(rows.map((row) => row.record.action)).toEqual(['awardStamp', 'revokeStamp', 'awardStamp', 'warn']);
-    const [lost, take, give, warn] = rows;
+  it('AE11: the stamps family carries awards and revocations with the stamp name and the giver', async () => {
+    const rows = await log('stamps');
+    expect(rows.map((row) => row.record.action)).toEqual(['awardStamp', 'revokeStamp', 'awardStamp']);
+    const [lost, take, give] = rows;
     expect(give.stamp_name).toBe('helper');
     expect(give.record.actor).toBe('did:plc:staff');
     expect(give.record.ref).toEqual({ uri: STAMP, cid: 'cid-helper' });
     expect(take.stamp_name).toBe('helper');
     expect(lost.stamp_name).toBeNull();
-    expect(warn.stamp_name).toBeNull();
   });
 
-  it('the membership family leaves stamp actions out, and no family returns everything', async () => {
+  it('the moderation and membership families leave stamp actions out, and no family returns everything', async () => {
+    const [warn] = await log('moderation');
+    expect(warn.record.action).toBe('warn');
+    expect(warn.stamp_name).toBeNull();
     expect((await log('membership')).map((row) => row.record.action)).toEqual(['acceptMember']);
     expect((await log()).map((row) => row.record.action)).toEqual(['awardStamp', 'revokeStamp', 'awardStamp', 'warn', 'acceptMember']);
   });
