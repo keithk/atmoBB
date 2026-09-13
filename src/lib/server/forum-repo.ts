@@ -19,6 +19,15 @@ export interface ForumRecordValue {
   [k: string]: unknown;
 }
 
+/** Turn a stale forum-account OAuth grant into an actionable admin message. */
+export function forumWriteErrorMessage(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : '';
+  if (/scope|permission|not authorized/i.test(message)) {
+    return 'The forum account needs updated permissions. Reconnect it in Admin → Connection, then try again.';
+  }
+  return message || fallback;
+}
+
 export async function createForumRecord(
   collection: string,
   value: ForumRecordValue,

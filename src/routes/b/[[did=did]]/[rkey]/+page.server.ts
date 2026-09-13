@@ -25,7 +25,7 @@ import {
   watchFailureMessage,
 } from '$lib/server/pds';
 import { boardModerator, canModerate } from '$lib/server/admin';
-import { createForumRecord } from '$lib/server/forum-repo';
+import { createForumRecord, forumWriteErrorMessage } from '$lib/server/forum-repo';
 import { parseBBCode, type RichTextBlock } from '$lib/richtext/bbcode';
 import { attachImages } from '$lib/server/richtext';
 import { addMentionFacets } from '$lib/server/mentions';
@@ -265,7 +265,9 @@ export const actions: Actions = {
         action,
       });
     } catch (e) {
-      return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t moderate this thread. Try again.' });
+      return fail(502, {
+        message: forumWriteErrorMessage(e, 'We couldn\'t moderate this thread. Try again.'),
+      });
     }
     redirect(303, `/b/${params.did ? `${params.did}/` : ''}${params.rkey}?moderated=1`);
   },

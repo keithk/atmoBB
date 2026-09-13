@@ -24,11 +24,16 @@ import { join } from 'node:path';
 export const NOTIFY_RELAY_DID = 'did:web:relay.atmo.pub';
 export const NOTIFY_RELAY_AUD = `${NOTIFY_RELAY_DID}#notif_relay`;
 const NOTIFY_SCOPE = `rpc:pub.atmo.notify.requestPermission?aud=${encodeURIComponent(NOTIFY_RELAY_AUD)}`;
+// Keep the moderation grant explicit as well as in authSysop. Existing PDSes
+// may have cached an older copy of the permission set from before moderation
+// was added; the granular scope makes a reconnect reliably refresh this grant.
+export const MODERATION_SCOPE = 'repo:app.atmobb.moderation.action?action=create';
 const MEMBER_SET = `include:app.atmobb.authForum ${NOTIFY_SCOPE}`;
 export const MEMBER_SCOPE = `atproto ${MEMBER_SET} blob:image/*`;
-export const SYSOP_SCOPE = 'atproto include:app.atmobb.authSysop blob:image/* blob:font/*';
+export const SYSOP_SCOPE =
+  `atproto include:app.atmobb.authSysop ${MODERATION_SCOPE} blob:image/* blob:font/*`;
 export const OAUTH_SCOPE =
-  `atproto ${MEMBER_SET} include:app.atmobb.authSysop blob:image/* blob:font/*`;
+  `atproto ${MEMBER_SET} include:app.atmobb.authSysop ${MODERATION_SCOPE} blob:image/* blob:font/*`;
 
 const appUrl = () => env.ATMOBB_APP_URL ?? 'http://127.0.0.1:5173';
 
