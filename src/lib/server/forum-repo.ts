@@ -121,7 +121,8 @@ async function indexPut(
     VALUES (${uri}, ${did}, ${collection}, ${rkey}, ${json}, ${'bafydev' + rkey}, ${now}, ${now})
     ON CONFLICT (uri) DO UPDATE SET record = EXCLUDED.record, indexed_at = EXCLUDED.indexed_at`;
   // Mimic the onModerationAction trigger (jetstream never sees index writes):
-  // origin hide/lock/pin flip the stats flags when the signer owns the board.
+  // origin hide/lock/pin flip the stats flags when the signer owns the board;
+  // account actions maintain bans, membership windows, and gating periods.
   const action = record as {
     action?: string;
     subject?: { uri?: string; did?: string };
@@ -129,17 +130,71 @@ async function indexPut(
     reason?: string;
     expiresAt?: string;
     createdAt?: string;
+    sponsor?: string;
+    via?: string;
+    mode?: string;
   };
   if (collection === `${NS}.moderation.action` && action.subject?.did) {
+    const member = action.subject.did;
+    const at = action.createdAt ?? now;
     if (action.action === 'ban') {
       await sql`
         INSERT INTO atmobb_bans (uri, forum_did, did, board_uri, since, until, reason)
-        VALUES (${uri}, ${did}, ${action.subject.did}, ${action.board ?? null}, ${action.createdAt ?? now}, ${action.expiresAt ?? null}, ${action.reason ?? null})
+        VALUES (${uri}, ${did}, ${member}, ${action.board ?? null}, ${at}, ${action.expiresAt ?? null}, ${action.reason ?? null})
         ON CONFLICT (uri) DO NOTHING`;
     } else if (action.action === 'unban') {
       await sql`
-        DELETE FROM atmobb_bans WHERE forum_did = ${did} AND did = ${action.subject.did}
+        DELETE FROM atmobb_bans WHERE forum_did = ${did} AND did = ${member}
           AND COALESCE(board_uri, '') = ${action.board ?? ''}`;
+    }
+    // Windows and gating periods apply in (createdAt, uri) order relative to
+    // the rows already there, matching the Lua trigger and rebuild-stats.sql.
+    if (action.action === 'acceptMember') {
+      await sql`
+        INSERT INTO atmobb_member_windows (action_uri, forum_did, did, since, until, sponsor, via)
+        SELECT ${uri}::text, ${did}::text, ${member}::text, ${at}::text,
+          (SELECT COALESCE((r.record::jsonb)->>'createdAt', r.created_at)
+             FROM happyview_records r
+            WHERE r.collection = ${`${NS}.moderation.action`}
+              AND r.did = ${did}
+              AND (r.record::jsonb)->'subject'->>'did' = ${member}
+              AND ((r.record::jsonb)->>'action' = 'revokeMember'
+                OR ((r.record::jsonb)->>'action' = 'ban' AND (r.record::jsonb)->>'board' IS NULL))
+              AND (COALESCE((r.record::jsonb)->>'createdAt', r.created_at), r.uri) > (${at}::text, ${uri}::text)
+            ORDER BY COALESCE((r.record::jsonb)->>'createdAt', r.created_at), r.uri
+            LIMIT 1),
+          ${action.sponsor ?? null}::text, ${action.via ?? null}::text
+        WHERE NOT EXISTS (
+          SELECT 1 FROM atmobb_member_windows w
+          WHERE w.forum_did = ${did} AND w.did = ${member} AND w.until IS NULL)
+        ON CONFLICT (action_uri) DO NOTHING`;
+    } else if (action.action === 'revokeMember' || (action.action === 'ban' && !action.board)) {
+      await sql`
+        UPDATE atmobb_member_windows SET until = ${at}
+        WHERE forum_did = ${did} AND did = ${member} AND until IS NULL
+          AND (since, action_uri) < (${at}::text, ${uri}::text)`;
+    } else if (action.action === 'gateForum' && member === did) {
+      await sql`
+        INSERT INTO atmobb_forum_gating (action_uri, forum_did, gated_since, opened_at, mode)
+        SELECT ${uri}::text, ${did}::text, ${at}::text,
+          (SELECT COALESCE((r.record::jsonb)->>'createdAt', r.created_at)
+             FROM happyview_records r
+            WHERE r.collection = ${`${NS}.moderation.action`}
+              AND r.did = ${did}
+              AND (r.record::jsonb)->>'action' = 'openForum'
+              AND (r.record::jsonb)->'subject'->>'did' = ${did}
+              AND (COALESCE((r.record::jsonb)->>'createdAt', r.created_at), r.uri) > (${at}::text, ${uri}::text)
+            ORDER BY COALESCE((r.record::jsonb)->>'createdAt', r.created_at), r.uri
+            LIMIT 1),
+          ${action.mode ?? null}::text
+        WHERE NOT EXISTS (
+          SELECT 1 FROM atmobb_forum_gating g WHERE g.forum_did = ${did} AND g.opened_at IS NULL)
+        ON CONFLICT (action_uri) DO NOTHING`;
+    } else if (action.action === 'openForum' && member === did) {
+      await sql`
+        UPDATE atmobb_forum_gating SET opened_at = ${at}
+        WHERE forum_did = ${did} AND opened_at IS NULL
+          AND (gated_since, action_uri) < (${at}::text, ${uri}::text)`;
     }
   }
   if (collection === `${NS}.moderation.action` && action.subject?.uri) {

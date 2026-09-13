@@ -48,6 +48,15 @@ The script reads `HAPPYVIEW_API_KEY` from the environment or `.env`, starts an a
 
 The annoying part is that Happyview runs `record.create` scripts during backfill too, which will happily double-count your derived stats. So `backfill.sh` rebuilds the derived tables from indexed records after each job finishes. Run it as many times as you like and the counts and moderation state come out the same.
 
+## Membership windows and gating periods
+
+Two more derived tables carry forum membership, both maintained by the `record.create` script on `app.atmobb.moderation.action` and mirrored by the development forum's index writes. Happyview runs a create script before it indexes the record, and the script sees only that record (`record`, `uri`, `did`), so a script that needs the neighbours of its record reads them from `happyview_records` itself.
+
+- **`atmobb_member_windows`** holds one row per acceptance: forum DID, member DID, `since`, `until`, `sponsor`, `via`, and the `acceptMember` action's URI as the key. `revokeMember`, or a forum-wide `ban`, closes the open window by setting `until`; `unban` leaves it closed. History is kept, so a re-acceptance opens a new row rather than reviving the old one. A partial unique index allows at most one open window (`until IS NULL`) per forum and member: an accept that finds an open window is a no-op, and so is a close that finds none.
+- **`atmobb_forum_gating`** holds one row per stretch during which a forum enforced membership: forum DID, `gated_since`, `opened_at` (null while gated), and the join `mode`. `gateForum` opens a period and `openForum` closes it; both are signed by the forum with its own account as subject. A post written at a time no period covers was written while the forum was open and is served regardless of membership.
+
+Both tables apply actions in the order of their `createdAt`, then URI, whatever order the records reach the index in. An accept whose later revocation or forum-wide ban is already indexed inserts its window closed at that action's time, and a close never touches a window opened after it. `infra/rebuild-stats.sql` reconstructs both tables from the indexed actions by walking each forum's (and each member's) open and close actions in that order, so a member with two accept-revoke cycles comes back with two closed rows.
+
 ## Delisting a forum
 
 A shared appview sometimes needs to drop a forum from the directory, the webring, topic federation, and the cross-forum listings on member profiles, without touching its records:

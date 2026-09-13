@@ -8,7 +8,8 @@
 --   docker compose exec -T postgres psql -1 -U happyview -d happyview \
 --     < infra/rebuild-stats.sql
 
-TRUNCATE atmobb_thread_stats, atmobb_post_counts, atmobb_bans;
+TRUNCATE atmobb_thread_stats, atmobb_post_counts, atmobb_bans,
+         atmobb_member_windows, atmobb_forum_gating;
 
 INSERT INTO atmobb_thread_stats
   (thread_uri, board_uri, author_did, title, created_at,
@@ -101,3 +102,69 @@ FROM (
            COALESCE((a.record::jsonb)->>'createdAt', a.created_at::text) DESC, a.uri DESC
 ) latest
 WHERE action = 'ban';
+
+-- Membership windows keep history, so unlike bans they are rebuilt by walking
+-- each (forum, member)'s acceptMember, revokeMember, and forum-wide ban
+-- actions in (createdAt, uri) order. Every close event is numbered; an accept
+-- opens a window only if it is the first accept since the previous close
+-- (so a duplicate accept is a no-op), and that window ends at the next close
+-- event, or stays open when there is none. Two accept-revoke cycles yield two
+-- closed rows.
+WITH events AS (
+  SELECT a.uri, a.did AS forum_did,
+         (a.record::jsonb)->'subject'->>'did' AS member,
+         COALESCE((a.record::jsonb)->>'createdAt', a.created_at) AS at,
+         (a.record::jsonb)->>'action' <> 'acceptMember' AS is_close,
+         (a.record::jsonb)->>'sponsor' AS sponsor,
+         (a.record::jsonb)->>'via' AS via
+  FROM happyview_records a
+  WHERE a.collection = 'app.atmobb.moderation.action'
+    AND (a.record::jsonb)->'subject'->>'did' IS NOT NULL
+    AND ((a.record::jsonb)->>'action' IN ('acceptMember', 'revokeMember')
+      OR ((a.record::jsonb)->>'action' = 'ban' AND (a.record::jsonb)->>'board' IS NULL))
+), numbered AS (
+  SELECT *, count(*) FILTER (WHERE is_close) OVER (
+           PARTITION BY forum_did, member ORDER BY at, uri
+           ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS closes_before
+  FROM events
+), opens AS (
+  SELECT DISTINCT ON (forum_did, member, closes_before)
+         forum_did, member, closes_before, at, uri, sponsor, via
+  FROM numbered
+  WHERE NOT is_close
+  ORDER BY forum_did, member, closes_before, at, uri
+)
+INSERT INTO atmobb_member_windows (action_uri, forum_did, did, since, until, sponsor, via)
+SELECT o.uri, o.forum_did, o.member, o.at, c.at, o.sponsor, o.via
+FROM opens o
+LEFT JOIN numbered c
+  ON c.forum_did = o.forum_did AND c.member = o.member
+ AND c.is_close AND c.closes_before = o.closes_before;
+
+-- Gating periods walk the same way: gateForum opens, openForum closes, both
+-- signed by the forum with its own account as subject.
+WITH events AS (
+  SELECT a.uri, a.did AS forum_did,
+         COALESCE((a.record::jsonb)->>'createdAt', a.created_at) AS at,
+         (a.record::jsonb)->>'action' = 'openForum' AS is_close,
+         (a.record::jsonb)->>'mode' AS mode
+  FROM happyview_records a
+  WHERE a.collection = 'app.atmobb.moderation.action'
+    AND (a.record::jsonb)->>'action' IN ('gateForum', 'openForum')
+    AND (a.record::jsonb)->'subject'->>'did' = a.did
+), numbered AS (
+  SELECT *, count(*) FILTER (WHERE is_close) OVER (
+           PARTITION BY forum_did ORDER BY at, uri
+           ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS closes_before
+  FROM events
+), opens AS (
+  SELECT DISTINCT ON (forum_did, closes_before) forum_did, closes_before, at, uri, mode
+  FROM numbered
+  WHERE NOT is_close
+  ORDER BY forum_did, closes_before, at, uri
+)
+INSERT INTO atmobb_forum_gating (action_uri, forum_did, gated_since, opened_at, mode)
+SELECT o.uri, o.forum_did, o.at, c.at, o.mode
+FROM opens o
+LEFT JOIN numbered c
+  ON c.forum_did = o.forum_did AND c.is_close AND c.closes_before = o.closes_before;

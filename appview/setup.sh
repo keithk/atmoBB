@@ -66,6 +66,37 @@ CREATE TABLE IF NOT EXISTS atmobb_bans (
   reason    text
 );
 CREATE INDEX IF NOT EXISTS idx_atmobb_bans_member ON atmobb_bans (did, forum_did);
+-- Membership windows, one row per acceptance and the revocation or forum-wide
+-- ban that ended it. History is kept: re-acceptance opens a new row rather than
+-- reviving the old one. At most one open window (until IS NULL) per forum and
+-- member. since/until are the action records' createdAt, like atmobb_bans.
+CREATE TABLE IF NOT EXISTS atmobb_member_windows (
+  action_uri text PRIMARY KEY,
+  forum_did  text NOT NULL,
+  did        text NOT NULL,
+  since      text NOT NULL,
+  until      text,
+  sponsor    text,
+  via        text
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_atmobb_member_windows_open
+  ON atmobb_member_windows (forum_did, did) WHERE until IS NULL;
+CREATE INDEX IF NOT EXISTS idx_atmobb_member_windows_member
+  ON atmobb_member_windows (forum_did, did, until);
+-- Gating periods: one row per stretch during which a forum enforced
+-- membership, opened by gateForum and closed by openForum. A post written at a
+-- time no period covers was written while the forum was open.
+CREATE TABLE IF NOT EXISTS atmobb_forum_gating (
+  action_uri  text PRIMARY KEY,
+  forum_did   text NOT NULL,
+  gated_since text NOT NULL,
+  opened_at   text,
+  mode        text
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_atmobb_forum_gating_open
+  ON atmobb_forum_gating (forum_did) WHERE opened_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_atmobb_forum_gating_forum
+  ON atmobb_forum_gating (forum_did, gated_since);
 
 -- Migrate the original global post-count table, then rebuild it from indexed
 -- records so existing installs immediately get accurate per-forum totals.
