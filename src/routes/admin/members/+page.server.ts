@@ -6,6 +6,7 @@ import {
   getLatestThreads,
   getMembers,
   getMembership,
+  getStanding,
   FORUM_DID,
   addSpaceMember,
   removeSpaceMember,
@@ -13,13 +14,14 @@ import {
   spaceOfBoard,
   resolveHandle,
 } from '$lib/server/appview';
-import type { ForumApplications, ForumMembershipSettings, ForumProfile, SpaceMember, ThreadSummary } from '$lib/server/appview';
+import type { AccessRequests, ForumApplications, ForumMembershipSettings, ForumProfile, SpaceMember } from '$lib/server/appview';
 import { boardMembers } from '$lib/server/space-access';
 import { adminActor, canModerateForum, forumStaff, isAdmin } from '$lib/server/admin';
 import { createForumRecord, createForumRecords, putForumRecord } from '$lib/server/forum-repo';
 import { listInvites, mintInvite, revokeInvite } from '$lib/server/invites';
 import { savedRedirect } from '$lib/server/saved-redirect';
-import { grandfatherSet } from '$lib/application';
+import { grandfatherSet, posterDids } from '$lib/application';
+import { banCovering } from '$lib/standing';
 import { inviteState } from '$lib/invites';
 import { joinMode, resolvedHandle, sponsorLine, type JoinMode } from '$lib/membership';
 
@@ -33,31 +35,21 @@ const DEFAULT_CAP = 3;
 const DEFAULT_DAYS = 14;
 
 const settingsOf = (profile?: ForumProfile) => (profile?.membership ?? {}) as MembershipSettings;
+const reason = (e: unknown) => (e instanceof Error ? e.message : 'appview error');
 
 /** Gated modes need the appview to answer getMembership; an older instance
  *  can't enforce them, so the form only offers them when it does. */
 const gatingAvailable = (forumDid: string) =>
   getMembership(forumDid, forumDid).then(() => true, () => false);
 
-/** DIDs seen posting in this forum's public threads. The feed carries each
- *  thread's author, last replier, and up to five participants, so a long
- *  thread's quieter repliers can be missed — the roster covers anyone who
- *  also declared membership. Merged-topic threads from other forums are
- *  skipped. */
-function posterDids(threads: ThreadSummary[], forumDid: string): string[] {
-  const out: string[] = [];
-  for (const t of threads) {
-    if (!t.board.startsWith(`at://${forumDid}/`)) continue;
-    out.push(t.author);
-    if (t.lastReplyBy) out.push(t.lastReplyBy);
-    for (const p of t.participants ?? []) out.push(p.did);
-  }
-  return out;
-}
-
-/** Everyone an open forum would grandfather if it gated now: every declared
- *  member plus every poster the public feed shows. */
-async function grandfatherDids(forumDid: string): Promise<string[]> {
+/** Everyone an open forum would accept as founding members if it gated
+ *  now: every declared member, every poster the public feed shows, and every
+ *  staffer (who must be able to post after the flip), minus anyone already
+ *  holding an open window (a forum that gated before keeps its acceptances)
+ *  or under a forum-wide ban (R19: lifting a ban never restores membership).
+ *  Standing is checked twenty accounts at a time; an appview error
+ *  propagates so the caller changes nothing. */
+async function founders(forumDid: string): Promise<string[]> {
   const declarers: string[] = [];
   let cursor: string | undefined;
   do {
@@ -72,19 +64,18 @@ async function grandfatherDids(forumDid: string): Promise<string[]> {
     posters.push(...posterDids(page.threads, forumDid));
     cursor = page.cursor;
   } while (cursor);
-  return grandfatherSet(declarers, posters, forumDid);
-}
-
-/** Drop the DIDs that already hold an open window (a forum that gated
- *  before keeps its acceptances when it opens), twenty lookups at a time. */
-async function withoutAccepted(dids: string[], forumDid: string): Promise<string[]> {
+  const staff = (await forumStaff()).map((s) => s.subject);
+  const candidates = grandfatherSet({ declarers, posters, staff }, forumDid);
   const out: string[] = [];
-  for (let i = 0; i < dids.length; i += 20) {
-    const slice = dids.slice(i, i + 20);
-    const accepted = await Promise.all(
-      slice.map((did) => getMembership(did, forumDid).then((m) => m.accepted, () => false)),
+  for (let i = 0; i < candidates.length; i += 20) {
+    const slice = candidates.slice(i, i + 20);
+    const eligible = await Promise.all(
+      slice.map(async (did) => {
+        const [acceptance, standing] = await Promise.all([getMembership(did, forumDid), getStanding(did, forumDid)]);
+        return !acceptance.accepted && !banCovering(standing.bans);
+      }),
     );
-    out.push(...slice.filter((_, j) => !accepted[j]));
+    out.push(...slice.filter((_, j) => eligible[j]));
   }
   return out;
 }
@@ -115,7 +106,7 @@ export const load: PageServerLoad = async ({ url }) => {
   // confirming. Only an open forum can be gated.
   let grandfatherCount: number | null = null;
   if (!gated && available) {
-    grandfatherCount = await grandfatherDids(forumDid).then((d) => d.length, () => null);
+    grandfatherCount = await founders(forumDid).then((d) => d.length, () => null);
   }
 
   let applications: Application[] = [];
@@ -148,15 +139,22 @@ export const load: PageServerLoad = async ({ url }) => {
   const roster = await getMembers(url.searchParams.get('members') ?? undefined, 50, forumDid);
 
   // Board access requests and the readers of each private board, as the
-  // boards page used to show them.
+  // boards page used to show them. The whole queue is listed: the appview
+  // pages it, and a request past the first page is still waiting.
   const spaceByBoard = new Map(
     index.boards.map((b) => [b.uri, spaceOfBoard(b.value.access)] as const),
   );
-  let requests: Awaited<ReturnType<typeof getAccessRequests>>['requests'] = [];
+  let requests: AccessRequests['requests'] = [];
   try {
-    const res = await getAccessRequests(forumDid);
+    const pending: AccessRequests['requests'] = [];
+    let requestCursor: string | undefined;
+    do {
+      const page = await getAccessRequests(forumDid, { cursor: requestCursor });
+      pending.push(...page.requests);
+      requestCursor = page.cursor;
+    } while (requestCursor);
     const checked = await Promise.all(
-      res.requests.map(async (r) => {
+      pending.map(async (r) => {
         const space = spaceByBoard.get(r.board);
         if (!space) return null; // board went public or vanished
         return (await isSpaceMember(space, r.requester)) ? null : r;
@@ -297,10 +295,14 @@ export const actions: Actions = {
       return fail(400, { message: 'Check the confirmation box to gate the forum.' });
     }
 
+    // One timestamp for the profile's gatedSince, the gating period, and the
+    // founding acceptances, so no founding member's post falls between the
+    // gate going up and their window opening.
+    const at = new Date().toISOString();
     const membership: MembershipSettings = { ...settingsOf(current), mode, inviteCap, inviteDays };
     if (prompt) membership.prompt = prompt;
     else delete membership.prompt;
-    if (gating) membership.gatedSince = new Date().toISOString();
+    if (gating) membership.gatedSince = at;
     const profile: ForumProfile = { ...current, membership };
 
     // Read the founding set before the gate goes up: once gated, the roster
@@ -308,29 +310,43 @@ export const actions: Actions = {
     let founding: string[] = [];
     if (gating) {
       try {
-        founding = await withoutAccepted(await grandfatherDids(forumDid), forumDid);
+        founding = await founders(forumDid);
       } catch (e) {
-        return fail(502, { message: `We couldn't list the current members: ${e instanceof Error ? e.message : 'appview error'}. Nothing was changed.` });
+        return fail(502, { message: `We couldn't list the current members: ${reason(e)}. Nothing was changed.` });
       }
     }
-    try {
-      await putForumRecord(`${NS}.forum.profile`, 'self', profile);
-      if (gating) await createForumRecord(ACTION, { subject: account(forumDid), action: 'gateForum', mode });
-      else if (opening) await createForumRecord(ACTION, { subject: account(forumDid), action: 'openForum' });
-    } catch (e) {
-      return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t save the join mode. Try again.' });
-    }
+
+    // Written in an order where every partial result is harmless and a retry
+    // finishes the job: acceptances first (windows change nothing while the
+    // forum is open), then the gating period, then the profile that turns
+    // gating on. Until the profile lands the forum still reads as open, so a
+    // retry re-enters this branch and skips the members already accepted.
     if (founding.length) {
       try {
         await createForumRecords(
           ACTION,
-          founding.map((did) => ({ subject: account(did), action: 'acceptMember', via: 'founding' })),
+          founding.map((did) => ({ subject: account(did), action: 'acceptMember', via: 'founding', createdAt: at })),
         );
       } catch (e) {
         return fail(502, {
-          message: `The forum is now gated, but accepting its ${founding.length} original members failed: ${e instanceof Error ? e.message : 'write error'}. Set the mode back to open, then gate it again.`,
+          message: `We couldn't accept the ${founding.length} original members: ${reason(e)}. The forum is still open; try again.`,
         });
       }
+    }
+    try {
+      if (gating) await createForumRecord(ACTION, { subject: account(forumDid), action: 'gateForum', mode, createdAt: at });
+      else if (opening) await createForumRecord(ACTION, { subject: account(forumDid), action: 'openForum' });
+    } catch (e) {
+      return fail(502, {
+        message: gating
+          ? `The original members are accepted, but the gating period couldn't be recorded: ${reason(e)}. The forum is still open; try again.`
+          : `We couldn't record the change: ${reason(e)}. The join mode is unchanged; try again.`,
+      });
+    }
+    try {
+      await putForumRecord(`${NS}.forum.profile`, 'self', profile);
+    } catch (e) {
+      return fail(502, { message: `We couldn't save the join mode: ${reason(e)}. Try again.` });
     }
     await savedRedirect(
       '/admin/members?saved=1',

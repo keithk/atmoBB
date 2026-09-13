@@ -80,11 +80,11 @@
             <div class="mode__confirm">
               <p class="mode__count">
                 {#if data.grandfatherCount === null}
-                  Gating the forum accepts everyone who has posted or declared membership as original members; we couldn't count them just now.
+                  Gating the forum accepts everyone who has posted, declared membership, or holds a staff grant as original members; we couldn't count them just now.
                 {:else}
                   Gating the forum accepts <strong>{data.grandfatherCount}</strong> {data.grandfatherCount === 1 ? 'person' : 'people'} who
-                  {data.grandfatherCount === 1 ? 'has' : 'have'} posted or declared membership as original members. Anyone else will need to be
-                  accepted before they can post. Everyone can still read.
+                  {data.grandfatherCount === 1 ? 'has' : 'have'} posted, declared membership, or holds a staff grant as original members. Anyone
+                  under a forum-wide ban is left out. Anyone else will need to be accepted before they can post. Everyone can still read.
                 {/if}
               </p>
               <label class="mode__really">

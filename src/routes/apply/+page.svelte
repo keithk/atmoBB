@@ -10,7 +10,9 @@
 <div class="apply">
   <h1 class="apply__title">Apply to join {data.forum.name}</h1>
 
-  {#if data.view.kind === 'open'}
+  {#if data.view.kind === 'banned'}
+    <p class="atm-notice">{data.view.message}</p>
+  {:else if data.view.kind === 'open'}
     <p class="atm-notice">This forum is open; join from the <a href="/">home page</a>.</p>
   {:else if data.view.kind === 'invite'}
     <p class="atm-notice">This forum is invite only.</p>

@@ -39,13 +39,40 @@ export function applicationState(app: ApplicationRecord, decisions: Decision[]):
   return newest ? ANSWERS[newest.action] : 'pending';
 }
 
-/** Everyone who was already here when an open forum gates: each declarer
- *  and each poster once, never the forum's own account. */
-export function grandfatherSet(declarers: string[], posters: string[], forumDid: string): string[] {
-  const seen = new Set<string>();
+/** The parts of a thread summary the founding set reads. */
+export interface PosterSource {
+  board: string;
+  author: string;
+  lastReplyBy?: string;
+  participants?: { did: string }[];
+}
+
+/** DIDs seen posting in a forum's public threads. The feed carries each
+ *  thread's author, last replier, and up to five participants, so a long
+ *  thread's quieter repliers can be missed; the roster covers anyone who
+ *  also declared membership. Merged-topic threads from other forums are
+ *  skipped. */
+export function posterDids(threads: PosterSource[], forumDid: string): string[] {
   const out: string[] = [];
-  for (const did of [...declarers, ...posters]) {
-    if (did === forumDid || seen.has(did)) continue;
+  for (const t of threads) {
+    if (!t.board.startsWith(`at://${forumDid}/`)) continue;
+    out.push(t.author);
+    if (t.lastReplyBy) out.push(t.lastReplyBy);
+    for (const p of t.participants ?? []) out.push(p.did);
+  }
+  return out;
+}
+
+/** Everyone who was already here when an open forum gates: each declarer,
+ *  poster, and staffer once, never the forum's own account. */
+export function grandfatherSet(
+  present: { declarers: string[]; posters: string[]; staff: string[] },
+  forumDid: string,
+): string[] {
+  const seen = new Set<string>([forumDid]);
+  const out: string[] = [];
+  for (const did of [...present.declarers, ...present.posters, ...present.staff]) {
+    if (seen.has(did)) continue;
     seen.add(did);
     out.push(did);
   }

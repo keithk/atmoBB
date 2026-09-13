@@ -8,6 +8,7 @@ export type ApplicantState = 'none' | 'pending' | 'waiting' | 'denied';
  * one-line notices about why there is nothing to fill in.
  */
 export type ApplyView =
+  | { kind: 'banned'; message: string }
   | { kind: 'open' }
   | { kind: 'invite' }
   | { kind: 'member' }

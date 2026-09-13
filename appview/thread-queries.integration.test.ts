@@ -17,6 +17,13 @@ const SEARCH = `at://did:plc:author/${NS}.discussion.thread/search`;
 const HIDDEN = `at://did:plc:author/${NS}.discussion.thread/hidden`;
 const PRIVATE_THREAD = `at://did:plc:author/${NS}.discussion.thread/private`;
 const BANNED = `at://did:plc:banned/${NS}.discussion.thread/banned`;
+// Threads on F while it was gated (2021-01-01 to 2021-06-01, then 2021-09-01
+// to 2022-01-01), between those periods, and by the forum account itself.
+const GATED_MEMBER = `at://did:plc:member/${NS}.discussion.thread/gated-member`;
+const GATED_OUTSIDER = `at://did:plc:outsider/${NS}.discussion.thread/gated-outsider`;
+const BETWEEN_GATES = `at://did:plc:outsider/${NS}.discussion.thread/between`;
+const GATED_FORMER = `at://did:plc:former/${NS}.discussion.thread/gated-former`;
+const GATED_FORUM = `at://${F}/${NS}.discussion.thread/gated-forum`;
 
 function source(path: string): string {
   return fs.readFileSync(new URL(path, import.meta.url), 'utf8');
@@ -71,6 +78,12 @@ async function fixtures(sql: Sql) {
     CREATE TEMP TABLE atmobb_bans (
       uri text PRIMARY KEY, forum_did text, did text, board_uri text, since text, until text
     );
+    CREATE TEMP TABLE atmobb_member_windows (
+      action_uri text PRIMARY KEY, forum_did text, did text, since text, until text, sponsor text, via text
+    );
+    CREATE TEMP TABLE atmobb_forum_gating (
+      action_uri text PRIMARY KEY, forum_did text, gated_since text, opened_at text, mode text
+    );
   `);
 
   const records: [string, string, string, string, string, string, string][] = [
@@ -92,6 +105,11 @@ async function fixtures(sql: Sql) {
     [`at://did:plc:peer/${NS}.discussion.thread/peer`, PEER, 'did:plc:peer-author', 'Peer visible', '2026-01-05T00:00:00Z', [], false, false, null],
     [`at://did:plc:blocked/${NS}.discussion.thread/blocked`, BLOCKED, 'did:plc:blocked-author', 'Blocked peer', '2026-01-06T00:00:00Z', [], false, false, null],
     [`at://did:plc:delisted/${NS}.discussion.thread/delisted`, DELISTED, 'did:plc:delisted-author', 'Delisted peer', '2026-01-07T00:00:00Z', [], false, false, null],
+    [GATED_MEMBER, BOARD, 'did:plc:member', 'Member while gated', '2021-02-01T00:00:00Z', [], false, false, null],
+    [GATED_OUTSIDER, BOARD, 'did:plc:outsider', 'Outsider while gated', '2021-02-01T00:00:00Z', [], false, false, null],
+    [BETWEEN_GATES, BOARD, 'did:plc:outsider', 'Outsider while open', '2021-07-01T00:00:00Z', [], false, false, null],
+    [GATED_FORMER, BOARD, 'did:plc:former', 'Former member while gated', '2021-10-01T00:00:00Z', [], false, false, null],
+    [GATED_FORUM, BOARD, F, 'Forum account while gated', '2021-10-02T00:00:00Z', [], false, false, null],
   ];
   for (const [uri, board, author, title, created, tags, hidden, locked, lockedAt] of threadRows) {
     records.push([uri, author, `${NS}.discussion.thread`, uri.split('/').at(-1)!, threadRecord(board, title, tags), `c-${title}`, created]);
@@ -122,6 +140,10 @@ async function fixtures(sql: Sql) {
   await sql`INSERT INTO atmobb_delisted_forums ${sql({ did: 'did:plc:delisted' })}`;
   await sql`INSERT INTO atmobb_bans ${sql({ uri: 'ban-thread', forum_did: F, did: 'did:plc:banned', board_uri: null, since: '2000-01-01T00:00:00Z', until: null })}`;
   await sql`INSERT INTO atmobb_bans ${sql({ uri: 'ban-reply', forum_did: F, did: 'did:plc:reply-banned', board_uri: null, since: '2000-01-01T00:00:00Z', until: null })}`;
+  await sql`INSERT INTO atmobb_forum_gating ${sql({ action_uri: 'gate-1', forum_did: F, gated_since: '2021-01-01T00:00:00Z', opened_at: '2021-06-01T00:00:00Z', mode: 'apply' })}`;
+  await sql`INSERT INTO atmobb_forum_gating ${sql({ action_uri: 'gate-2', forum_did: F, gated_since: '2021-09-01T00:00:00Z', opened_at: '2022-01-01T00:00:00Z', mode: 'invite' })}`;
+  await sql`INSERT INTO atmobb_member_windows ${sql({ action_uri: 'accept-member', forum_did: F, did: 'did:plc:member', since: '2021-01-01T00:00:00Z', until: null, sponsor: null, via: 'founding' })}`;
+  await sql`INSERT INTO atmobb_member_windows ${sql({ action_uri: 'accept-former', forum_did: F, did: 'did:plc:former', since: '2021-01-01T00:00:00Z', until: '2021-09-15T00:00:00Z', sponsor: null, via: 'founding' })}`;
   await sql`INSERT INTO happyview_records ${sql({
     uri: `at://${F}/${NS}.forum.moderator/staff`, did: F, collection: `${NS}.forum.moderator`, rkey: 'staff',
     record: JSON.stringify({ subject: 'did:plc:staff' }), cid: 'm1', created_at: '2020-01-01T00:00:00Z',
@@ -165,6 +187,15 @@ run('thread list SQL integration', () => {
     expect(uris).toContain(`at://did:plc:peer/${NS}.discussion.thread/peer`);
     for (const excluded of [HIDDEN, PRIVATE_THREAD, BANNED]) expect(uris).not.toContain(excluded);
     expect(uris.some((uri) => uri.includes('blocked') || uri.includes('delisted'))).toBe(false);
+  });
+
+  it('serves a gated forum\'s threads only from members, the forum account, or while it was open', async () => {
+    const uris = (await sql.unsafe(queries.latestRows, latestParams())).map((row) => row.thread_uri);
+    for (const served of [GATED_MEMBER, BETWEEN_GATES, GATED_FORUM]) expect(uris).toContain(served);
+    for (const hidden of [GATED_OUTSIDER, GATED_FORMER]) expect(uris).not.toContain(hidden);
+    const board = (await sql.unsafe(queries.boardRows, boardParams())).map((row) => row.thread_uri);
+    for (const served of [GATED_MEMBER, BETWEEN_GATES, GATED_FORUM]) expect(board).toContain(served);
+    for (const hidden of [GATED_OUTSIDER, GATED_FORMER]) expect(board).not.toContain(hidden);
   });
 
   it('orders, bounds and deduplicates actual visible participants', async () => {

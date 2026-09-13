@@ -6,12 +6,15 @@
 -- keyed by the signing forum, so any forum's actions shape its own views.
 --
 -- Windows and gating periods apply actions in (createdAt, uri) order relative
--- to the rows already there, so the table converges on what
--- infra/rebuild-stats.sql produces no matter which order records arrive in:
--- an accept checks the index for an already-indexed later revoke or forum-wide
--- ban and, finding one, inserts its window already closed; a close never
--- touches a window opened after it. Optional fields are passed as '' and
--- NULLIFed in SQL because db.raw stops binding at the first nil parameter.
+-- to the rows already there, so the table matches what infra/rebuild-stats.sql
+-- produces when a repo's records arrive in order, as the firehose and a
+-- backfill deliver them: an accept checks the index for an already-indexed
+-- later revoke or forum-wide ban and, finding one, inserts its window already
+-- closed; a close never touches a window opened after it. An accept that
+-- arrives after a newer accept for the same member is dropped, so after an
+-- out-of-order backfill run infra/rebuild-stats.sql. Optional fields are
+-- passed as '' and NULLIFed in SQL because db.raw stops binding at the first
+-- nil parameter.
 function handle()
   if not (record and record.subject) then
     return record

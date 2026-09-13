@@ -2,7 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { FORUM_DID, getMembership, resolveHandle } from '$lib/server/appview';
 import { createForumRecord } from '$lib/server/forum-repo';
-import { getInvite, redeemInvite, releaseInvite, reserveInvite } from '$lib/server/invites';
+import { getInvite, redeemInvite, releaseInvite, reserveInvite, revokeInvite } from '$lib/server/invites';
 import { declareMembership } from '$lib/server/membership';
 import { savedRedirect } from '$lib/server/saved-redirect';
 import { bannedFrom } from '$lib/server/standing';
@@ -90,11 +90,16 @@ export const actions: Actions = {
     }
 
     // 4. Spend the link. They are accepted either way now, so a store hiccup
-    //    here is logged rather than shown: the reservation lapses on its own.
+    //    here is logged rather than shown. The reservation would lapse and
+    //    reopen the link, so after a second try the link is revoked instead.
     try {
       await redeemInvite(token, viewer);
     } catch (e) {
-      console.error('invite redeemed but not marked spent', token, e);
+      const spent = await redeemInvite(token, viewer).catch(() => false);
+      if (!spent) {
+        await revokeInvite(token, invite.minter, true).catch(() => {});
+        console.error('invite redeemed but not marked spent', token.slice(0, 8), e);
+      }
     }
 
     // 5. Their own declaration. The masthead offers "finish joining" if this
