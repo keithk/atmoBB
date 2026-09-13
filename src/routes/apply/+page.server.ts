@@ -8,9 +8,6 @@ import { applyView, canApply, noteTooLong, NOTE_MAX_GRAPHEMES, type ApplicantSta
 
 const DEFAULT_PROMPT = "Tell the moderators why you'd like to join.";
 
-// The queue holds one row per open applicant; a few pages covers a busy forum.
-const MAX_PAGES = 20;
-
 /**
  * The applicant's state as the moderators see it. The appview's forum queue
  * already folds every decision into one state per applicant (accepted ones
@@ -19,15 +16,8 @@ const MAX_PAGES = 20;
  * record and a capped moderation log.
  */
 async function applicantState(did: string): Promise<ApplicantState> {
-  let cursor: string | undefined;
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const res = await getAccessRequests(FORUM_DID(), { kind: 'forum', limit: 100, cursor });
-    const mine = res.requests.find((r) => r.requester === did);
-    if (mine) return mine.state;
-    if (!res.cursor) break;
-    cursor = res.cursor;
-  }
-  return 'none';
+  const res = await getAccessRequests(FORUM_DID(), { kind: 'forum', limit: 1, requester: did });
+  return res.requests[0]?.state ?? 'none';
 }
 
 export const load: PageServerLoad = async ({ locals, parent, url }) => {

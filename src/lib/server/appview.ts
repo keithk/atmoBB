@@ -77,14 +77,17 @@ export interface ForumProfile {
   ogImage?: unknown;
   ogTheme?: string;
   /** Join policy (app.atmobb.forum.profile#membership); absent means open. */
-  membership?: {
-    mode?: string;
-    prompt?: string;
-    inviteCap?: number;
-    inviteDays?: number;
-    gatedSince?: string;
-  };
+  membership?: ForumMembershipSettings;
   [k: string]: unknown;
+}
+
+/** The profile's join policy. Absent means open. */
+export interface ForumMembershipSettings {
+  mode?: string;
+  prompt?: string;
+  inviteCap?: number;
+  inviteDays?: number;
+  gatedSince?: string;
 }
 
 export interface LatestPost {
@@ -466,6 +469,8 @@ export interface AccessRequestOptions<K extends AccessRequestKind = 'board'> {
   kind?: K;
   limit?: number;
   cursor?: string;
+  /** With kind forum: only this account's application. */
+  requester?: string;
 }
 
 export const getAccessRequests = <K extends AccessRequestKind = 'board'>(
@@ -478,6 +483,7 @@ export const getAccessRequests = <K extends AccessRequestKind = 'board'>(
       ...(opts.kind ? { kind: opts.kind } : {}),
       ...(opts.limit ? { limit: String(opts.limit) } : {}),
       ...(opts.cursor ? { cursor: opts.cursor } : {}),
+      ...(opts.requester ? { requester: opts.requester } : {}),
     },
   });
 

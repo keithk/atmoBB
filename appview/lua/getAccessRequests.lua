@@ -66,7 +66,7 @@ end
 
 local STATES = { holdApplication = "waiting", denyAccess = "denied" }
 
-local function forum_applications(forum, limit, offset)
+local function forum_applications(forum, limit, offset, requester)
   local rows = db.raw([[
     WITH applications AS (
       SELECT DISTINCT ON (r.did)
@@ -93,13 +93,14 @@ local function forum_applications(forum, limit, offset)
     LEFT JOIN happyview_records p
       ON p.did = a.did AND p.collection = $4 AND p.rkey = 'self'
     WHERE COALESCE(a.decision, '') <> 'acceptMember'
+      AND ($7 = '' OR a.did = $7)
       AND NOT EXISTS (
         SELECT 1 FROM atmobb_member_windows w
         WHERE w.forum_did = $1 AND w.did = a.did AND w.until IS NULL)
     ORDER BY a.created_at ASC
     LIMIT $5 OFFSET $6
   ]], { forum, NS .. ".forum.accessRequest", NS .. ".moderation.action",
-        NS .. ".actor.profile", limit, offset })
+        NS .. ".actor.profile", limit, offset, requester or "" })
 
   local requests = toarray({})
   for i, row in ipairs(rows) do
@@ -130,7 +131,7 @@ function handle()
 
   local rows, requests
   if kind == "forum" then
-    rows, requests = forum_applications(forum, limit, offset)
+    rows, requests = forum_applications(forum, limit, offset, params.requester)
   elseif kind == "board" then
     rows, requests = board_requests(forum, limit, offset)
   else

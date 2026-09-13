@@ -12,6 +12,7 @@ import type { ActorProfile, LatestThreads } from '$lib/server/appview';
 import { readSpaceBoardThreads } from '$lib/server/space-read';
 import { getMembership, leaveForum } from '$lib/server/pds';
 import { declareMembership } from '$lib/server/membership';
+import { safeReturnPath } from '$lib/server/notify/return-path';
 import { getPublicProfile } from '$lib/server/profiles';
 import { presenceSnapshot } from '$lib/server/presence';
 import { normalizeHomepage, rankHotThreads, selectFeaturedThreads } from '$lib/homepage';
@@ -165,7 +166,7 @@ export const actions: Actions = {
     } catch (e) {
       return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t add you to this forum. Try again.' });
     }
-    redirect(303, /^\/(?!\/)/.test(next) ? next : '/');
+    redirect(303, safeReturnPath(next) ?? '/');
   },
   leave: async ({ locals }) => {
     if (!locals.user) redirect(303, '/login');

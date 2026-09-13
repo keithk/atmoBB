@@ -82,3 +82,23 @@ export function sponsorLine(window: MembershipWindow, name: (did: string) => str
   const who = name(window.sponsor) ?? 'a former member';
   return `${window.via === 'application' ? 'approved' : 'invited'} by ${who}`;
 }
+
+/** A resolved handle from a DID-to-handle map, or nothing when resolution
+ *  fell back to the DID itself. */
+export function resolvedHandle(handles: Record<string, string | null | undefined>, did: string): string | undefined {
+  const h = handles[did];
+  return h && h !== did ? h : undefined;
+}
+
+/** The sponsor line plus the sponsor's handle for linking, from a handle map. */
+export function sponsorDisplay(
+  window: MembershipWindow,
+  handles: Record<string, string | null | undefined>,
+): { text: string; handle: string | null } {
+  const name = (did: string) => {
+    const h = resolvedHandle(handles, did);
+    return h ? `@${h}` : undefined;
+  };
+  const handle = window.sponsor ? (resolvedHandle(handles, window.sponsor) ?? null) : null;
+  return { text: sponsorLine(window, name), handle };
+}

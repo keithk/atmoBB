@@ -38,6 +38,16 @@ describe('safeReturnPath', () => {
     expect(safeReturnPath('/join')).toBeNull();
   });
 
+  it('accepts the pages the join notice returns to', () => {
+    expect(safeReturnPath('/')).toBe('/');
+    expect(safeReturnPath('/latest')).toBe('/latest');
+    expect(safeReturnPath('/apply')).toBe('/apply');
+    expect(safeReturnPath('/b/general')).toBe('/b/general');
+    expect(safeReturnPath('/b/did:plc:abc/general?page=2')).toBe('/b/did:plc:abc/general?page=2');
+    expect(safeReturnPath('/b/general?page=x')).toBeNull();
+    expect(safeReturnPath('/b/general/extra')).toBeNull();
+  });
+
   it('rejects protocol-relative, backslash, absolute, and off-list paths', () => {
     expect(safeReturnPath('//evil.example')).toBeNull();
     expect(safeReturnPath('/\\evil')).toBeNull();

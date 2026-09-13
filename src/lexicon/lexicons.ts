@@ -872,6 +872,12 @@ export const schemaDict = {
             cursor: {
               type: 'string',
             },
+            requester: {
+              type: 'string',
+              format: 'did',
+              description:
+                "With kind=forum: only this account's application, for a point lookup.",
+            },
           },
         },
         output: {

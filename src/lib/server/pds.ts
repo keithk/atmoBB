@@ -70,12 +70,18 @@ export async function joinForum(did: string, forum: string): Promise<void> {
   membershipCache.delete(did);
 }
 
-/** The requester's own pending access-request record for a board, or null. */
-export async function getAccessRequest(did: string, board: string): Promise<{ uri: string } | null> {
+/** An access request targets a members-only board or, as an application, the forum itself. */
+type AccessTarget = { board: string } | { forum: string };
+
+/** The requester's own access-request record for a target, or null. */
+async function findAccessRequest(did: string, target: AccessTarget): Promise<{ uri: string } | null> {
   try {
     const agent = await agentFor(did);
     const res = await agent.com.atproto.repo.listRecords({ repo: did, collection: ACCESS_REQUEST, limit: 100 });
-    const rec = res.data.records.find((r) => (r.value as { board?: string }).board === board);
+    const rec = res.data.records.find((r) => {
+      const v = r.value as { board?: string; forum?: string };
+      return 'board' in target ? v.board === target.board : v.forum === target.forum;
+    });
     return rec ? { uri: rec.uri } : null;
   } catch {
     return null;
@@ -83,13 +89,13 @@ export async function getAccessRequest(did: string, board: string): Promise<{ ur
 }
 
 /**
- * Write an access-request record into the member's repo. Asking again replaces
- * the earlier request so its timestamp is fresh: the moderation queue only
- * shows a request newer than the last decision on it.
+ * Write an access request into the member's repo. Asking again replaces the
+ * earlier request so its timestamp is fresh: the queue only shows a request
+ * newer than the last decision on it, so a resubmission reopens it.
  */
-export async function requestAccess(did: string, board: string, reason?: string): Promise<void> {
+async function replaceAccessRequest(did: string, target: AccessTarget, reason?: string): Promise<void> {
   const agent = await agentFor(did);
-  const existing = await getAccessRequest(did, board);
+  const existing = await findAccessRequest(did, target);
   if (existing) {
     const p = parseAtUri(existing.uri);
     if (p) await agent.com.atproto.repo.deleteRecord({ repo: did, collection: p.collection, rkey: p.rkey });
@@ -99,43 +105,24 @@ export async function requestAccess(did: string, board: string, reason?: string)
     collection: ACCESS_REQUEST,
     record: {
       $type: ACCESS_REQUEST,
-      board,
+      ...target,
       ...(reason ? { reason } : {}),
       createdAt: new Date().toISOString(),
     },
   });
 }
 
-/** The applicant's own application to join a gated forum (an accessRequest with `forum` set), or null. */
-export async function getForumApplication(did: string, forum: string): Promise<{ uri: string } | null> {
-  try {
-    const agent = await agentFor(did);
-    const res = await agent.com.atproto.repo.listRecords({ repo: did, collection: ACCESS_REQUEST, limit: 100 });
-    const rec = res.data.records.find((r) => (r.value as { forum?: string }).forum === forum);
-    return rec ? { uri: rec.uri } : null;
-  } catch {
-    return null;
-  }
-}
+/** The requester's own pending access-request record for a board, or null. */
+export const getAccessRequest = (did: string, board: string) => findAccessRequest(did, { board });
 
-/**
- * Write a forum application into the applicant's repo. Applying again after a
- * denial replaces the old record so the application is newer than the
- * decision and reopens as pending (R9).
- */
-export async function applyToForum(did: string, forum: string, reason: string): Promise<void> {
-  const agent = await agentFor(did);
-  const existing = await getForumApplication(did, forum);
-  if (existing) {
-    const p = parseAtUri(existing.uri);
-    if (p) await agent.com.atproto.repo.deleteRecord({ repo: did, collection: p.collection, rkey: p.rkey });
-  }
-  await agent.com.atproto.repo.createRecord({
-    repo: did,
-    collection: ACCESS_REQUEST,
-    record: { $type: ACCESS_REQUEST, forum, reason, createdAt: new Date().toISOString() },
-  });
-}
+export const requestAccess = (did: string, board: string, reason?: string) =>
+  replaceAccessRequest(did, { board }, reason);
+
+/** The applicant's own application to join a gated forum, or null. */
+export const getForumApplication = (did: string, forum: string) => findAccessRequest(did, { forum });
+
+export const applyToForum = (did: string, forum: string, reason: string) =>
+  replaceAccessRequest(did, { forum }, reason);
 
 export async function leaveForum(did: string, membershipUri: string): Promise<void> {
   const p = parseAtUri(membershipUri);

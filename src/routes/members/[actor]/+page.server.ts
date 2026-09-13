@@ -5,7 +5,7 @@ import { getBoardIndex, getMembership, getStanding, FORUM_DID } from '$lib/serve
 import { createForumRecord } from '$lib/server/forum-repo';
 import { savedRedirect } from '$lib/server/saved-redirect';
 import { revokeSpaceAccess } from '$lib/server/space-access';
-import { joinMode, sponsorLine } from '$lib/membership';
+import { joinMode, sponsorDisplay } from '$lib/membership';
 import { expiryFromDays } from '$lib/standing';
 
 const NS = 'app.atmobb';
@@ -49,18 +49,21 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
 
   // Everyone sees how a member came in; only staff and the member themself
   // see whom they brought in. Both are display only.
-  const sponsorHandle = membership?.sponsor ? await resolveHandle(membership.sponsor) : null;
-  const sponsorResolved = sponsorHandle && sponsorHandle !== membership?.sponsor ? sponsorHandle : null;
-  const sponsorText =
+  const [sponsorHandle, sponsored] = await Promise.all([
+    membership?.sponsor ? resolveHandle(membership.sponsor) : null,
+    showStanding && membership
+      ? Promise.all(membership.sponsored.map(async (s) => ({ ...s, handle: await resolveHandle(s.did) })))
+      : null,
+  ]);
+  const sponsor =
     membership?.accepted && membership.since
-      ? sponsorLine({ since: membership.since, sponsor: membership.sponsor, via: membership.via }, () =>
-          sponsorResolved ? `@${sponsorResolved}` : undefined,
+      ? sponsorDisplay(
+          { since: membership.since, sponsor: membership.sponsor, via: membership.via },
+          membership.sponsor ? { [membership.sponsor]: sponsorHandle } : {},
         )
       : null;
-  const sponsored =
-    showStanding && membership
-      ? await Promise.all(membership.sponsored.map(async (s) => ({ ...s, handle: await resolveHandle(s.did) })))
-      : null;
+  const sponsorText = sponsor?.text ?? null;
+  const sponsorResolved = sponsor?.handle ?? null;
 
   // Threads on other forums link to those forums' own sites — forum account
   // handles double as site domains. Unresolvable handles fall back to null

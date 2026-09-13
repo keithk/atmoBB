@@ -20,6 +20,8 @@ export type QueryParams = {
   kind?: 'board' | 'forum' | (string & {})
   limit?: number
   cursor?: string
+  /** With kind=forum: only this account's application, for a point lookup. */
+  requester?: string
 }
 export type InputSchema = undefined
 

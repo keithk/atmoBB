@@ -13,7 +13,7 @@ import {
   spaceOfBoard,
   resolveHandle,
 } from '$lib/server/appview';
-import type { ForumApplications, ForumProfile, SpaceMember, ThreadSummary } from '$lib/server/appview';
+import type { ForumApplications, ForumMembershipSettings, ForumProfile, SpaceMember, ThreadSummary } from '$lib/server/appview';
 import { boardMembers } from '$lib/server/space-access';
 import { adminActor, canModerateForum, forumStaff, isAdmin } from '$lib/server/admin';
 import { createForumRecord, createForumRecords, putForumRecord } from '$lib/server/forum-repo';
@@ -21,20 +21,13 @@ import { listInvites, mintInvite, revokeInvite } from '$lib/server/invites';
 import { savedRedirect } from '$lib/server/saved-redirect';
 import { grandfatherSet } from '$lib/application';
 import { inviteState } from '$lib/invites';
-import { joinMode, sponsorLine, type JoinMode } from '$lib/membership';
+import { joinMode, resolvedHandle, sponsorLine, type JoinMode } from '$lib/membership';
 
 const NS = 'app.atmobb';
 const ACTION = `${NS}.moderation.action`;
 const account = (did: string) => ({ $type: `${ACTION}#account`, did });
 
-/** The profile's join policy. Absent means open. */
-interface MembershipSettings {
-  mode?: string;
-  prompt?: string;
-  inviteCap?: number;
-  inviteDays?: number;
-  gatedSince?: string;
-}
+type MembershipSettings = ForumMembershipSettings;
 
 const DEFAULT_CAP = 3;
 const DEFAULT_DAYS = 14;
@@ -98,17 +91,11 @@ async function withoutAccepted(dids: string[], forumDid: string): Promise<string
 
 type Application = ForumApplications['requests'][number];
 
-/** The open application from `did`, paged from the appview rather than
+/** The open application from `did`, read from the appview rather than
  *  trusted from the form. */
 async function findApplication(did: string): Promise<Application | undefined> {
-  let cursor: string | undefined;
-  do {
-    const page = await getAccessRequests(FORUM_DID(), { kind: 'forum', limit: 100, cursor });
-    const hit = page.requests.find((r) => r.requester === did);
-    if (hit) return hit;
-    cursor = page.cursor;
-  } while (cursor);
-  return undefined;
+  const page = await getAccessRequests(FORUM_DID(), { kind: 'forum', limit: 1, requester: did });
+  return page.requests[0];
 }
 
 async function handlesFor(dids: Iterable<string>): Promise<Record<string, string>> {
@@ -119,11 +106,10 @@ async function handlesFor(dids: Iterable<string>): Promise<Record<string, string
 
 export const load: PageServerLoad = async ({ url }) => {
   const forumDid = FORUM_DID();
-  const index = await getBoardIndex(forumDid);
+  const [index, available] = await Promise.all([getBoardIndex(forumDid), gatingAvailable(forumDid)]);
   const settings = settingsOf(index.forum);
   const mode = joinMode(settings);
   const gated = mode !== 'open';
-  const available = await gatingAvailable(forumDid);
 
   // What gating would do right now, so the admin sees the number before
   // confirming. Only an open forum can be gated.
@@ -200,7 +186,10 @@ export const load: PageServerLoad = async ({ url }) => {
     ...invites.map((i) => i.minter),
     ...roster.members.flatMap((m) => (m.sponsor ? [m.did, m.sponsor] : [m.did])),
   ]);
-  const name = (did: string) => (handles[did] && handles[did] !== did ? `@${handles[did]}` : undefined);
+  const name = (did: string) => {
+    const h = resolvedHandle(handles, did);
+    return h ? `@${h}` : undefined;
+  };
 
   return {
     mode,
@@ -421,7 +410,7 @@ export const actions: Actions = {
     try {
       await addSpaceMember(space, did, 'write');
       await createForumRecord(`${NS}.moderation.action`, {
-        subject: { $type: `${NS}.moderation.action#account`, did },
+        subject: account(did),
         action: 'grantAccess',
         board: boardUri,
       });
@@ -440,7 +429,7 @@ export const actions: Actions = {
     const did = String(form.get('did') ?? '');
     try {
       await createForumRecord(`${NS}.moderation.action`, {
-        subject: { $type: `${NS}.moderation.action#account`, did },
+        subject: account(did),
         action: 'denyAccess',
         board: boardUri,
       });
@@ -471,7 +460,7 @@ export const actions: Actions = {
     try {
       await removeSpaceMember(space, did);
       await createForumRecord(`${NS}.moderation.action`, {
-        subject: { $type: `${NS}.moderation.action#account`, did },
+        subject: account(did),
         action: 'revokeAccess',
         board: boardUri,
       });
