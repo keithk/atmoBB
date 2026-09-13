@@ -25,6 +25,8 @@ The webring and cross-forum thread links build forum URLs as `https://<forum han
 
 Notifications need nothing from the tenant either. The app generates its atmo.pub signing key on first boot into the site's persistent storage and serves its sender identity at `/.well-known/did.json`, so each tenant forum is its own sender under its own domain.
 
+[Membership](features.md#membership) (join modes, applications, invites) needs no operator step either; none of it touches the session secret. One thing to know: a tenant's invite links are `/join/<token>` URLs, and the token is the whole secret, so every redeemed and unredeemed invite lands in the host's access logs. Keep log retention short.
+
 ## The invite queue
 
 Signup can also be self-serve. Set `ATMOBB_HOSTING=1` and a dashboard `DEPLOY_SESSION_TOKEN` on the one deployment that offers hosting, and it grows two pages. `/host` is public: someone with an invite code logs in, claims a subdomain, and names their forum account. Admin → Hosting is where invite codes get minted and requests get approved or rejected. Approving one provisions the site through the dashboard automatically and the page flips it to live once the new forum serves its DID.

@@ -320,7 +320,7 @@ Relevant app environment variables:
 | `HAPPYVIEW_URL` | Public Happyview base URL. |
 | `ATMOBB_FORUM_DID` | DID of the dedicated forum account. |
 | `ATMOBB_COOKIE_SECRET` | Signs app login cookies; rotating it logs everyone out. |
-| `DATA_DIR` | Persistent OAuth state, the forum's atmo.pub signing key, and members' notification state. Losing it disconnects every account and makes the forum a new sender, so members approve it again. |
+| `DATA_DIR` | Persistent OAuth state, the forum's atmo.pub signing key, members' notification state, and the invite links of a gated forum (`invites.json`). Losing it disconnects every account, makes the forum a new sender so members approve it again, and voids every unredeemed invite. |
 | `HAPPYVIEW_SESSION_SECRET` | Copy of Happyview's session secret for private boards. Must be at least 32 bytes; in production the app refuses to start with a weak one, and treats a weak `ATMOBB_COOKIE_SECRET` the same way. |
 | `HAPPYVIEW_CLIENT_KEY` | Optional app identity for Happyview rate limiting. |
 | `ATMOBB_AVATAR_BUILDER_URL` | Optional. Links an external avatar builder from profile settings. |

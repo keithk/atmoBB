@@ -91,6 +91,8 @@ RESET=1 ADMIN_DID="$ADMIN_DID" bun appview/seed-dev.ts
 
 `ADMIN_DID` gets an admin grant for `/admin`. Defaults are `BOARDS=8`, `THREADS=400`, `REPLIES=4000`, and `AUTHORS=60`. Keep `RESET=1` unless you specifically want a second batch, because leaving it off gives you duplicate boards and posts with fresh rkeys.
 
+Add `GATED=1` to seed the forum in apply mode, gated thirty days ago: founding acceptances for every seeded poster and for `ADMIN_DID`, one invited member with a sponsor, one approved applicant, one removed member, one application still in the queue, and two threads on the first board (an outsider's and the removed member's) that the index should hide. The forum profile carries the matching `membership` object, so Admin → Members opens on the gated settings.
+
 > [!WARNING]
 > `RESET=1` deletes synthetic records and clears derived statistics. Only ever point it at the disposable development index. Aimed anywhere else, it does exactly what it says it does.
 

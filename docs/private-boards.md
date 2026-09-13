@@ -49,15 +49,17 @@ The cookie is a signed DID with no expiry and no binding to a client. Whoever ho
 ## The join flow
 
 1. A non-member submits the request form, with an optional note. This writes a public `accessRequest` record to their repo.
-2. The request shows up on `/admin/boards`. Requests from current members, and requests with a denial or revocation decided after them, are filtered out.
+2. The request shows up on Admin → Members. Requests from current members, and requests with a denial or revocation decided after them, are filtered out.
 3. **Approve** grants space write access and records a `grantAccess` moderation action.
 4. **Deny** records a `denyAccess` action and changes nothing about space membership. They can ask again: a new request replaces the old record with a fresh timestamp, which reopens it in the queue.
+
+On a gated forum ([membership](features.md#membership) in apply or invite mode), only forum members can request a board. Everyone else sees the join notice where the request form would be. The same `accessRequest` record type carries forum applications, with a `forum` field instead of `board`, and Admin → Members shows the two queues side by side.
 
 ## Leaving and being removed
 
 Membership is what gates the board, so anything meant to keep someone out has to touch it. Bans alone only stop writes, and space reads never see them.
 
-- **Remove** on `/admin/boards` takes a member out of a board's space and records a `revokeAccess` action. Their posts stay in the space. They can ask again.
+- **Remove** on Admin → Members takes a member out of a board's space and records a `revokeAccess` action. Their posts stay in the space. They can ask again.
 - **Banning** a member, from a board or the whole forum, also removes them from every space the ban covers. Lifting the ban doesn't put them back; they request access again.
 - Space writes check bans strictly. If the appview can't confirm a member's standing, I refuse the post rather than let it through, because nothing downstream would catch it.
 

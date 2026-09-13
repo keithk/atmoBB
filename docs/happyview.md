@@ -57,6 +57,16 @@ Two more derived tables carry forum membership, both maintained by the `record.c
 
 Both tables apply actions in the order of their `createdAt`, then URI, whatever order the records reach the index in. An accept whose later revocation or forum-wide ban is already indexed inserts its window closed at that action's time, and a close never touches a window opened after it. `infra/rebuild-stats.sql` reconstructs both tables from the indexed actions by walking each forum's (and each member's) open and close actions in that order, so a member with two accept-revoke cycles comes back with two closed rows.
 
+### Taking membership to production
+
+Moving an instance that predates membership takes three steps, in this order:
+
+1. **Publish the changed record schemas** from the authority account. Three of them changed, all additively: `goat lex publish --update lexicons/app/atmobb/moderation/action.json lexicons/app/atmobb/forum/profile.json lexicons/app/atmobb/forum/accessRequest.json`. Self-hosters skip this; the schemas are already on the network. [Lexicons](lexicons.md) has the details.
+2. **Rerun `appview/setup.sh`.** It creates the two tables, re-resolves the record schemas, uploads the `getMembership` query and the updated `getAccessRequests` and `getLog` schemas, and installs the Lua that maintains the tables from here on.
+3. **Backfill and rebuild.** The trigger only sees actions that arrive after it's installed. With both tables empty the index knows no gating period and no acceptance, so it enforces nothing and every post is served, whatever the forum's profile says. Run `appview/backfill.sh` (see [Backfill](#backfill)); it ends by running `infra/rebuild-stats.sql`, which fills both tables from every indexed action. On an instance where no forum has gated yet the rebuild finds nothing to insert, but it's cheap, so run it anyway.
+
+Until step 2 runs, the app has no membership query to ask, and the gated modes stay hidden on Admin → Members. That's deliberate: a forum can't gate itself on an index that wouldn't enforce it.
+
 ## Delisting a forum
 
 A shared appview sometimes needs to drop a forum from the directory, the webring, topic federation, and the cross-forum listings on member profiles, without touching its records:

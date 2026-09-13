@@ -45,6 +45,13 @@ const SPAN = 365 * 24 * 3600 * 1000;
 const randomTime = (after = NOW - SPAN) =>
   Math.min(after + (NOW - after) * Math.pow(Math.random(), 0.5), NOW - 1000);
 
+// GATED=1 puts the forum in apply mode as of thirty days ago and seeds the
+// membership scenarios (founding, invited, applied, removed, pending,
+// outsider) below. Everything written before that instant stays served.
+const DAY = 24 * 3600 * 1000;
+const GATED = !!process.env.GATED;
+const GATED_AT = NOW - 30 * DAY;
+
 const text = (t: string) => ({ $type: `${NS}.richtext.block#text`, text: t });
 
 type Row = {
@@ -97,6 +104,15 @@ await insert([makeRow(FORUM_DID, `${NS}.forum.profile`, "self", {
     { title: "Frequent poster", minPosts: 50 },
     { title: "Veteran", minPosts: 200 },
   ],
+  ...(GATED ? {
+    membership: {
+      mode: "apply",
+      prompt: "What brings you to the dev forum?",
+      inviteCap: 3,
+      inviteDays: 14,
+      gatedSince: iso(GATED_AT),
+    },
+  } : {}),
   createdAt: iso(NOW - SPAN),
 }, NOW - SPAN)]);
 
@@ -343,6 +359,86 @@ for (let i = 0; i < REPLIES; i++) {
   }, at));
 }
 await insert(replyRows);
+
+// The gated scenario: the forum's own actions live in its repo, applications
+// and declarations in the applicants' repos, and the rebuild below turns the
+// actions into windows the same way setup's trigger would have.
+if (GATED) {
+  const INVITED_DID = "did:plc:atmobbdevinvited";
+  const APPLICANT_DID = "did:plc:atmobbdevapplicant";
+  const REMOVED_DID = "did:plc:atmobbdevremoved";
+  const PENDING_DID = "did:plc:atmobbdevpending";
+  const OUTSIDER_DID = "did:plc:atmobbdevoutsider";
+  const account = (did: string) => ({ did });
+  const decision = (value: Record<string, unknown>, atMs: number) =>
+    makeRow(FORUM_DID, `${NS}.moderation.action`, null, { ...value, createdAt: iso(atMs) }, atMs);
+
+  await insert([INVITED_DID, APPLICANT_DID, REMOVED_DID, PENDING_DID, OUTSIDER_DID].map((did, i) =>
+    makeRow(did, `${NS}.actor.profile`, "self", {
+      displayName: ["invited member", "approved applicant", "removed member", "pending applicant", "outsider"][i],
+      createdAt: iso(GATED_AT - DAY),
+    }, GATED_AT - DAY)));
+
+  // The gate goes up, then everyone already here (the seeded posters, the
+  // admin, and the member who gets removed later) is accepted as founding.
+  await insert([
+    decision({ subject: account(FORUM_DID), action: "gateForum", mode: "apply" }, GATED_AT),
+    ...[...authors, ADMIN_DID, REMOVED_DID].map((did, i) =>
+      decision({ subject: account(did), action: "acceptMember", via: "founding" }, GATED_AT + 1000 + i)),
+  ]);
+
+  // One application approved by the admin (who becomes the sponsor), one
+  // still waiting, one member brought in by an invite from a founding
+  // member, and one founding member removed by staff.
+  const applicationAt = GATED_AT + 2 * DAY;
+  const application = makeRow(APPLICANT_DID, `${NS}.forum.accessRequest`, null, {
+    forum: FORUM_DID,
+    reason: "I lurked here for a year and would like to post.",
+    createdAt: iso(applicationAt),
+  }, applicationAt);
+  await insert([
+    application,
+    makeRow(PENDING_DID, `${NS}.forum.accessRequest`, null, {
+      forum: FORUM_DID,
+      reason: "seeded test: still waiting in the queue",
+      createdAt: iso(NOW - 2 * DAY),
+    }, NOW - 2 * DAY),
+    decision({
+      subject: account(APPLICANT_DID), action: "acceptMember", via: "application",
+      sponsor: ADMIN_DID, ref: { uri: application.uri, cid: application.cid },
+    }, applicationAt + DAY),
+    decision({
+      subject: account(INVITED_DID), action: "acceptMember", via: "invite", sponsor: authors[1],
+    }, GATED_AT + 4 * DAY),
+    decision({
+      subject: account(REMOVED_DID), action: "revokeMember", reason: "seeded test: removed by staff",
+    }, GATED_AT + 6 * DAY),
+  ]);
+
+  // Accepted members still declare for themselves; the removed member's
+  // declaration stays behind, as it would after a real removal.
+  await insert([INVITED_DID, APPLICANT_DID, REMOVED_DID].map((did) =>
+    makeRow(did, `${NS}.forum.membership`, null, {
+      forum: FORUM_DID,
+      createdAt: iso(GATED_AT + 8 * DAY),
+    }, GATED_AT + 8 * DAY)));
+
+  // Three threads on the first board after the gate. The invited member's
+  // should show; the outsider's and the removed member's (written after the
+  // revocation) should not.
+  const gatedThread = (did: string, title: string, atMs: number) =>
+    makeRow(did, `${NS}.discussion.thread`, null, {
+      board: boardRows[0].uri,
+      title,
+      body: [text(`Seeded on a gated forum by ${did}.`)],
+      createdAt: iso(atMs),
+    }, atMs);
+  await insert([
+    gatedThread(INVITED_DID, "Hello from an invited member (seeded, should show)", GATED_AT + 9 * DAY),
+    gatedThread(OUTSIDER_DID, "Posted without membership (seeded, should be hidden)", GATED_AT + 9 * DAY + 1000),
+    gatedThread(REMOVED_DID, "Posted after removal (seeded, should be hidden)", GATED_AT + 9 * DAY + 2000),
+  ]);
+}
 
 // Derive the stats tables from what we just inserted, the same way a
 // backfill does, so the seed and the rebuild can't drift apart.

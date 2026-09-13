@@ -28,6 +28,19 @@ Everything an atmobb forum does today. What I haven't built is listed at the [bo
 - **Hovercards.** Hover any member link for avatar, rank, both post counts, join date, and presence.
 - **Who's online.** Members by DID, guests counted anonymously (salted hash, never identified), online/idle dots on avatars, and an all-time high-water mark on the home page. Very phpBB.
 
+## Membership
+
+Joining a forum is an `app.atmobb.forum.membership` record in the member's own repo. On an open forum, the default, that declaration is the whole story. Gate the forum and it takes two things to post: the forum has to have accepted you, and you have to have declared.
+
+- **Three join modes.** Open, apply, or invite, set on Admin → Members with a prompt for applicants, an invite cap (default 3 open invites per member), and an invite lifetime (default 14 days). The policy is a `membership` object on the forum's profile record. Gated modes are only offered when the index can answer the membership query, so a forum can't gate itself on an appview that wouldn't enforce it.
+- **Reading stays public.** Non-members read everything on a gated forum. The composer, reply, quote, vote, and private-board request controls are replaced by a join notice. Membership gates writing, not reading.
+- **Acceptances are moderation actions.** Being accepted is an `acceptMember` action in the forum's public repo, carrying who sponsored you and how you came in (`invite`, `application`, or `founding`). Removal is `revokeMember`. Both are in the mod log like everything else.
+- **Gating keeps the past.** Flipping open → gated shows how many people will be grandfathered and asks you to confirm. It then writes a `gateForum` action and founding `acceptMember` actions for everyone already here: the declared roster plus thread authors, last repliers, and up to five participants per thread from the latest feed. A quiet replier deep in a long thread who never declared membership can be missed and has to be invited again. Posts written while the forum was open are always served, whoever wrote them; only posts written during a gated period are held to the author's standing at the time they posted. Opening the forum again is `openForum`, and the acceptances stay for the next time.
+- **Applying.** On an apply-mode forum, `/apply` asks the one question the forum set. The answer is an `app.atmobb.forum.accessRequest` record in the applicant's own repo, so it's public. Staff see the queue on Admin → Members and can approve (the approving staffer becomes the sponsor), deny, or hold it, with a link to the applicant's Bluesky profile for a look around. A denied applicant can apply again.
+- **Invites.** On an invite-mode forum, members mint invite links from `/settings/invites`, up to the cap, and can withdraw their own. Staff mint from Admin → Members. `/join/<token>` shows who invited you and asks you to confirm. A refusal for any reason (already a member, banned, expired link) never spends the invite. Invite links are the only piece of this that isn't a public record: they live in a file in the forum's data directory, because the token in the link is the whole secret.
+- **The roster.** Admin → Members lists every accepted member with their sponsor. Staff can remove a member; a staffer has to leave staff first. A forum-wide ban also revokes membership, and lifting the ban doesn't restore it. Leaving is still deleting your own declaration, and the forum's acceptance survives, so coming back is just declaring again.
+- **Finish joining.** An accepted account that hasn't declared yet gets a one-click "Finish joining" button, which writes the declaration.
+
 ## Boards
 
 - **Categories, boards, subforums.** Categories group boards on the index; boards take a description, an ordering, and optionally a parent for one level of nesting.
@@ -58,10 +71,10 @@ Everything an atmobb forum does today. What I haven't built is listed at the [bo
 - **A public, portable mod log.** Every action is an `app.atmobb.moderation.action` record in the forum's public repo, so anyone can audit it and any appview can index it.
 - **Hide and unhide threads.** One button on any board row or thread page. Hiding one of the forum's own threads propagates to every forum that indexes it; hiding a federated thread only shapes the local view.
 - **Lock and pin threads.** Locking stops new replies, and it's enforced when the thread is read: a reply written from another client after the lock doesn't show, though staff can still post a closing word. Pinned threads sit at the top of their own board. Both are the origin forum's call, not a federated peer's.
-- **Bans and warnings.** From a member's profile, staff can warn them (a reason they'll see on their profile) or ban them, forum-wide or from one board, for a number of days or until lifted. A ban refuses new threads, replies, votes, and access requests in the app, and the appview drops anything the member posts inside the ban window from any other client. Posts from before the ban stay. Banned members see why on every page.
+- **Bans and warnings.** From a member's profile, staff can warn them (a reason they'll see on their profile) or ban them, forum-wide or from one board, for a number of days or until lifted. A ban refuses new threads, replies, votes, and access requests in the app, and the appview drops anything the member posts inside the ban window from any other client. Posts from before the ban stay. Banned members see why on every page. On a gated forum a forum-wide ban also revokes membership, and lifting it doesn't put the member back.
 - **Block and unblock forums.** Drop another forum out of a board's merged stream, or mute it forum-wide in Latest.
-- **Access queue.** Members-only boards get a request queue with approve and deny, filtered so already-members and re-asks after a denial don't pile up.
-- **Undo.** Active hides, locks, pins, bans, and blocks are listed in the admin panel with one-click reversal.
+- **Access queue.** Members-only boards get a request queue on Admin → Members with approve and deny, filtered so already-members and re-asks after a denial don't pile up. On a gated forum only members can ask.
+- **Undo.** Active hides, locks, pins, bans, and blocks are listed on Admin → Topics with one-click reversal. Membership decisions aren't in that list; they're reversed from the Members page.
 - **Operator delisting.** An operator running a shared appview can delist a forum from every cross-forum surface (directory, webring, federation, member activity) with one database row, without touching the forum's records or its own site.
 
 ## Admin panel
@@ -72,6 +85,7 @@ Custom CSS never applies to `/admin`, so a broken theme is always repairable.
 - **Appearance.** Custom CSS and up to 12 uploaded WOFF/WOFF2 webfonts. See [theming](theming.md) for the cascade contract, tokens, and class hooks.
 - **Boards.** Create, edit, delete, categorize, nest, reorder with up/down arrows, toggle members-only, with destructive-action confirmations where they're needed.
 - **Staff.** Grant and revoke admin and moderator roles.
+- **Members.** Join mode, application prompt, invite cap and lifetime, the application queue, staff invites, the members-only board request queue, and the roster with removal.
 - **Topics.** Set a board's topic slug, choose open or allowlist federation, preview what a topic would merge with before committing, and browse every topic in the atmosphere.
 - **Connection.** OAuth-connect the forum's own account. Whoever connects it first gets bootstrapped as admin; connecting the wrong account is detected and revoked.
 
@@ -93,4 +107,4 @@ Admin saves wait until the change is visible in the index before redirecting, so
 
 ## Not built
 
-I haven't built search, RSS, private messages, or reactions, and there's no schema for any of them either. Polls on members-only boards aren't built either, since votes are public records the space can't see. Notifications don't yet cover replies from federated peers or other clients, watching a single thread, or moderation notices.
+I haven't built search, RSS, private messages, or reactions, and there's no schema for any of them either. Polls on members-only boards aren't built either, since votes are public records the space can't see. Notifications exist through atmo.pub but don't yet cover replies from federated peers or other clients, watching a single thread, moderation notices, or membership decisions. Membership has no private variant: applications, acceptances, sponsors, and removals are all public records.
