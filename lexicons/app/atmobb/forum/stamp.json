@@ -1,0 +1,110 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.forum.stamp",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A stamp a forum awards for belonging: being somewhere or arriving at some time, never for how much someone has posted. Lives in the forum account's repo. Members choose which awarded stamps to wear via the wearing list on their membership record.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": [
+          "name",
+          "look",
+          "trigger",
+          "createdAt"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 240,
+            "maxGraphemes": 24
+          },
+          "look": {
+            "type": "ref",
+            "ref": "#look"
+          },
+          "trigger": {
+            "type": "ref",
+            "ref": "#trigger"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    },
+    "look": {
+      "type": "object",
+      "description": "How the stamp is drawn: two colors and one of a bounded set of shapes. No free CSS or images.",
+      "required": [
+        "bg",
+        "ink",
+        "shape"
+      ],
+      "properties": {
+        "bg": {
+          "type": "string",
+          "maxLength": 7,
+          "description": "Background as a full six-digit hex color (for example #1a73e8). Writers must validate the #RRGGBB format."
+        },
+        "ink": {
+          "type": "string",
+          "maxLength": 7,
+          "description": "Text and outline as a full six-digit hex color (for example #ffffff). Writers must validate the #RRGGBB format."
+        },
+        "shape": {
+          "type": "string",
+          "knownValues": [
+            "stamp",
+            "pill",
+            "ticket",
+            "pixel"
+          ],
+          "maxLength": 32
+        }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "description": "What earns the stamp. kind names the event or place; the other fields parameterize it. Writers must validate that the parameter matching kind is present: board for firstPostInBoard, before for profileBefore, via for arrivedBy. firstPostHere and byHand take no parameter.",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "knownValues": [
+            "firstPostInBoard",
+            "firstPostHere",
+            "profileBefore",
+            "arrivedBy",
+            "byHand"
+          ],
+          "maxLength": 32
+        },
+        "board": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "For firstPostInBoard: the app.atmobb.forum.board whose first post earns the stamp."
+        },
+        "before": {
+          "type": "string",
+          "format": "datetime",
+          "description": "For profileBefore: members whose atmobb profile predates this moment earn the stamp."
+        },
+        "via": {
+          "type": "string",
+          "knownValues": [
+            "invite",
+            "application",
+            "founding"
+          ],
+          "maxLength": 32,
+          "description": "For arrivedBy: how the member was accepted (matches the acceptMember action's via)."
+        }
+      }
+    }
+  }
+}

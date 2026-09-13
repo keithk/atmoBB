@@ -4,7 +4,7 @@
   "defs": {
     "main": {
       "type": "query",
-      "description": "One page of a thread: the thread, total reply count, and a page of replies in chronological order, with author profiles and postcounts hydrated. The thread carries its moderation flags for the viewing forum (hidden, locked, pinned).",
+      "description": "One page of a thread: the thread, total reply count, and a page of replies in chronological order, with author profiles and worn stamps hydrated. The thread carries its moderation flags for the viewing forum (hidden, locked, pinned).",
       "parameters": {
         "type": "params",
         "required": [
@@ -50,10 +50,12 @@
           ],
           "properties": {
             "thread": {
-              "type": "unknown"
+              "type": "unknown",
+              "description": "Shaped like #postView, plus origin and the moderation flags hidden, locked, lockedAt, and pinned."
             },
             "replies": {
               "type": "array",
+              "description": "Each item is shaped like #postView.",
               "items": {
                 "type": "unknown"
               }
@@ -72,6 +74,58 @@
               "description": "Vote counts per option, voter total, and the viewer's votes, when the thread has a poll."
             }
           }
+        }
+      }
+    },
+    "postView": {
+      "type": "object",
+      "description": "The fields a thread and each reply share: the post itself and its author, hydrated.",
+      "required": [
+        "uri",
+        "author",
+        "value"
+      ],
+      "properties": {
+        "uri": {
+          "type": "string",
+          "format": "at-uri"
+        },
+        "cid": {
+          "type": "string",
+          "format": "cid"
+        },
+        "author": {
+          "type": "string",
+          "format": "did"
+        },
+        "authorProfile": {
+          "type": "unknown",
+          "description": "The author's app.atmobb.actor.profile record, when they have one."
+        },
+        "authorPosts": {
+          "type": "integer",
+          "description": "Deprecated and no longer rendered: the author's post count on this forum. Kept for older clients."
+        },
+        "authorTotalPosts": {
+          "type": "integer",
+          "description": "Deprecated and no longer rendered: the author's post count across every indexed forum. Kept for older clients."
+        },
+        "authorStamps": {
+          "type": "array",
+          "description": "The stamps the author wears on the viewing forum, in order.",
+          "maxLength": 3,
+          "items": {
+            "type": "ref",
+            "ref": "app.atmobb.forum.getStamps#trayEntry"
+          }
+        },
+        "value": {
+          "type": "unknown",
+          "description": "The thread or reply record."
+        },
+        "indexedAt": {
+          "type": "string",
+          "format": "datetime"
         }
       }
     }

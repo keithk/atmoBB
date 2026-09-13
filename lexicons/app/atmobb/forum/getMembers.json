@@ -4,7 +4,7 @@
   "defs": {
     "main": {
       "type": "query",
-      "description": "Members of a forum ordered by postcount, with atmobb profiles.",
+      "description": "Members of a forum ordered by arrival, with atmobb profiles and the stamps they wear.",
       "parameters": {
         "type": "params",
         "required": ["forum"],
@@ -20,9 +20,38 @@
           "type": "object",
           "required": ["members"],
           "properties": {
-            "members": { "type": "array", "items": { "type": "unknown" } },
+            "members": {
+              "type": "array",
+              "description": "Each item is shaped like #memberView.",
+              "items": { "type": "unknown" }
+            },
             "cursor": { "type": "string" }
           }
+        }
+      }
+    },
+    "memberView": {
+      "type": "object",
+      "description": "One member as getMembers returns them.",
+      "required": ["did"],
+      "properties": {
+        "did": { "type": "string", "format": "did" },
+        "profile": { "type": "unknown", "description": "The member's app.atmobb.actor.profile record, when they have one." },
+        "since": {
+          "type": "string",
+          "format": "datetime",
+          "description": "When the member arrived: their acceptance on a gated forum, or their membership declaration on an open one."
+        },
+        "sponsor": { "type": "string", "format": "did" },
+        "via": { "type": "string", "knownValues": ["invite", "application", "founding"], "maxLength": 32 },
+        "lastActive": { "type": "string", "format": "datetime" },
+        "posts": { "type": "integer", "description": "Deprecated and no longer rendered: post count on this forum. Kept for older clients." },
+        "totalPosts": { "type": "integer", "description": "Deprecated and no longer rendered: post count across every indexed forum. Kept for older clients." },
+        "stamps": {
+          "type": "array",
+          "description": "The stamps the member wears on this forum, in order.",
+          "maxLength": 3,
+          "items": { "type": "ref", "ref": "app.atmobb.forum.getStamps#trayEntry" }
         }
       }
     }

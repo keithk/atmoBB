@@ -36,7 +36,7 @@ export interface Main {
     | $Typed<AppAtmobbRichtextBlock.Code>
     | { $type: string }
   )[]
-  /** Post-count rank ladder, ordered ascending by minPosts. Ranks are computed by appviews from indexed post counts. */
+  /** Deprecated and no longer rendered: post-count ranks gave way to stamps (app.atmobb.forum.stamp). Kept so older records still validate. */
   ranks?: Rank[]
   links?: string[]
   /** Built-in color theme preset. Absent means the classic atmobb skin. Custom CSS loads after the preset and may override it. */
@@ -54,6 +54,8 @@ export interface Main {
   membership?: Membership
   /** Hide the 'powered by atmobb' badge in the page footer. Absent means shown. */
   hideCredit?: boolean
+  /** Hide the board and arrival default stamps on member rails. The 'here since' line always shows. Absent means shown. */
+  hideDefaultStamps?: boolean
   createdAt?: string
   [k: string]: unknown
 }

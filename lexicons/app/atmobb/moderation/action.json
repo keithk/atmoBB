@@ -41,7 +41,9 @@
               "revokeMember",
               "holdApplication",
               "gateForum",
-              "openForum"
+              "openForum",
+              "awardStamp",
+              "revokeStamp"
             ],
             "maxLength": 64
           },
@@ -63,7 +65,7 @@
           "ref": {
             "type": "ref",
             "ref": "com.atproto.repo.strongRef",
-            "description": "For acceptMember, denyAccess, or holdApplication: the accessRequest record this decision answers."
+            "description": "For acceptMember, denyAccess, or holdApplication: the accessRequest record this decision answers. For awardStamp or revokeStamp: the app.atmobb.forum.stamp record being awarded to or taken from the subject account."
           },
           "mode": {
             "type": "string",
@@ -78,6 +80,11 @@
             "type": "string",
             "format": "at-uri",
             "description": "Scopes account-level actions (e.g. a ban) to one board. Absent means forum-wide."
+          },
+          "actor": {
+            "type": "string",
+            "format": "did",
+            "description": "The staff member who performed the action, when it differs from the signing forum account."
           },
           "reason": {
             "type": "string",

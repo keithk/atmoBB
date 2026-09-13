@@ -39,7 +39,7 @@
           },
           "ranks": {
             "type": "array",
-            "description": "Post-count rank ladder, ordered ascending by minPosts. Ranks are computed by appviews from indexed post counts.",
+            "description": "Deprecated and no longer rendered: post-count ranks gave way to stamps (app.atmobb.forum.stamp). Kept so older records still validate.",
             "maxLength": 50,
             "items": { "type": "ref", "ref": "#rank" }
           },
@@ -90,6 +90,10 @@
           "hideCredit": {
             "type": "boolean",
             "description": "Hide the 'powered by atmobb' badge in the page footer. Absent means shown."
+          },
+          "hideDefaultStamps": {
+            "type": "boolean",
+            "description": "Hide the board and arrival default stamps on member rails. The 'here since' line always shows. Absent means shown."
           },
           "createdAt": { "type": "string", "format": "datetime" }
         }

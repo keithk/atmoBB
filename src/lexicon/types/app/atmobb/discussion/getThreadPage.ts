@@ -10,6 +10,7 @@ import {
   is$typed as _is$typed,
   type OmitKey,
 } from '../../../../util.js'
+import type * as AppAtmobbForumGetStamps from '../forum/getStamps.js'
 
 const is$typed = _is$typed,
   validate = _validate
@@ -28,7 +29,9 @@ export type QueryParams = {
 export type InputSchema = undefined
 
 export interface OutputSchema {
+  /** Shaped like #postView, plus origin and the moderation flags hidden, locked, lockedAt, and pinned. */
   thread?: { [_ in string]: unknown }
+  /** Each item is shaped like #postView. */
   replies: { [_ in string]: unknown }[]
   replyCount?: number
   replyIndex?: number
@@ -50,4 +53,33 @@ export interface Response {
 
 export function toKnownErr(e: any) {
   return e
+}
+
+/** The fields a thread and each reply share: the post itself and its author, hydrated. */
+export interface PostView {
+  $type?: 'app.atmobb.discussion.getThreadPage#postView'
+  uri: string
+  cid?: string
+  author: string
+  /** The author's app.atmobb.actor.profile record, when they have one. */
+  authorProfile?: { [_ in string]: unknown }
+  /** Deprecated and no longer rendered: the author's post count on this forum. Kept for older clients. */
+  authorPosts?: number
+  /** Deprecated and no longer rendered: the author's post count across every indexed forum. Kept for older clients. */
+  authorTotalPosts?: number
+  /** The stamps the author wears on the viewing forum, in order. */
+  authorStamps?: AppAtmobbForumGetStamps.TrayEntry[]
+  /** The thread or reply record. */
+  value: { [_ in string]: unknown }
+  indexedAt?: string
+}
+
+const hashPostView = 'postView'
+
+export function isPostView<V>(v: V) {
+  return is$typed(v, id, hashPostView)
+}
+
+export function validatePostView<V>(v: V) {
+  return validate<PostView & V>(v, id, hashPostView)
 }
