@@ -344,6 +344,7 @@ export interface ProfileEdit {
   displayName?: string;
   description?: string;
   theme?: import('$lib/themes').ForumTheme | '';
+  forumThemes?: { forum: string; theme: import('$lib/themes').ForumTheme | '' }[];
   signature?: unknown[];
   pronouns?: string;
   website?: string;
@@ -367,6 +368,7 @@ export async function saveProfile(did: string, edit: ProfileEdit): Promise<void>
   if ('pronouns' in edit) fields.pronouns = edit.pronouns || undefined;
   if ('website' in edit) fields.website = edit.website || undefined;
   if ('theme' in edit) fields.theme = edit.theme || undefined;
+  if ('forumThemes' in edit) fields.forumThemes = edit.forumThemes?.length ? edit.forumThemes : undefined;
   if (uploaded) fields.avatar = uploaded;
   await patchActorProfile(
     did,

@@ -7,7 +7,7 @@ import { ringForums } from '$lib/server/webring';
 import { blobCid, blobUrl } from '$lib/server/profiles';
 import { countUnread, readMember } from '$lib/server/notify/store';
 import { forumStanding } from '$lib/server/membership';
-import { DEFAULT_THEME, FORUM_THEMES, normalizeTheme, themeCss, type ForumTheme } from '$lib/themes';
+import { DEFAULT_THEME, personalTheme, normalizeTheme, themeCss, type ForumTheme } from '$lib/themes';
 
 const FONT_FAMILY = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,63}$/u;
 const cssString = (value: string) => JSON.stringify(value).replaceAll('<', '\\3c ');
@@ -87,9 +87,8 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
       }
     })(),
   ]);
-  if (FORUM_THEMES.includes(avatarProfile?.theme as ForumTheme)) {
-    forumTheme = avatarProfile!.theme as ForumTheme;
-  }
+  const preference = personalTheme(avatarProfile, FORUM_DID());
+  if (preference) forumTheme = preference;
   const notifyOn = notify?.status === 'on';
   // Standing on a gated forum (KTD7), computed once here beside the ban
   // load. It needs the profile, so it follows the index read; an open forum
@@ -114,7 +113,7 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
     forum,
     forumDid: FORUM_DID(),
     forumTheme,
-    personalThemeCss: FORUM_THEMES.includes(avatarProfile?.theme as ForumTheme) ? themeCss(forumTheme, true) : '',
+    personalThemeCss: preference ? themeCss(preference, true) : '',
     forumFontCss,
     forumCustomCss,
     forumFavicon,

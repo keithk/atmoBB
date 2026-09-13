@@ -1,12 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const state = vi.hoisted(() => ({ theme: undefined as unknown }));
+const state = vi.hoisted(() => ({ theme: undefined as unknown, forumThemes: undefined as unknown }));
 vi.mock('$lib/server/appview', () => ({
   FORUM_DID: () => 'did:plc:forum',
   getBoardIndex: async () => ({ boards: [], forum: { name: 'Forum', theme: 'forest', customCss: ':root{color:red}' } }),
   getStanding: async () => null,
 }));
-vi.mock('$lib/server/pds', () => ({ getMembership: async () => null, getOwnAvatarProfile: async () => ({ theme: state.theme }) }));
+vi.mock('$lib/server/pds', () => ({ getMembership: async () => null, getOwnAvatarProfile: async () => ({ theme: state.theme, forumThemes: state.forumThemes }) }));
 vi.mock('$lib/server/admin', () => ({ staffRole: async () => null, forumUnclaimed: async () => false }));
 vi.mock('$lib/server/webring', () => ({ ringForums: async () => [] }));
 vi.mock('$lib/server/profiles', () => ({ blobCid: () => null, blobUrl: async () => null }));
@@ -14,7 +14,15 @@ vi.mock('$lib/server/notify/store', () => ({ readMember: async () => null, count
 vi.mock('$lib/server/membership', () => ({ forumStanding: async () => ({ mode: 'open', standing: 'open' }) }));
 import { load } from './+layout.server';
 
+beforeEach(() => { state.forumThemes = undefined; });
+
 describe('personal theme precedence', () => {
+  it('preserves owner CSS without personal tokens when this forum opts out of the account theme', async () => {
+    state.theme = 'sky';
+    state.forumThemes = [{ forum: 'did:plc:forum', theme: '' }];
+    const data = await load({ locals: { user: { did: 'did:plc:user' } }, route: { id: '/' } } as never);
+    expect(data).toMatchObject({ forumTheme: 'forest', personalThemeCss: '', forumCustomCss: ':root{color:red}' });
+  });
   it.each(['classic', 'midnight'])('uses personal %s while preserving forum CSS', async (theme) => {
     state.theme = theme;
     const data = await load({ locals: { user: { did: 'did:plc:user' } }, route: { id: '/' } } as never);

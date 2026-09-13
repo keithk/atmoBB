@@ -8,7 +8,6 @@
   import { profileHref } from '$lib/profile-card';
   import type { RichTextBlock } from '$lib/richtext/bbcode';
   import type { PageData } from './$types';
-  import { THEME_PRESETS } from '$lib/themes';
 
   let { data, form }: { data: PageData; form: { saved?: boolean; restoredAvatar?: boolean; message?: string } | null } = $props();
 
@@ -117,17 +116,6 @@
         Your profile is shared across atmobb forums. Changes you make here will
         appear anywhere you use this account.
       </p>
-
-      <label>
-        <span class="atm-label">Theme</span>
-        <select class="atm-input" name="theme" value={data.profile.theme} aria-describedby="theme-hint">
-          <option value="">Forum default</option>
-          {#each THEME_PRESETS as preset}
-            <option value={preset.value}>{preset.label}</option>
-          {/each}
-        </select>
-        <span class="atm-hint" id="theme-hint">Only changes how forums look to you. Forum custom styling stays, with your theme colors applied afterwards. Save changes to apply.</span>
-      </label>
 
       <div class="avatar-row">
         <Avatar seed={data.did} profile={data.avatarProfile} size={100} alt="Your avatar" />
@@ -271,7 +259,7 @@
 
 <style>
   @layer atmobb {
-  .wrap { max-width: 780px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--space-4); }
+  .wrap { width: 100%; display: flex; flex-direction: column; gap: var(--space-4); }
 
   .edit { display: flex; flex-direction: column; gap: var(--space-4); }
   .lede { margin: 0; font: var(--type-meta); color: var(--forum-ink-soft); }

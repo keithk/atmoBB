@@ -5,7 +5,6 @@ import { getActorProfile, saveProfile } from '$lib/server/pds';
 import { blobCid, bustProfileCache, getBskyProfile } from '$lib/server/profiles';
 import type { RichTextBlock } from '$lib/richtext/bbcode';
 import { attachImages, resolveBodyImages } from '$lib/server/richtext';
-import { FORUM_THEMES, type ForumTheme } from '$lib/themes';
 
 const SIG_BLOCK = 'app.atmobb.richtext.block#text';
 const SIG_IMAGE_BLOCK = 'app.atmobb.richtext.block#image';
@@ -50,7 +49,6 @@ export const load: PageServerLoad = async ({ locals }) => {
     hasBskyAvatar: !!bskyProfile?.avatar,
     avatarBuilderUrl: env.ATMOBB_AVATAR_BUILDER_URL || null,
     profile: {
-      theme: FORUM_THEMES.includes(profile?.theme as ForumTheme) ? profile!.theme as ForumTheme : '',
       displayName: profile?.displayName ?? '',
       description: profile?.description ?? '',
       signature: sigText,
@@ -83,10 +81,6 @@ export const actions: Actions = {
     const pronouns = String(fd.get('pronouns') ?? '').trim();
     const website = String(fd.get('website') ?? '').trim();
     const avatarFile = fd.get('avatar');
-    const theme = String(fd.get('theme') ?? '');
-    if (theme && !FORUM_THEMES.includes(theme as ForumTheme)) {
-      return fail(400, { message: 'Choose a valid theme.' });
-    }
 
     if (website && !/^https?:\/\//i.test(website)) {
       return fail(400, { message: 'Website must start with http:// or https://.' });
@@ -116,7 +110,7 @@ export const actions: Actions = {
       : undefined;
 
     try {
-      await saveProfile(locals.user.did, { displayName, description, signature, pronouns, website, avatar, theme: theme as ForumTheme | '' });
+      await saveProfile(locals.user.did, { displayName, description, signature, pronouns, website, avatar });
       bustProfileCache(locals.user.did);
       return { saved: true };
     } catch (e) {

@@ -20,6 +20,8 @@ export interface Main {
   /** Personal color theme across forums. Omit to follow each forum's default styling. */
   theme?:
     'classic' | 'sky' | 'bubblegum' | 'midnight' | 'forest' | (string & {})
+  /** Per-forum personal theme overrides. Omit a forum to use the global theme; an empty theme preserves that forum's own styling. */
+  forumThemes?: ForumTheme[]
   displayName?: string
   /** Free-text bio, shown on the profile's About panel. Global across forums. */
   description?: string
@@ -55,6 +57,23 @@ export {
   type Main as Record,
   isMain as isRecord,
   validateMain as validateRecord,
+}
+
+export interface ForumTheme {
+  $type?: 'app.atmobb.actor.profile#forumTheme'
+  forum: string
+  theme:
+    '' | 'classic' | 'sky' | 'bubblegum' | 'midnight' | 'forest' | (string & {})
+}
+
+const hashForumTheme = 'forumTheme'
+
+export function isForumTheme<V>(v: V) {
+  return is$typed(v, id, hashForumTheme)
+}
+
+export function validateForumTheme<V>(v: V) {
+  return validate<ForumTheme & V>(v, id, hashForumTheme)
 }
 
 /** Legacy built avatar as part + colour choices. Kept so existing records stay valid. */

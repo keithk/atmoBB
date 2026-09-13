@@ -87,6 +87,15 @@ export const schemaDict = {
               ],
               maxLength: 64,
             },
+            forumThemes: {
+              type: 'array',
+              description:
+                "Per-forum personal theme overrides. Omit a forum to use the global theme; an empty theme preserves that forum's own styling.",
+              items: {
+                type: 'ref',
+                ref: 'lex:app.atmobb.actor.profile#forumTheme',
+              },
+            },
             displayName: {
               type: 'string',
               maxLength: 640,
@@ -145,6 +154,28 @@ export const schemaDict = {
               type: 'string',
               format: 'datetime',
             },
+          },
+        },
+      },
+      forumTheme: {
+        type: 'object',
+        required: ['forum', 'theme'],
+        properties: {
+          forum: {
+            type: 'string',
+            format: 'did',
+          },
+          theme: {
+            type: 'string',
+            maxLength: 64,
+            knownValues: [
+              '',
+              'classic',
+              'sky',
+              'bubblegum',
+              'midnight',
+              'forest',
+            ],
           },
         },
       },

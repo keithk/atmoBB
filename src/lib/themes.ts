@@ -13,6 +13,18 @@ export const FORUM_THEMES = ['classic', 'sky', 'bubblegum', 'midnight', 'forest'
 export type ForumTheme = (typeof FORUM_THEMES)[number];
 export const DEFAULT_THEME: ForumTheme = 'classic';
 
+/** Undefined inherits the account default; an empty string explicitly keeps forum styling. */
+export function forumThemeOverride(value: unknown, forum: string): ForumTheme | '' | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const theme = value.find((entry) => entry?.forum === forum)?.theme;
+  return theme === '' || FORUM_THEMES.includes(theme) ? theme : undefined;
+}
+
+export function personalTheme(profile: { theme?: unknown; forumThemes?: unknown } | null, forum: string): ForumTheme | '' {
+  const theme = forumThemeOverride(profile?.forumThemes, forum) ?? profile?.theme;
+  return FORUM_THEMES.includes(theme as ForumTheme) ? theme as ForumTheme : '';
+}
+
 export interface ThemePreset {
   value: ForumTheme;
   label: string;

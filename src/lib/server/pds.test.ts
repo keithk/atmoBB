@@ -19,6 +19,19 @@ beforeEach(() => {
 });
 
 describe('profile avatars', () => {
+  it('persists forum opt-outs, preserves them during profile edits, and clears them from the layout cache', async () => {
+    let existing = { displayName: 'Keep me', theme: 'forest' };
+    repo.getRecord.mockImplementation(async () => ({ data: { value: existing } }));
+    repo.putRecord.mockImplementation(async ({ record }) => { existing = record; });
+    const did = 'did:plc:forum-theme-test';
+    await saveProfile(did, { forumThemes: [{ forum: 'did:plc:forum', theme: '' }] });
+    expect(await getOwnAvatarProfile(did)).toMatchObject({ theme: 'forest', forumThemes: [{ forum: 'did:plc:forum', theme: '' }] });
+    await saveProfile(did, { displayName: 'Renamed' });
+    expect(repo.putRecord.mock.calls[1][0].record.forumThemes).toEqual([{ forum: 'did:plc:forum', theme: '' }]);
+    await saveProfile(did, { forumThemes: [] });
+    expect(await getOwnAvatarProfile(did)).not.toHaveProperty('forumThemes');
+    expect(await getOwnAvatarProfile(did)).toMatchObject({ displayName: 'Renamed', theme: 'forest' });
+  });
   it('saves and clears a personal theme without losing other profile fields, updating the layout cache', async () => {
     const existing = { displayName: 'Theme user', theme: 'forest', extension: 'preserved' };
     repo.getRecord.mockImplementation(async () => ({ data: { value: existing } }));
