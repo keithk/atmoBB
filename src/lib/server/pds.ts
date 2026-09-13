@@ -106,6 +106,37 @@ export async function requestAccess(did: string, board: string, reason?: string)
   });
 }
 
+/** The applicant's own application to join a gated forum (an accessRequest with `forum` set), or null. */
+export async function getForumApplication(did: string, forum: string): Promise<{ uri: string } | null> {
+  try {
+    const agent = await agentFor(did);
+    const res = await agent.com.atproto.repo.listRecords({ repo: did, collection: ACCESS_REQUEST, limit: 100 });
+    const rec = res.data.records.find((r) => (r.value as { forum?: string }).forum === forum);
+    return rec ? { uri: rec.uri } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Write a forum application into the applicant's repo. Applying again after a
+ * denial replaces the old record so the application is newer than the
+ * decision and reopens as pending (R9).
+ */
+export async function applyToForum(did: string, forum: string, reason: string): Promise<void> {
+  const agent = await agentFor(did);
+  const existing = await getForumApplication(did, forum);
+  if (existing) {
+    const p = parseAtUri(existing.uri);
+    if (p) await agent.com.atproto.repo.deleteRecord({ repo: did, collection: p.collection, rkey: p.rkey });
+  }
+  await agent.com.atproto.repo.createRecord({
+    repo: did,
+    collection: ACCESS_REQUEST,
+    record: { $type: ACCESS_REQUEST, forum, reason, createdAt: new Date().toISOString() },
+  });
+}
+
 export async function leaveForum(did: string, membershipUri: string): Promise<void> {
   const p = parseAtUri(membershipUri);
   if (!p || p.did !== did || p.collection !== MEMBERSHIP) throw new Error('not your membership record');
