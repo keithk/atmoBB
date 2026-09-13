@@ -22,6 +22,8 @@
     }
     const scope = { accountDid, forumDid };
     const posts = document.querySelectorAll<HTMLElement>('[data-atm-post-position]');
+    // Count posts that are genuinely on screen, not only posts that cross a
+    // narrow reading band. Short threads can be read without any scrolling.
     const observer = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         if (!entry.isIntersecting) continue;
@@ -41,7 +43,7 @@
         });
         if (changed) window.dispatchEvent(new Event(readingStateEvent(scope)));
       }
-    }, { rootMargin: '-20% 0px -55% 0px', threshold: 0 });
+    }, { rootMargin: '0px 0px -10% 0px', threshold: 0 });
     posts.forEach((post) => observer.observe(post));
     return () => observer.disconnect();
   });

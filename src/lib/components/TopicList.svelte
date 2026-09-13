@@ -61,6 +61,7 @@
               createdAt={thread.createdAt}
               lastActivity={thread.lastActivity}
               replyCount={thread.replyCount}
+              lastPostBy={thread.replyCount === 0 ? thread.author : thread.lastReplyBy}
             />
           {/if}
         </div>

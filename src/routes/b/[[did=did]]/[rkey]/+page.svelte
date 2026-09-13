@@ -135,7 +135,7 @@
             <span>&middot; via <span class="atm-via">{t.origin.name ?? t.origin.did.slice(8, 24)}</span></span>
           {/if}
           <span>&middot; started {relTime(t.createdAt)}</span>
-          <TopicReadStatus accountDid={user?.did} forumDid={data.forumDid} threadUri={t.uri} canonicalHref={threadPath(t.uri)} createdAt={t.createdAt} lastActivity={t.lastActivity} replyCount={t.replyCount} />
+          <TopicReadStatus accountDid={user?.did} forumDid={data.forumDid} threadUri={t.uri} canonicalHref={threadPath(t.uri)} createdAt={t.createdAt} lastActivity={t.lastActivity} replyCount={t.replyCount} lastPostBy={t.replyCount === 0 ? t.author : t.lastReplyBy} />
           {#if staff}
             {#snippet modact(action: string, label: string, title: string)}
               <form class="atm-modact" method="POST" action="?/moderateThread">

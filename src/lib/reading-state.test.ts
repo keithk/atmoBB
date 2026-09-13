@@ -80,6 +80,26 @@ describe('reading state', () => {
     expect(topicReadState(state, { ...activity(0), threadUri: 'at://new', createdAt: '2026-01-03T00:00:00Z' })?.status).toBe('new');
   });
 
+  it('treats the viewer posting the latest activity as read', () => {
+    const storage = new MemoryStorage();
+    const state = markPostVisible(storage, alice, {
+      threadUri: topic,
+      position: 0,
+      postHref: '/t/x#opening-post',
+      postAt: '2026-01-01T00:00:00Z',
+    })!;
+    expect(topicReadState(state, {
+      ...activity(2, '2026-01-03T00:00:00Z'),
+      viewerDid: alice.accountDid,
+      lastPostBy: alice.accountDid,
+    })?.status).toBe('read');
+    expect(topicReadState(state, {
+      ...activity(2, '2026-01-03T00:00:00Z'),
+      viewerDid: alice.accountDid,
+      lastPostBy: 'did:plc:bob',
+    })?.status).toBe('unread');
+  });
+
   it('recovers from malformed, unavailable, and old-version storage', () => {
     const storage = new MemoryStorage();
     storage.setItem(readingStorageKey(alice), '{bad');

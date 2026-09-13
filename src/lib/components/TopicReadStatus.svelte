@@ -15,6 +15,7 @@
     createdAt,
     lastActivity,
     replyCount,
+    lastPostBy,
   }: {
     accountDid?: string | null;
     forumDid: string;
@@ -23,6 +24,7 @@
     createdAt?: string;
     lastActivity?: string;
     replyCount: number;
+    lastPostBy?: string;
   } = $props();
 
   let state = $state<TopicReadState>(null);
@@ -31,7 +33,7 @@
     state = null;
     if (!accountDid || !forumDid) return;
     const scope = { accountDid, forumDid };
-    const activity = { threadUri, canonicalHref, createdAt, lastActivity, replyCount };
+    const activity = { threadUri, canonicalHref, createdAt, lastActivity, replyCount, viewerDid: accountDid, lastPostBy };
     const refresh = () => {
       try {
         state = topicReadState(readReadingState(localStorage, scope), activity);

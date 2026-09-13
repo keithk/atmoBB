@@ -29,6 +29,8 @@ export interface TopicActivity {
   lastActivity?: string;
   replyCount: number;
   canonicalHref: string;
+  viewerDid?: string;
+  lastPostBy?: string;
 }
 
 export type TopicReadState =
@@ -154,6 +156,12 @@ export function markPostVisible(
 
 export function topicReadState(state: ReadingState | null, activity: TopicActivity): TopicReadState {
   if (!state) return null;
+  // Posting is itself proof that the viewer has reached the latest activity.
+  // This also keeps a newly created topic from immediately appearing unread
+  // while its thread page and local reading marker are still settling.
+  if (activity.viewerDid && activity.lastPostBy === activity.viewerDid) {
+    return { status: 'read', resumeHref: null };
+  }
   const progress = state.topics[activity.threadUri];
   if (!progress) {
     return validDate(activity.createdAt) && Date.parse(activity.createdAt) > Date.parse(state.startedAt)
