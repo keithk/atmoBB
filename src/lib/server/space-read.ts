@@ -9,8 +9,12 @@ import {
   type ThreadPage,
   type ActorProfile,
   type RichTextBlock,
+  type TrayEntry,
+  FORUM_DID,
+  getStamps,
 } from './appview';
 import { getPublicProfile } from './profiles';
+import { wornFromTray } from '$lib/stamps';
 import type { ThreadFilters } from '$lib/thread-filters';
 
 interface ThreadValue {
@@ -43,6 +47,22 @@ async function profilesFor(dids: string[]): Promise<Record<string, ActorProfile 
       async (did) =>
         [did, (await getPublicProfile(did)) ?? undefined] as const,
     ),
+  );
+  return Object.fromEntries(entries);
+}
+
+/** Each author's worn stamps on this forum; a failed lookup wears none. */
+async function stampsFor(dids: string[]): Promise<Record<string, TrayEntry[]>> {
+  const unique = [...new Set(dids)];
+  const entries = await Promise.all(
+    unique.map(async (did) => {
+      try {
+        const { tray = [], worn = [] } = await getStamps(FORUM_DID(), did);
+        return [did, wornFromTray(tray, worn)] as const;
+      } catch {
+        return [did, [] as TrayEntry[]] as const;
+      }
+    }),
   );
   return Object.fromEntries(entries);
 }
@@ -185,7 +205,8 @@ export async function readSpaceThreadPage(viewer: string, threadUri: string): Pr
     .filter((r) => r.value.thread?.uri === threadUri)
     .sort((a, b) => ((a.value.createdAt ?? '') < (b.value.createdAt ?? '') ? -1 : 1));
 
-  const profiles = await profilesFor([head.author, ...mine.map((r) => r.author)]);
+  const authors = [head.author, ...mine.map((r) => r.author)];
+  const [profiles, stamps] = await Promise.all([profilesFor(authors), stampsFor(authors)]);
 
   return {
     thread: {
@@ -193,6 +214,7 @@ export async function readSpaceThreadPage(viewer: string, threadUri: string): Pr
       cid: head.cid,
       author: head.author,
       authorProfile: profiles[head.author],
+      authorStamps: stamps[head.author] ?? [],
       value: {
         title: head.value.title,
         body: head.value.body,
@@ -210,6 +232,7 @@ export async function readSpaceThreadPage(viewer: string, threadUri: string): Pr
       cid: r.cid,
       author: r.author,
       authorProfile: profiles[r.author],
+      authorStamps: stamps[r.author] ?? [],
       value: { body: r.value.body, createdAt: r.value.createdAt, editedAt: r.value.editedAt, parent: r.value.parent },
       indexedAt: r.value.createdAt ?? '',
     })),
