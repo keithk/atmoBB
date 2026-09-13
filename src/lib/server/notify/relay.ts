@@ -10,7 +10,10 @@ export const RELAY_AUD = `${RELAY_DID}#notif_relay`;
 
 export const relayUrl = () => `https://${RELAY_DID.slice('did:web:'.length)}`;
 
-const TIMEOUT_MS = 5000;
+// The relay resolves the sender's DID document and delivers to the member's
+// channels before answering, and a cold worker can take a while over that;
+// nothing waits on this except the send log.
+const TIMEOUT_MS = 15000;
 const KEY_CACHE_MS = 5 * 60_000;
 const FORCE_REFRESH_MIN_MS = 30_000;
 

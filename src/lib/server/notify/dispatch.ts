@@ -164,7 +164,6 @@ async function dispatch(input: NotifyForPostInput, deps: DispatchDeps) {
       written += 1;
       if (delivery === 'skipped') return;
 
-      lastSend.set(key, deps.now());
       const payload = space
         ? composeNotification({
             ...common,
@@ -175,6 +174,10 @@ async function dispatch(input: NotifyForPostInput, deps: DispatchDeps) {
         : local;
       const res = await deps.send({ recipient: r.did, ...payload });
       await deps.store.updateEntry(r.did, entry.id, { delivery: res.ok ? 'sent' : 'undelivered' });
+      // Only a delivered alert starts the cool-down; a refused one should not
+      // also silence the next five minutes.
+      if (res.ok) lastSend.set(key, deps.now());
+      else console.warn(`[notify] relay refused ${entry.id} for ${r.did}: ${res.status} ${res.error ?? ''}`);
       // Only the relay saying there is no grant turns a member off; a quota
       // or outage answer must never silence anyone.
       if (!res.ok && res.status === 403 && res.error === 'NotAuthorized') {

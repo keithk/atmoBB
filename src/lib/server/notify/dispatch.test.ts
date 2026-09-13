@@ -273,6 +273,15 @@ describe('cool-down and sender identity', () => {
     expect((await entriesOf(alice))[0].delivery).toBe('sent');
   });
 
+  it('does not start the cool-down when the relay refuses the alert', async () => {
+    const deps = fakeDeps();
+    vi.mocked(deps.send!).mockResolvedValueOnce({ ok: false, status: 502, error: 'Bad gateway' });
+    await notifyForPost(publicReply, deps);
+    clock += 60_000;
+    await notifyForPost({ ...publicReply, uri: `at://${bob}/${NS}.discussion.reply/r2` }, deps);
+    expect((await entriesOf(alice)).map((e) => e.delivery)).toEqual(['sent', 'undelivered']);
+  });
+
   it('records skipped entries and never sends without a sender identity', async () => {
     const deps = fakeDeps({ senderDid: () => null });
     await notifyForPost(publicReply, deps);
