@@ -5,7 +5,7 @@
     "main": {
       "type": "permission-set",
       "title": "atmobb forum admin",
-      "detail": "Run a forum: its profile, appearance, and rules, boards and categories, shared-board mounts, staff grants, and moderation actions. Granted to the forum's own account, not to members.",
+      "detail": "Run a forum: its profile, appearance, and rules, boards and categories, shared-board mounts, staff grants, stamps, and moderation actions. Granted to the forum's own account, not to members.",
       "permissions": [
         {
           "type": "permission",
@@ -15,6 +15,7 @@
             "app.atmobb.forum.board",
             "app.atmobb.forum.category",
             "app.atmobb.forum.moderator",
+            "app.atmobb.forum.stamp",
             "app.atmobb.moderation.action"
           ]
         }
