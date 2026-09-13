@@ -5,12 +5,13 @@ import {
   resolveActor,
   getPublicProfile,
   getAtmobbActivity,
-  getForumRanks,
   presenceFor,
 } from '$lib/server/profiles';
 import { profileAvatarNode } from '$lib/server/og/avatar';
 import { rankFor } from '$lib/rank';
 import type { RichTextBlock } from '$lib/server/appview';
+import { getBoardIndex, FORUM_DID } from '$lib/server/appview';
+import { ogSkin } from '$lib/server/og/palette';
 
 const signatureText = (blocks?: RichTextBlock[]): string =>
   (blocks ?? [])
@@ -24,19 +25,20 @@ export const GET: RequestHandler = async ({ params, url, fetch }) => {
     const id = await resolveActor(params.actor);
     if (!id) throw new Error('no member');
 
-    const [profile, activity, ranks] = await Promise.all([
+    const [profile, activity, index] = await Promise.all([
       getPublicProfile(id.did, id.pds),
       getAtmobbActivity(id.did),
-      getForumRanks(),
+      getBoardIndex(FORUM_DID()),
     ]);
 
     const localPosts = activity.local.posts || null;
     const posts = activity.global.posts || null;
+    const colors = ogSkin(index.forum?.theme, index.forum?.customCss);
     const avatar = await profileAvatarNode(
       profile,
       id.did,
       fetch,
-      { size: 150, ring: true, presence: presenceFor(id.did) },
+      { size: 150, ring: true, presence: presenceFor(id.did), skin: colors },
       profile?.displayName ?? id.handle,
     );
 
@@ -45,10 +47,11 @@ export const GET: RequestHandler = async ({ params, url, fetch }) => {
         displayName: profile?.displayName ?? id.handle,
         handle: id.handle,
         avatar,
-        rank: localPosts != null ? rankFor(ranks, localPosts).title || undefined : undefined,
+        rank: localPosts != null ? rankFor(index.forum?.ranks ?? [], localPosts).title || undefined : undefined,
         posts,
         joined: profile?.createdAt ? String(new Date(profile.createdAt).getFullYear()) : null,
         signature: signatureText(profile?.signature) || undefined,
+        skin: colors,
       }),
     );
     return pngResponse(png, 300);

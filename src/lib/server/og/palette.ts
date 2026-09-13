@@ -1,3 +1,5 @@
+import { normalizeTheme, themeTokens } from '$lib/themes';
+
 const classic = {
   bg: '#eceae7',
   surface: '#ffffff',
@@ -11,7 +13,7 @@ const classic = {
   ink: '#2b2a2e',
   inkSoft: '#6c6a70',
   inkFaint: '#9a97a0',
-  body: '#43424a',
+  body: '#2b2a2e',
 
   accent: '#f79b7a',
   accentInk: '#4a2a1c',
@@ -27,55 +29,95 @@ const classic = {
   online: '#4a9b4e',
   idle: '#d0951f',
   offline: '#a7a2ab',
+  radius: 8,
+  shadow: '0 1px 0 rgba(33,28,22,0.04), 0 1px 2px rgba(33,28,22,0.06)',
 };
 
-export type OgSkin = { [K in keyof typeof classic]: string };
-export type OgTheme = 'classic' | 'midnight' | 'ocean' | 'forest' | 'plum';
-
+export type OgSkin = { [K in keyof typeof classic]: (typeof classic)[K] extends number ? number : string };
 export const skin: OgSkin = classic;
 
-export const ogSkins: Record<OgTheme, OgSkin> = {
-  classic,
-  midnight: {
-    ...classic,
-    bg: '#171821', surface: '#222430', surface2: '#2a2c39', sunken: '#15161d',
-    line: '#3a3d4d', lineStrong: '#505467', edge: '#4b4e60', bevel: 'rgba(255,255,255,0.08)',
-    ink: '#f5f1ff', inkSoft: '#c7c2d3', inkFaint: '#918b9d', body: '#ddd7e8',
-    accent: '#ffb454', accentInk: '#33200b', accentSoft: '#3b2b1b', link: '#ffb454',
-    catBg: 'linear-gradient(180deg,#2c2e3b,#242631)', catEdge: '#ffb454',
-    rank: '#d7b8ff', rankBg: '#332947', online: '#70d58a', idle: '#f0bd52', offline: '#777b89',
-  },
-  ocean: {
-    ...classic,
-    bg: '#dcecf1', surface: '#f9fdff', surface2: '#eaf5f8', sunken: '#d2e6ec',
-    line: '#bdd5dc', lineStrong: '#91b8c4', edge: '#91b8c4',
-    ink: '#14313d', inkSoft: '#476b78', inkFaint: '#73939e', body: '#284d5b',
-    accent: '#35b6d4', accentInk: '#082f39', accentSoft: '#d9f5fa', link: '#087e9a',
-    catBg: 'linear-gradient(180deg,#edf7fa,#dceef3)', catEdge: '#35b6d4',
-    rank: '#326e91', rankBg: '#deeff8', online: '#35a76c', idle: '#c58b20', offline: '#86a0a8',
-  },
-  forest: {
-    ...classic,
-    bg: '#e4eadf', surface: '#fbfcf7', surface2: '#f0f3e9', sunken: '#d9e1d2',
-    line: '#c8d1bf', lineStrong: '#a8b79d', edge: '#a8b79d',
-    ink: '#243326', inkSoft: '#5a6d5c', inkFaint: '#869487', body: '#3d5140',
-    accent: '#79a85a', accentInk: '#1d3414', accentSoft: '#e8f2df', link: '#527d38',
-    catBg: 'linear-gradient(180deg,#f2f5ed,#e5ebdf)', catEdge: '#79a85a',
-    rank: '#6d7040', rankBg: '#eff0d9', online: '#47924c', idle: '#bf8b2a', offline: '#909c90',
-  },
-  plum: {
-    ...classic,
-    bg: '#eee4ed', surface: '#fffafd', surface2: '#f7edf5', sunken: '#e5d8e2',
-    line: '#ddc9d8', lineStrong: '#c7a9bf', edge: '#c7a9bf',
-    ink: '#382636', inkSoft: '#765d72', inkFaint: '#9c8398', body: '#553f52',
-    accent: '#d56aaf', accentInk: '#471333', accentSoft: '#fae5f3', link: '#a43e80',
-    catBg: 'linear-gradient(180deg,#f9f0f7,#eee1eb)', catEdge: '#d56aaf',
-    rank: '#90507d', rankBg: '#f4e3ef', online: '#4d9d66', idle: '#c38b2f', offline: '#a28d9d',
-  },
-};
+const TOKEN_TO_SKIN = {
+  '--forum-bg': 'bg',
+  '--forum-surface': 'surface',
+  '--forum-surface-2': 'surface2',
+  '--forum-sunken': 'sunken',
+  '--forum-line': 'line',
+  '--forum-line-strong': 'lineStrong',
+  '--forum-edge': 'edge',
+  '--forum-bevel': 'bevel',
+  '--forum-ink': 'ink',
+  '--forum-ink-soft': 'inkSoft',
+  '--forum-ink-faint': 'inkFaint',
+  '--forum-accent': 'accent',
+  '--forum-accent-ink': 'accentInk',
+  '--forum-accent-soft': 'accentSoft',
+  '--forum-link': 'link',
+  '--forum-cat-bg': 'catBg',
+  '--forum-cat-edge': 'catEdge',
+  '--forum-rank': 'rank',
+  '--forum-rank-bg': 'rankBg',
+  '--online': 'online',
+  '--idle': 'idle',
+  '--offline': 'offline',
+  '--shadow-sm': 'shadow',
+} as const;
 
-export function ogSkin(value: unknown): OgSkin {
-  return typeof value === 'string' && value in ogSkins ? ogSkins[value as OgTheme] : skin;
+/** Read custom properties from owner `:root` rules, matching the public theme cascade. */
+function customProperties(css: unknown): Record<string, string> {
+  if (typeof css !== 'string') return {};
+  const properties: Record<string, string> = {};
+  const source = css.slice(0, 100_000).replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const match of source.matchAll(/:root\s*\{([^{}]*)\}/gi)) {
+    for (const declaration of match[1].split(';')) {
+      const colon = declaration.indexOf(':');
+      if (colon < 0) continue;
+      const name = declaration.slice(0, colon).trim();
+      const value = declaration.slice(colon + 1).trim();
+      if (name.startsWith('--') && value) properties[name] = value;
+    }
+  }
+  return properties;
+}
+
+function resolveValue(value: string, properties: Record<string, string>): string {
+  let resolved = value;
+  for (let pass = 0; pass < 10 && resolved.includes('var('); pass++) {
+    resolved = resolved.replace(/var\(\s*(--[\w-]+)(?:\s*,\s*([^()]+))?\s*\)/g, (_, name, fallback = '') =>
+      properties[name] ?? fallback.trim(),
+    );
+  }
+  return resolved;
+}
+
+const safeStyleValue = (value: string): boolean =>
+  value.length <= 500 && !/url\s*\(|image\s*\(|expression\s*\(|var\s*\(/i.test(value);
+
+/**
+ * The OG renderer cannot execute stylesheets, so it consumes the same stable
+ * design-token contract as the browser. Built-in theme values are applied
+ * first and owner `:root` overrides win, just as they do on public pages.
+ */
+export function ogSkin(theme: unknown, customCss?: unknown): OgSkin {
+  const properties = {
+    '--online': classic.online,
+    '--idle': classic.idle,
+    '--offline': classic.offline,
+    '--radius-lg': `${classic.radius}px`,
+    '--shadow-sm': classic.shadow,
+    ...themeTokens(normalizeTheme(theme)),
+    ...customProperties(customCss),
+  };
+  const colors: OgSkin = { ...classic };
+  for (const [token, key] of Object.entries(TOKEN_TO_SKIN)) {
+    const value = resolveValue(properties[token] ?? '', properties);
+    if (value && safeStyleValue(value)) (colors[key] as string) = value;
+  }
+  colors.body = colors.ink;
+
+  const radius = resolveValue(properties['--radius-lg'], properties).trim();
+  const match = radius.match(/^([\d.]+)(px|rem)?$/);
+  if (match) colors.radius = Math.min(120, Number(match[1]) * (match[2] === 'rem' ? 16 : 1));
+  return colors;
 }
 
 export const font = {

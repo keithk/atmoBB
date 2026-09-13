@@ -12,8 +12,6 @@ import { normalizeTheme } from '$lib/themes';
 
 const PROFILE = 'app.atmobb.forum.profile';
 
-export const OG_THEMES = new Set(['classic', 'midnight', 'ocean', 'forest', 'plum']);
-
 export async function currentProfile(): Promise<ForumProfile> {
   const index = await getBoardIndex(FORUM_DID());
   if (!index.forum) throw new Error('forum profile not found');
