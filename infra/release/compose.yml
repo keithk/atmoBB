@@ -48,7 +48,7 @@ services:
   # atmobb release expects, then applies lexicons, Lua, and derived tables.
   # `./atmobb backfill` and `./atmobb install` also run one-off commands here.
   setup:
-    image: ghcr.io/keithk/atmobb:0.2.0
+    image: ghcr.io/keithk/atmobb:0.2.1
     restart: "no"
     command: ["sh", "appview/container-setup.sh"]
     environment:
@@ -68,7 +68,7 @@ services:
         condition: service_started
 
   atmobb:
-    image: ghcr.io/keithk/atmobb:0.2.0
+    image: ghcr.io/keithk/atmobb:0.2.1
     restart: unless-stopped
     ports:
       - "127.0.0.1:3001:3001"

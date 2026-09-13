@@ -6,6 +6,13 @@ means. Every entry names the Happyview release it was tested against.
 
 ## Unreleased
 
+## 0.2.1
+
+Tested against Happyview 2.14.0.
+
+- Board and stamp color fields now include native color pickers while retaining editable hex values.
+- Homepage topic sections use lighter separators without redundant row dividers.
+
 ## 0.2.0
 
 Tested against Happyview 2.14.0.
