@@ -6,6 +6,7 @@ import { getStanding } from '$lib/server/appview';
 import { ringForums } from '$lib/server/webring';
 import { blobCid, blobUrl } from '$lib/server/profiles';
 import { countUnread, readMember } from '$lib/server/notify/store';
+import { forumStanding } from '$lib/server/membership';
 import { DEFAULT_THEME, normalizeTheme, type ForumTheme } from '$lib/themes';
 
 const FONT_FAMILY = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,63}$/u;
@@ -52,7 +53,7 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
   // domain isn't assigned yet), layout-on-404 would recurse into a request
   // loop that floods the box.
   if (!route.id) {
-    return { user: locals.user, membership: null, avatarProfile: null, admin: false, staffRole: null, forumUnclaimed: false, bans: [], ringSize: 0, forum, forumDid: FORUM_DID(), forumTheme, forumFontCss, forumCustomCss, forumFavicon, sidebarBoards, sidebarCategories, appviewDown: true, notifyOn: false, unread: 0 };
+    return { user: locals.user, membership: null, avatarProfile: null, admin: false, staffRole: null, forumUnclaimed: false, bans: [], joinMode: 'open' as const, standing: 'open' as const, sponsorWindow: null, ringSize: 0, forum, forumDid: FORUM_DID(), forumTheme, forumFontCss, forumCustomCss, forumFavicon, sidebarBoards, sidebarCategories, appviewDown: true, notifyOn: false, unread: 0 };
   }
   const [membership, avatarProfile, role, ring, standing, notify] = await Promise.all([
     locals.user ? getMembership(locals.user.did, FORUM_DID()) : null,
@@ -87,6 +88,10 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
     })(),
   ]);
   const notifyOn = notify?.status === 'on';
+  // Standing on a gated forum (KTD7), computed once here beside the ban
+  // load. It needs the profile, so it follows the index read; an open forum
+  // (or one whose profile couldn't be read) costs nothing.
+  const gate = await forumStanding(locals.user?.did, forum, { declaration: membership });
   return {
     user: locals.user,
     notifyOn,
@@ -99,6 +104,9 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
     // tab; completing setup still requires the forum account's own OAuth.
     forumUnclaimed: locals.user ? await forumUnclaimed() : false,
     bans: standing?.bans ?? [],
+    joinMode: gate.mode,
+    standing: gate.standing,
+    sponsorWindow: gate.window ?? null,
     ringSize: ring.length,
     forum,
     forumDid: FORUM_DID(),

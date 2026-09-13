@@ -7,7 +7,9 @@
   import MemberLink from '$lib/components/MemberLink.svelte';
   import RichTextEditor from '$lib/components/RichTextEditor.svelte';
   import TopicReadStatus from '$lib/components/TopicReadStatus.svelte';
+  import JoinNotice from '$lib/components/JoinNotice.svelte';
   import { threadFilterHref } from '$lib/thread-filters';
+  import { canPost } from '$lib/membership';
 
   let { data, form } = $props();
 
@@ -15,6 +17,8 @@
   let posting = $state(false);
 
   const user = $derived(page.data.user);
+  // On a gated forum, non-members read but see no write controls (R22).
+  const mayPost = $derived(canPost(page.data.standing));
   const staff = $derived(data.canModerate);
   const name = (t: { authorProfile?: { displayName?: string }; author: string }) =>
     t.authorProfile?.displayName ?? data.handles[t.author] ?? t.author.slice(8, 20);
@@ -66,7 +70,7 @@
           <button class="atm-btn atm-btn--secondary">{data.watching ? 'Unwatch' : 'Watch this board'}</button>
         </form>
       {/if}
-      {#if !data.locked}
+      {#if !data.locked && mayPost}
         <a class="atm-btn atm-btn--primary" href="#composer">✎ new thread</a>
       {/if}
     </div>
@@ -79,7 +83,9 @@
     <div class="atm-card__body locked__body">
       <div class="locked__icon" aria-hidden="true">🔒</div>
       <h2 class="locked__title">This board is members-only</h2>
-      {#if !user}
+      {#if !mayPost}
+        <JoinNotice action="ask for access to this board" />
+      {:else if !user}
         <p class="locked__msg">Only members can view this board's threads.</p>
         <a class="atm-btn atm-btn--primary" href="/login">Log in to request access</a>
       {:else if page.url.searchParams.has('requested')}
@@ -202,7 +208,7 @@
   </div>
 {/if}
 
-{#if user}
+{#if user && mayPost}
   <div class="atm-card atm-composer" id="composer">
     <div class="atm-card__header">
       <span>Start a new thread</span>
@@ -251,6 +257,8 @@
       </form>
     </div>
   </div>
+{:else if !mayPost}
+  <JoinNotice action="start a thread" />
 {:else}
   <p class="atm-loginhint"><a href="/login">Log in</a> to start a thread.</p>
 {/if}

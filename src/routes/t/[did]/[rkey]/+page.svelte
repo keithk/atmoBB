@@ -10,9 +10,13 @@
   import ConversationLogin from '$lib/components/ConversationLogin.svelte';
   import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
   import ThreadReadingTracker from '$lib/components/ThreadReadingTracker.svelte';
+  import JoinNotice from '$lib/components/JoinNotice.svelte';
   import { page } from '$app/state';
+  import { canPost } from '$lib/membership';
   let { data, form } = $props();
   const user = $derived(page.data.user);
+  // On a gated forum, non-members read but see no write controls (R22).
+  const mayPost = $derived(canPost(page.data.standing));
 
   const totalReplies = $derived(data.replyCount ?? 0);
   const totalPages = $derived(Math.max(1, Math.ceil(totalReplies / data.limit)));
@@ -89,7 +93,7 @@
     if (!confirm('Delete this post? This removes it from your repo.')) e.preventDefault();
   };
   // Members can't reply to a locked thread; staff still can, for a closing word.
-  const composerOpen = $derived(!!user && (!data.thread?.locked || data.canModerate));
+  const composerOpen = $derived(!!user && mayPost && (!data.thread?.locked || data.canModerate));
 </script>
 
 {#if !data.thread}
@@ -195,7 +199,7 @@
       {/if}
       {#if data.thread.value.poll}
         <div class="atm-post__poll">
-          <Poll poll={data.thread.value.poll} result={data.poll} canVote={!!user} syncing={voteSyncing} />
+          <Poll poll={data.thread.value.poll} result={data.poll} canVote={!!user && mayPost} loginHint={!user && mayPost} syncing={voteSyncing} />
         </div>
       {/if}
       {#if data.thread.authorProfile?.signature}
@@ -309,6 +313,8 @@
         </form>
       </div>
     </section>
+  {:else if !mayPost}
+    <JoinNotice action="reply" />
   {:else if !data.thread.locked}
     <ConversationLogin />
   {/if}
@@ -318,7 +324,7 @@
 {/if}
 
 {#snippet respond(uri: string)}
-  {#if user}
+  {#if user && mayPost}
     <span class="atm-post__own">
       <a href={respondHref(uri, 'to')} title="Answer this post">reply</a>
       <a href={respondHref(uri, 'quote')} title="Answer this post, quoting it">quote</a>

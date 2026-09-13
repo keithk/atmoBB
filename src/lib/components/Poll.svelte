@@ -5,12 +5,14 @@
   // A thread's poll: results always, and a vote form for logged-in readers
   // while it's open. Voting and retracting post to the thread page's actions;
   // the retract button is a second submit so it works without JavaScript.
+  // `loginHint` offers a login where voting is off only for being signed out.
   let {
     poll,
     result,
     canVote,
+    loginHint = !canVote,
     syncing = false,
-  }: { poll: Poll; result?: PollResult; canVote: boolean; syncing?: boolean } = $props();
+  }: { poll: Poll; result?: PollResult; canVote: boolean; loginHint?: boolean; syncing?: boolean } = $props();
 
   const closed = $derived(pollClosed(poll));
   const counts = $derived(result?.counts ?? poll.options.map(() => 0));
@@ -60,7 +62,7 @@
             <button class="atm-btn atm-btn--ghost atm-btn--sm" formaction="?/retract" disabled={syncing}>retract</button>
           {/if}
         </span>
-      {:else if !canVote && !closed}
+      {:else if loginHint && !closed}
         <a href="/login">Log in to vote</a>
       {/if}
     </div>

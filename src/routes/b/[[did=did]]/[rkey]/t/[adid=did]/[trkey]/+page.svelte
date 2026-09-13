@@ -10,10 +10,14 @@
   import ConversationLogin from '$lib/components/ConversationLogin.svelte';
   import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
   import ThreadReadingTracker from '$lib/components/ThreadReadingTracker.svelte';
+  import JoinNotice from '$lib/components/JoinNotice.svelte';
+  import { canPost } from '$lib/membership';
   // Simplified sibling of /t/[did]/[rkey]: private threads live in a space, so
   // reads are immediate (no firehose lag) — no waiting/polling states needed.
   let { data, form } = $props();
   const user = $derived(page.data.user);
+  // On a gated forum, non-members read but see no write controls (R22).
+  const mayPost = $derived(canPost(page.data.standing));
   const saved = $derived(page.url.searchParams.has('saved'));
   const deleted = $derived(page.url.searchParams.has('deleted'));
   const editHref = (uri: string) => `${page.url.pathname}?edit=${uri.split('/').pop()}#${postAnchor(uri)}`;
@@ -132,7 +136,7 @@
     </article>
   {/each}
 
-  {#if user}
+  {#if user && mayPost}
     <section class="atm-card atm-card--edge atm-composer atm-composer--reply" id="reply">
       <div class="atm-card__header atm-composer__header">
         <h3 class="atm-composer__title">Reply</h3>
@@ -178,6 +182,8 @@
         </form>
       </div>
     </section>
+  {:else if !mayPost}
+    <JoinNotice action="reply" />
   {:else}
     <ConversationLogin />
   {/if}
@@ -189,7 +195,7 @@
 {/if}
 
 {#snippet respond(uri: string)}
-  {#if user}
+  {#if user && mayPost}
     <span class="atm-post__own">
       <a href={respondHref(uri, 'to')} title="Answer this post">reply</a>
       <a href={respondHref(uri, 'quote')} title="Answer this post, quoting it">quote</a>

@@ -10,7 +10,8 @@ import {
 } from '$lib/server/appview';
 import type { ActorProfile, LatestThreads } from '$lib/server/appview';
 import { readSpaceBoardThreads } from '$lib/server/space-read';
-import { getMembership, joinForum, leaveForum } from '$lib/server/pds';
+import { getMembership, leaveForum } from '$lib/server/pds';
+import { declareMembership } from '$lib/server/membership';
 import { getPublicProfile } from '$lib/server/profiles';
 import { presenceSnapshot } from '$lib/server/presence';
 import { normalizeHomepage, rankHotThreads, selectFeaturedThreads } from '$lib/homepage';
@@ -154,14 +155,17 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 };
 
 export const actions: Actions = {
-  join: async ({ locals }) => {
+  // Declares membership; a "Finish joining" notice elsewhere posts here too
+  // with the page to return to. Declaring twice writes nothing the second time.
+  join: async ({ locals, request }) => {
     if (!locals.user) redirect(303, '/login');
+    const next = String((await request.formData()).get('next') ?? '');
     try {
-      await joinForum(locals.user.did, FORUM_DID());
+      await declareMembership(locals.user.did, FORUM_DID());
     } catch (e) {
       return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t add you to this forum. Try again.' });
     }
-    redirect(303, '/');
+    redirect(303, /^\/(?!\/)/.test(next) ? next : '/');
   },
   leave: async ({ locals }) => {
     if (!locals.user) redirect(303, '/login');

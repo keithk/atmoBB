@@ -76,6 +76,14 @@ export interface ForumProfile {
   customFonts?: ForumFont[];
   ogImage?: unknown;
   ogTheme?: string;
+  /** Join policy (app.atmobb.forum.profile#membership); absent means open. */
+  membership?: {
+    mode?: string;
+    prompt?: string;
+    inviteCap?: number;
+    inviteDays?: number;
+    gatedSince?: string;
+  };
   [k: string]: unknown;
 }
 

@@ -20,6 +20,7 @@ import { parseBBCode } from '$lib/richtext/bbcode';
 import { attachImages, resolveBodyImages } from '$lib/server/richtext';
 import { addMentionFacets } from '$lib/server/mentions';
 import { banMessage, bannedFrom } from '$lib/server/standing';
+import { refuseUnlessMember } from '$lib/server/membership';
 import { handleNotifyVisit } from '$lib/server/notify/visit';
 import { neverAskedAboutNotifications } from '$lib/server/notify/store';
 import { notifyForPost } from '$lib/server/notify/dispatch';
@@ -155,12 +156,15 @@ export const actions: Actions = {
     // Strict: space reads never consult the index, so a ban the appview
     // couldn't confirm has nothing else to catch it.
     let ban;
+    let refusal;
     try {
       ban = await bannedFrom(locals.user.did, boardUri(params.rkey, params.did), { strict: true });
+      refusal = await refuseUnlessMember(locals, { strict: true });
     } catch {
       return fail(502, { message: "We couldn't check your standing. Try again." });
     }
     if (ban) return fail(403, { message: banMessage(ban) });
+    if (refusal) return refusal;
     const form = await request.formData();
     const body = String(form.get('body') ?? '').trim();
     const images = String(form.get('body__images') ?? '');

@@ -143,9 +143,13 @@
       <div class="atm-masthead__right">
         {#if data.user}
           {#if data.membership && !data.membership.joined}
-            <form method="POST" action="/?/join">
-              <button class="atm-btn atm-btn--sm">join this forum</button>
-            </form>
+            {#if data.joinMode === 'open' || data.standing === 'accepted-undeclared'}
+              <form method="POST" action="/?/join">
+                <button class="atm-btn atm-btn--sm">{data.joinMode === 'open' ? 'join this forum' : 'finish joining'}</button>
+              </form>
+            {:else if data.joinMode === 'apply'}
+              <a class="atm-btn atm-btn--sm" href="/apply">apply to join</a>
+            {/if}
           {/if}
           <a class="atm-bell" class:atm-bell--unread={data.unread > 0} href="/notifications" aria-label="Notifications, {data.unread} unread">
               <svg class="atm-bell__glyph" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

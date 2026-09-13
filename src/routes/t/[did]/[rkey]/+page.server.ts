@@ -4,6 +4,7 @@ import { getBoardThreads, getThreadPage, threadUri, resolveHandle, FORUM_DID, ty
 import { castVote, createReply, deletePost, retractVote, updatePost } from '$lib/server/pds';
 import { pollClosed } from '$lib/poll';
 import { banMessage, bannedFrom } from '$lib/server/standing';
+import { refuseUnlessMember } from '$lib/server/membership';
 import { blocksToDoc } from '$lib/richtext/blocks-tiptap';
 import { blocksToPlainText } from '$lib/richtext/plain';
 import { boardPath, postAnchor, postAuthor } from '$lib/appview-paths';
@@ -228,6 +229,8 @@ export const actions: Actions = {
     }
     const ban = thread ? await bannedFrom(locals.user.did, thread.value.board) : undefined;
     if (ban) return fail(403, { message: banMessage(ban) });
+    const refusal = await refuseUnlessMember(locals);
+    if (refusal) return refusal;
 
     try {
       const record = {
@@ -319,6 +322,8 @@ export const actions: Actions = {
     if (pollClosed(poll)) return fail(400, { message: 'This poll has closed.' });
     const ban = await bannedFrom(locals.user.did, page.thread.value.board);
     if (ban) return fail(403, { message: banMessage(ban) });
+    const refusal = await refuseUnlessMember(locals);
+    if (refusal) return refusal;
     if (!chosen.length) return fail(400, { message: 'Pick an option first.' });
     if (!poll.multipleChoice && chosen.length > 1) return fail(400, { message: 'This poll takes one choice.' });
     if (chosen.some((o) => o < 0 || o >= poll.options.length)) return fail(400, { message: 'Pick an option from the list.' });

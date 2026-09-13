@@ -32,6 +32,7 @@ import { addMentionFacets } from '$lib/server/mentions';
 import { isThreadAction } from '$lib/moderation';
 import { parsePoll } from '$lib/poll';
 import { banMessage, bannedFrom } from '$lib/server/standing';
+import { refuseUnlessMember } from '$lib/server/membership';
 import { notifyForPost } from '$lib/server/notify/dispatch';
 import { threadFilters } from '$lib/thread-filters';
 import { parseThreadTags } from '$lib/thread-tags';
@@ -184,12 +185,15 @@ export const actions: Actions = {
       return fail(502, { message: "We couldn't confirm this board's settings. Try again." });
     }
     let ban;
+    let refusal;
     try {
       ban = await bannedFrom(locals.user.did, board, { strict: !!space });
+      refusal = await refuseUnlessMember(locals, { strict: !!space });
     } catch {
       return fail(502, { message: "We couldn't check your standing. Try again." });
     }
     if (ban) return fail(403, { message: banMessage(ban) });
+    if (refusal) return refusal;
     // Votes are public records pointing at the thread; a members-only
     // board's threads live in its space, where the tally can't see them.
     if (parsed && space) {
@@ -231,6 +235,9 @@ export const actions: Actions = {
     const board = boardUri(params.rkey, params.did);
     const ban = await bannedFrom(locals.user.did, board);
     if (ban) return fail(403, { message: banMessage(ban) });
+    // On a gated forum only members may ask for a members-only board (R21).
+    const refusal = await refuseUnlessMember(locals);
+    if (refusal) return refusal;
     const form = await request.formData();
     const reason = String(form.get('reason') ?? '').trim() || undefined;
     try {
