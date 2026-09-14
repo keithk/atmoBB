@@ -55,6 +55,13 @@ export class ExtensionLimitError extends Error {
   }
 }
 
+/** The SDK never settled a call, so its plug-in can't be trusted to answer or close. */
+class StuckPluginError extends ExtensionLimitError {
+  constructor() {
+    super('timeout', 'Extension call ran past its time limit');
+  }
+}
+
 const WASM_PAGE_BYTES = 64 * 1024;
 const MEMORY_SECTION = 5;
 
@@ -63,6 +70,7 @@ function readVarUint(bytes: Uint8Array, offset: number): [value: number, next: n
   let shift = 0;
   let byte: number;
   do {
+    if (offset >= bytes.length) throw new Error('Extension module ends inside a number');
     byte = bytes[offset++];
     value += (byte & 0x7f) * 2 ** shift;
     shift += 7;
@@ -89,6 +97,7 @@ function varUint(value: number): number[] {
  * modules that import memory, so defined memories are the only ones.
  */
 export function capMemory(bytes: Uint8Array, maxPages: number): Uint8Array {
+  if (!WebAssembly.validate(bytes as Uint8Array<ArrayBuffer>)) throw new Error('Extension module is not valid WebAssembly');
   const parts: Uint8Array[] = [bytes.subarray(0, 8)];
   let offset = 8;
   while (offset < bytes.length) {
@@ -101,8 +110,11 @@ export function capMemory(bytes: Uint8Array, maxPages: number): Uint8Array {
       continue;
     }
     let [count, cursor] = readVarUint(bytes, contentStart);
+    // Each memory takes at least two bytes, so a count the section can't hold is refused before the loop.
+    if (count * 2 > end - cursor) throw new Error('Extension module declares more memories than its memory section holds');
     const content = varUint(count);
     for (let i = 0; i < count; i++) {
+      if (cursor >= end) throw new Error('Extension module declares more memories than its memory section holds');
       const flags = bytes[cursor++];
       if (flags & 0x04) throw new Error('64-bit memories are not supported');
       let min: number;
@@ -155,6 +167,10 @@ export function extensionRuntime(
 ) {
   const { timeoutMs, memoryPages, idleMs } = { ...DEFAULT_LIMITS, ...limits };
   const installs = new Map<string, Install>();
+  // The SDK cancels a call at timeoutMs and gives its worker restart another
+  // timeoutMs. When that restart hangs or fails, the SDK never settles the
+  // call, so the host stops waiting on its own shortly after both budgets.
+  const watchdogMs = 2 * timeoutMs + 1_000;
 
   async function start(module: ExtensionModule): Promise<Plugin> {
     const bytes = typeof module.wasm === 'string' ? await readFile(module.wasm) : module.wasm;
@@ -178,6 +194,22 @@ export function extensionRuntime(
     const plugin = install.plugin;
     install.plugin = null;
     await plugin?.then((p) => p.close()).catch(() => {});
+  }
+
+  /** Detach the install's instance and close it without waiting, since a stuck plug-in may never finish closing. */
+  function abandon(install: Install) {
+    const plugin = install.plugin;
+    install.plugin = null;
+    void plugin?.then((p) => p.close()).catch(() => {});
+  }
+
+  /** Settles as `work` does, or rejects with StuckPluginError once watchdogMs pass first. */
+  function watched<T>(work: Promise<T>): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new StuckPluginError()), watchdogMs);
+    });
+    return Promise.race([work, expired]).finally(() => clearTimeout(timer));
   }
 
   function enqueue<T>(install: Install, task: () => Promise<T>): Promise<T> {
@@ -204,8 +236,12 @@ export function extensionRuntime(
       let plugin: Plugin | null = null;
       try {
         plugin = await start(options.module);
-        return await invoke(plugin, name, input, options);
+        return await watched(invoke(plugin, name, input, options));
       } catch (err) {
+        if (err instanceof StuckPluginError) {
+          void plugin?.close().catch(() => {});
+          plugin = null;
+        }
         throw asLimitError(err);
       } finally {
         await plugin?.close().catch(() => {});
@@ -219,11 +255,14 @@ export function extensionRuntime(
     if (install.idle) clearTimeout(install.idle);
     install.plugin ??= load(installId).then(start);
     try {
-      return await task(await install.plugin);
+      return await watched(task(await install.plugin));
     } catch (err) {
       // After a timeout or a throwing host function the SDK may be restarting
-      // or closing its worker, so start clean on the next call.
-      await stop(install);
+      // or closing its worker, so start clean on the next call. The install
+      // stays in `installs` so calls already queued keep their order; they
+      // and later calls cold-start a new instance.
+      if (err instanceof StuckPluginError) abandon(install);
+      else await stop(install);
       throw asLimitError(err);
     } finally {
       install.idle = setTimeout(() => void enqueue(install, () => stop(install)), idleMs);

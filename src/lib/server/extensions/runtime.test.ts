@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { CallContext } from '@extism/extism';
-import { ExtensionLimitError, extensionRuntime, type ExtensionModule, type RuntimeLimits } from './runtime';
+import createPlugin, { type CallContext, type Plugin } from '@extism/extism';
+import { capMemory, ExtensionLimitError, extensionRuntime, type ExtensionModule, type RuntimeLimits } from './runtime';
+
+// The real SDK, wrapped so a test can hand the runtime a fake plug-in for one cold start.
+vi.mock('@extism/extism', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@extism/extism')>();
+  return { ...actual, default: vi.fn(actual.default) };
+});
 
 // probe.wasm is built from fixtures/probe.js; see fixtures/README.md.
 const probe = new URL('./fixtures/probe.wasm', import.meta.url).pathname;
@@ -78,6 +84,34 @@ describe('extensionRuntime', () => {
   it('refuses a module whose initial memory is already over the limit', async () => {
     const rt = start({ memoryPages: 8 });
     await expect(rt.call('big', 'echo', 'x')).rejects.toThrow(/memory pages/);
+  });
+
+  it('gives up on a call the SDK never settles and runs the calls behind it on a new instance', async () => {
+    const close = vi.fn(async () => {});
+    const stuck = { functionExists: async () => true, call: () => new Promise(() => {}), close } as unknown as Plugin;
+    vi.mocked(createPlugin).mockResolvedValueOnce(stuck);
+    const load = vi.fn(async (_install: string) => probeModule());
+    const rt = start({ timeoutMs: 200 }, load);
+    const began = performance.now();
+    const wedged = rt.call('wedged', 'echo', 'lost').catch((err) => err);
+    const queued = rt.call('wedged', 'echo', 'queued');
+    const error = await wedged;
+    expect(error).toBeInstanceOf(ExtensionLimitError);
+    expect(error.limit).toBe('timeout');
+    expect(performance.now() - began).toBeLessThan(2_000);
+    expect(close).toHaveBeenCalled();
+    expect(await queued).toBe('queued');
+    expect(await rt.call('wedged', 'echo', 'back')).toBe('back');
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses a malformed module declaring millions of memories without building them', () => {
+    const header = [0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];
+    // A memory section four bytes long whose count is 3,000,000.
+    const module = Uint8Array.from([...header, 0x05, 0x04, 0xc0, 0x8d, 0xb7, 0x01]);
+    const began = performance.now();
+    expect(() => capMemory(module, 8)).toThrow(/not valid WebAssembly/);
+    expect(performance.now() - began).toBeLessThan(50);
   });
 
   it('waits on an async host function inside the timeout but fails a guest busy-loop past it', async () => {
