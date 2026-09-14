@@ -1,0 +1,20 @@
+{
+  "lexicon": 1,
+  "id": "com.example.counter.tally",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "The counter's latest count. Publishing it binds the counter to its thread.",
+      "key": "literal:counter",
+      "record": {
+        "type": "object",
+        "required": ["thread", "count", "updatedAt"],
+        "properties": {
+          "thread": { "type": "string", "format": "at-uri", "description": "The thread the counter belongs to." },
+          "count": { "type": "integer", "minimum": 0 },
+          "updatedAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    }
+  }
+}

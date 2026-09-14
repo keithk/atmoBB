@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { readFileSync } from 'node:fs';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
@@ -10,6 +11,10 @@ export default defineConfig({
   define: {
     // Release version baked in at build time; served by /api/version.
     __ATMOBB_VERSION__: JSON.stringify(version),
+  },
+  test: {
+    // Vitest's default excludes, plus the extension kit, a separate package with its own test run.
+    exclude: ['**/node_modules/**', '**/.git/**', 'extension-kit/**'],
   },
   server: {
     // The OAuth client registers http://127.0.0.1:5173/oauth/callback, so the

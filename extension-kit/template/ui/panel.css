@@ -1,0 +1,13 @@
+body {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0;
+  padding: 1rem;
+  font: 1rem system-ui, sans-serif;
+}
+
+output {
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+}

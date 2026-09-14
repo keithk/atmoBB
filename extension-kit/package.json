@@ -1,0 +1,36 @@
+{
+  "name": "atmobb-extension-kit",
+  "version": "0.1.0",
+  "description": "Build atmoBB extensions in TypeScript: the author API, a build CLI, and a starter template.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "bin": {
+    "atmobb-extension": "lib/cli/index.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/runtime.ts",
+      "default": "./src/runtime.ts"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build-cli.mjs",
+    "prepare": "node scripts/build-cli.mjs",
+    "check": "tsc -p .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "esbuild": "0.28.2"
+  },
+  "devDependencies": {
+    "@atproto/lexicon": "^0.7.12",
+    "@atproto/syntax": "^0.7.5",
+    "@extism/extism": "2.0.0-rc13",
+    "@types/node": "^26.4.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}

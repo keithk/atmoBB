@@ -1,0 +1,10 @@
+{
+  "id": "com.example.roundtrip",
+  "name": "Round trip",
+  "version": "0.0.1",
+  "hostApi": "1.0",
+  "dataVersion": 1,
+  "collections": [],
+  "capabilities": ["kv", "notify"],
+  "lexicons": []
+}

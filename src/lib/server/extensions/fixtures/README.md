@@ -22,21 +22,27 @@ exports-only module inlined in `host.test.ts` instead of a third QuickJS build.
 
 ## Toolchain
 
-| Tool | Version | Source |
-| --- | --- | --- |
-| `extism-js` | release `v1.7.0` (the binary reports `extism-js 1.6.1`) | https://github.com/extism/js-pdk/releases/tag/v1.7.0 |
-| binaryen (`wasm-merge`, `wasm-opt`) | `version_132` | https://github.com/WebAssembly/binaryen/releases/tag/version_132 |
-| `@extism/extism` (host SDK) | `2.0.0-rc13`, pinned in package.json | npm |
+| Tool | Pinned in |
+| --- | --- |
+| `extism-js` (Extism JS PDK compiler) | `extension-kit/compiler-version.json`, shared with the extension kit's builds |
+| binaryen (`wasm-merge`, `wasm-opt`) | `extension-kit/compiler-version.json` |
+| `@extism/extism` (host SDK) | package.json |
 
 `extism-js` needs `wasm-merge` and `wasm-opt` on `PATH`.
 
 ## Rebuild
 
+These fixtures call the host ABI directly (`host.test.ts` checks the raw
+`{ ok, value | error }` replies, and `probe.js` imports test-only host
+functions), so they're compiled with `extism-js` itself rather than through the
+kit's `build`. The kit's `toolchain` command downloads the pinned tools and
+prints the `PATH` line for them. From this directory, after `bun install` in
+`extension-kit/`:
+
 ```sh
-PATH="/path/to/extism-js-dir:/path/to/binaryen-version_132/bin:$PATH" \
-  extism-js probe.js -i probe.interface.txt -o probe.wasm
-PATH="/path/to/extism-js-dir:/path/to/binaryen-version_132/bin:$PATH" \
-  extism-js host-probe.js -i host-probe.interface.txt -o host-probe.wasm
+eval "$(node ../../../../../extension-kit/lib/cli/index.mjs toolchain)"
+extism-js probe.js -i probe.interface.txt -o probe.wasm
+extism-js host-probe.js -i host-probe.interface.txt -o host-probe.wasm
 ```
 
 Builds are not byte-for-byte reproducible: two runs over the same source differ

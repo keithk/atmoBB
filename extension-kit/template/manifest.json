@@ -1,0 +1,12 @@
+{
+  "id": "com.example.counter",
+  "name": "Counter",
+  "version": "0.1.0",
+  "hostApi": "1.0",
+  "dataVersion": 1,
+  "collections": ["com.example.counter.tally"],
+  "binding": { "collection": "com.example.counter.tally", "threadField": "thread" },
+  "capabilities": ["kv", "records", "timers"],
+  "ui": { "entry": "ui/index.html" },
+  "lexicons": ["lexicons/com.example.counter.tally.json"]
+}

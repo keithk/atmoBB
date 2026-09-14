@@ -1,0 +1,2 @@
+# The built CLI; `bun install` (prepare) or `bun run build` writes it.
+lib/

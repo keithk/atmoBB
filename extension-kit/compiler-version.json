@@ -1,0 +1,46 @@
+{
+  "$comment": "The one pin for the Extism JS compiler and the binaryen tools it needs on PATH. The kit's build and the host fixtures in src/lib/server/extensions/fixtures both compile with these. sha256 is of the downloaded archive; each matches the checksum file upstream publishes beside it.",
+  "extismJs": {
+    "release": "v1.7.0",
+    "reportsVersion": "extism-js 1.6.1",
+    "platforms": {
+      "darwin-arm64": {
+        "url": "https://github.com/extism/js-pdk/releases/download/v1.7.0/extism-js-aarch64-macos-v1.7.0.gz",
+        "sha256": "12c01c2bb2240a6a05a4f8babe680c793c397d84e6a1497a7ca1312e78a475c3"
+      },
+      "darwin-x64": {
+        "url": "https://github.com/extism/js-pdk/releases/download/v1.7.0/extism-js-x86_64-macos-v1.7.0.gz",
+        "sha256": "cce4a756eceb34b5aaac5ea864607d6c8b0610535e2c1b0c05a96bdbda69c7bb"
+      },
+      "linux-x64": {
+        "url": "https://github.com/extism/js-pdk/releases/download/v1.7.0/extism-js-x86_64-linux-v1.7.0.gz",
+        "sha256": "63b72da2f5e88655522dc21477de549f238a2f40546a69ce4e0fce7e78654035"
+      },
+      "linux-arm64": {
+        "url": "https://github.com/extism/js-pdk/releases/download/v1.7.0/extism-js-aarch64-linux-v1.7.0.gz",
+        "sha256": "025f4050b199d68413c159bde1187271ae270021a9f7171e7beb509922821f2a"
+      }
+    }
+  },
+  "binaryen": {
+    "release": "version_132",
+    "platforms": {
+      "darwin-arm64": {
+        "url": "https://github.com/WebAssembly/binaryen/releases/download/version_132/binaryen-version_132-arm64-macos.tar.gz",
+        "sha256": "98aad827847af7ef990ed7098d885725c8e5b5aae75073403635617ae4e259aa"
+      },
+      "darwin-x64": {
+        "url": "https://github.com/WebAssembly/binaryen/releases/download/version_132/binaryen-version_132-x86_64-macos.tar.gz",
+        "sha256": "40c3de90bb3766bd0282a895e139a6f50253dba49b4f5bb89e66faca162d832e"
+      },
+      "linux-x64": {
+        "url": "https://github.com/WebAssembly/binaryen/releases/download/version_132/binaryen-version_132-x86_64-linux.tar.gz",
+        "sha256": "195ddc94f9bc89f45abdabb0b9eea86023d727ba90eac8b35b80f2544fc30572"
+      },
+      "linux-arm64": {
+        "url": "https://github.com/WebAssembly/binaryen/releases/download/version_132/binaryen-version_132-aarch64-linux.tar.gz",
+        "sha256": "c58562417836c5d0493d89bdefc434933bdc097db641b483df86bcfa557a107f"
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "paths": {
+      "$lib/*": ["../src/lib/*"],
+      "$env/dynamic/private": ["./src/cli/sveltekit-env.ts"]
+    }
+  },
+  "include": ["src", "test", "scripts", "vitest.config.ts"],
+  "exclude": ["test/fixtures/*/dist"]
+}
