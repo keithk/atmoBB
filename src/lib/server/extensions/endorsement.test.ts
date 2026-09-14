@@ -154,6 +154,33 @@ describe('endorsementFor', () => {
       expect(state.outboundFetch).toHaveBeenCalledTimes(1);
     });
 
+    it('shares one fetch between concurrent lookups for the same repository', async () => {
+      const rkey = endorsementRkey(DIPLOMACY);
+      respond(200, { uri: `at://${DIRECTORY}/${ENDORSEMENT}/${rkey}`, cid: 'bafy', value: { reviewed: ['deadbeef'] } });
+      const [first, second] = await Promise.all([endorsementFor(DIPLOMACY, 'deadbeef'), endorsementFor(DIPLOMACY, 'deadbeef')]);
+      expect(first).toEqual(second);
+      expect(state.outboundFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('caches a failed lookup for thirty seconds, then retries', async () => {
+      vi.useFakeTimers();
+      try {
+        state.outboundFetch.mockRejectedValue(new Error('timed out'));
+        expect(await endorsementFor(DIPLOMACY, 'sha1')).toEqual({ status: 'unverified' });
+        expect(state.outboundFetch).toHaveBeenCalledTimes(1);
+
+        vi.advanceTimersByTime(29_000);
+        expect(await endorsementFor(DIPLOMACY, 'sha1')).toEqual({ status: 'unverified' });
+        expect(state.outboundFetch).toHaveBeenCalledTimes(1);
+
+        vi.advanceTimersByTime(1_000);
+        expect(await endorsementFor(DIPLOMACY, 'sha1')).toEqual({ status: 'unverified' });
+        expect(state.outboundFetch).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('is unverified on a missing record (400), a PDS error status, or a thrown timeout — and never blocks the caller', async () => {
       respond(400, { error: 'RecordNotFound' });
       expect(await endorsementFor(DIPLOMACY, 'sha1')).toEqual({ status: 'unverified' });

@@ -98,19 +98,23 @@ export async function removeReviewedSha(gitUrl: string, sha: string): Promise<En
 
 export type EndorsementLookup = { status: 'unverified' } | { status: 'endorsed'; reviewed: boolean; listing?: string };
 
-type RawEndorsement = { found: false } | { found: true; reviewed: string[]; listing?: string };
+type RawEndorsement = { found: false; unavailable?: true } | { found: true; reviewed: string[]; listing?: string };
 
 const READ_MAX_BYTES = 64 * 1024;
 const READ_TIMEOUT_MS = 5_000;
 const CACHE_TTL_MS = 3 * 60_000;
+/** A failed lookup is retried sooner, so a directory outage doesn't read as unverified for the full successful-lookup TTL. */
+const UNAVAILABLE_TTL_MS = 30_000;
 const CACHE_MAX = 500;
 
 const cache = new Map<string, { at: number; raw: RawEndorsement }>();
+const inflight = new Map<string, Promise<RawEndorsement>>();
 
 function cacheGet(key: string): RawEndorsement | undefined {
   const hit = cache.get(key);
   if (!hit) return undefined;
-  if (Date.now() - hit.at >= CACHE_TTL_MS) {
+  const ttl = !hit.raw.found && hit.raw.unavailable ? UNAVAILABLE_TTL_MS : CACHE_TTL_MS;
+  if (Date.now() - hit.at >= ttl) {
     cache.delete(key);
     return undefined;
   }
@@ -172,24 +176,33 @@ async function rawEndorsementFor(gitUrl: string): Promise<RawEndorsement> {
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
-  let raw: RawEndorsement;
-  try {
-    if (directoryDid === FORUM_DID()) {
-      const record = await getForumRecord(ENDORSEMENT_COLLECTION, rkey);
-      const parsed = record && isObject(record.value) ? parseValue(record.uri, record.value) : null;
-      raw = parsed ? { found: true, reviewed: parsed.reviewed, listing: parsed.listing } : { found: false };
-    } else {
-      raw = await fetchFromDirectoryPds(directoryDid, rkey);
+  const running = inflight.get(cacheKey);
+  if (running) return running;
+
+  const lookup = (async (): Promise<RawEndorsement> => {
+    try {
+      if (directoryDid === FORUM_DID()) {
+        const record = await getForumRecord(ENDORSEMENT_COLLECTION, rkey);
+        const parsed = record && isObject(record.value) ? parseValue(record.uri, record.value) : null;
+        return parsed ? { found: true, reviewed: parsed.reviewed, listing: parsed.listing } : { found: false };
+      }
+      return await fetchFromDirectoryPds(directoryDid, rkey);
+    } catch (error) {
+      // Never blocks an install: unresolvable DID, unreachable PDS, timeout,
+      // or anything else reads as unverified, cached only briefly so a
+      // transient failure doesn't add its timeout to every view until it clears.
+      console.error('[extensions] endorsement lookup failed:', error instanceof OutboundFetchError ? error.code : error instanceof Error ? error.message : error);
+      return { found: false, unavailable: true };
     }
-  } catch (error) {
-    // Never blocks an install: unresolvable DID, unreachable PDS, timeout, or
-    // anything else reads as unverified, and stays uncached so a transient
-    // failure doesn't linger past whatever caused it.
-    console.error('[extensions] endorsement lookup failed:', error instanceof OutboundFetchError ? error.code : error instanceof Error ? error.message : error);
-    return { found: false };
-  }
-  cacheSet(cacheKey, raw);
-  return raw;
+  })()
+    .then((raw) => {
+      cacheSet(cacheKey, raw);
+      return raw;
+    })
+    .finally(() => inflight.delete(cacheKey));
+
+  inflight.set(cacheKey, lookup);
+  return lookup;
 }
 
 /** Whether the atmobb.app directory endorses `gitUrl`'s repository, and whether `sha` is among the SHAs staff reviewed. */
