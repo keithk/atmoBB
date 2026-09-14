@@ -17,13 +17,17 @@ const id = 'app.atmobb.actor.profile'
 
 export interface Main {
   $type: 'app.atmobb.actor.profile'
+  /** Whether connected forums may notify this account. Defaults to true; never grants relay permission. */
+  notifications?: boolean
+  /** Per-forum overrides for profile fields and notification preferences. Other fields inherit account defaults. */
+  forumProfiles?: ForumProfile[]
   /** Personal color theme across forums. Omit to follow each forum's default styling. */
   theme?:
     'classic' | 'sky' | 'bubblegum' | 'midnight' | 'forest' | (string & {})
   /** Per-forum personal theme overrides. Omit a forum to use the global theme; an empty theme preserves that forum's own styling. */
   forumThemes?: ForumTheme[]
   displayName?: string
-  /** Free-text bio, shown on the profile's About panel. Global across forums. */
+  /** Default free-text bio, shown on the profile's About panel unless overridden for a forum. */
   description?: string
   avatar?: BlobRef
   /** Rendered under every post, phpBB style. Keep it short; clients may truncate. */
@@ -57,6 +61,47 @@ export {
   type Main as Record,
   isMain as isRecord,
   validateMain as validateRecord,
+}
+
+export interface ForumProfile {
+  $type?: 'app.atmobb.actor.profile#forumProfile'
+  forum: string
+  /** Only listed fields override defaults. A listed field with no value explicitly clears it (avatar falls back to Bluesky); remove it from this list to inherit again. */
+  fields: (
+    | 'displayName'
+    | 'description'
+    | 'pronouns'
+    | 'website'
+    | 'signature'
+    | 'avatar'
+    | 'title'
+    | 'notifications'
+    | (string & {})
+  )[]
+  displayName?: string
+  description?: string
+  pronouns?: string
+  website?: string
+  title?: string
+  avatar?: BlobRef
+  notifications?: boolean
+  signature?: (
+    | $Typed<AppAtmobbRichtextBlock.Text>
+    | $Typed<AppAtmobbRichtextBlock.Quote>
+    | $Typed<AppAtmobbRichtextBlock.Code>
+    | $Typed<AppAtmobbRichtextBlock.Image>
+    | { $type: string }
+  )[]
+}
+
+const hashForumProfile = 'forumProfile'
+
+export function isForumProfile<V>(v: V) {
+  return is$typed(v, id, hashForumProfile)
+}
+
+export function validateForumProfile<V>(v: V) {
+  return validate<ForumProfile & V>(v, id, hashForumProfile)
 }
 
 export interface ForumTheme {

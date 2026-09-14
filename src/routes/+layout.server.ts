@@ -8,6 +8,7 @@ import { blobCid, blobUrl } from '$lib/server/profiles';
 import { countUnread, readMember } from '$lib/server/notify/store';
 import { forumStanding } from '$lib/server/membership';
 import { DEFAULT_THEME, personalTheme, normalizeTheme, themeCss, type ForumTheme } from '$lib/themes';
+import { profileForForum } from '$lib/profile-overrides';
 
 const FONT_FAMILY = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,63}$/u;
 const cssString = (value: string) => JSON.stringify(value).replaceAll('<', '\\3c ');
@@ -99,7 +100,7 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
     notifyOn,
     unread: notifyOn ? countUnread(notify.entries) : 0,
     membership,
-    avatarProfile,
+    avatarProfile: profileForForum(avatarProfile, FORUM_DID()),
     admin: role === 'admin',
     staffRole: role,
     // A forum with no staff yet shows every logged-in visitor the setup

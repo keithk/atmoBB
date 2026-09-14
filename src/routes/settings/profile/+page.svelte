@@ -8,6 +8,7 @@
   import { profileHref } from '$lib/profile-card';
   import type { RichTextBlock } from '$lib/richtext/bbcode';
   import type { PageData } from './$types';
+  import { PROFILE_FIELDS, type ProfileField } from '$lib/profile-overrides';
 
   let { data, form }: { data: PageData; form: { saved?: boolean; restoredAvatar?: boolean; message?: string } | null } = $props();
 
@@ -20,6 +21,12 @@
   let saving = $state(false);
   let avatarName = $state('');
   let avatarInput: HTMLInputElement;
+  let inherited = $state<ProfileField[]>(untrack(() => data.scope === 'forum' ? PROFILE_FIELDS.filter((field) => !data.overriddenFields.includes(field)) : []));
+  $effect(() => {
+    inherited = data.scope === 'forum' ? PROFILE_FIELDS.filter((field) => !data.overriddenFields.includes(field)) : [];
+    signature = data.profile.signature;
+    signatureImages = data.profile.signatureImages;
+  });
 
   const signatureBlockCount = $derived((signature.trim() ? 1 : 0) + signatureImages.length);
   const signatureImagePayloads = $derived.by(() =>
@@ -85,6 +92,15 @@
   }
 </script>
 
+{#snippet inheritance(field: ProfileField, label: string)}
+  {#if data.scope === 'forum'}
+    <label class="inherit-choice">
+      <input type="checkbox" name="inherit" value={field} bind:group={inherited} aria-label={`Use my account default for ${label}`} />
+      Use my account default
+    </label>
+  {/if}
+{/snippet}
+
 <div class="wrap">
   <nav class="atm-crumbs">
     <a href={profileHref(data.did)}>your profile</a><span class="atm-crumbs__sep">›</span>
@@ -94,7 +110,7 @@
   <Card title="Edit profile">
     <form
       method="POST"
-      action="?/save"
+      action={`?/save&scope=${data.scope}`}
       enctype="multipart/form-data"
       class="edit"
       use:enhance={() => {
@@ -113,20 +129,30 @@
       }}
     >
       <p class="lede">
-        Your profile is shared across atmobb forums. Changes you make here will
-        appear anywhere you use this account.
+        Set your account defaults, or choose a different profile for this forum.
+        Forum choices are public and stay separate from your defaults.
       </p>
+      <label class="atm-field">
+        <span class="atm-label">Editing</span>
+        <select class="atm-input" value={data.scope} onchange={(event) => window.location.assign(`?scope=${event.currentTarget.value}`)}>
+          <option value="forum">This forum only — {data.forum.name}</option>
+          <option value="all">All atmobb forums — account defaults</option>
+        </select>
+        <span class="atm-hint">Save before switching. {data.scope === 'forum' ? 'Uncheck a field to customize it here. An empty signature, bio, pronouns, or website hides it on this forum.' : 'Used wherever you have not chosen a forum-specific value. Existing forum choices stay unchanged.'}</span>
+      </label>
 
       <div class="avatar-row">
         <Avatar seed={data.did} profile={data.avatarProfile} size={100} alt="Your avatar" />
         <div class="avatar-row__text">
           <span class="atm-label">Avatar</span>
+          {@render inheritance('avatar', 'avatar')}
           <label class="atm-btn atm-btn--secondary avatar-upload">
             Upload image
             <input
               bind:this={avatarInput}
               name="avatar"
               type="file"
+              disabled={inherited.includes('avatar')}
               accept="image/png,image/jpeg,image/webp,image/gif"
               onchange={(event) => (avatarName = event.currentTarget.files?.[0]?.name ?? '')}
             />
@@ -138,7 +164,7 @@
             <button
               class="atm-btn atm-btn--ghost restore-avatar"
               type="submit"
-              formaction="?/restoreAvatar"
+              formaction={`?/restoreAvatar&scope=${data.scope}`}
               disabled={saving}
             >Restore Bluesky picture</button>
           {:else if data.hasBskyAvatar}
@@ -147,8 +173,9 @@
           <span class="atm-hint">Use the userpic maker to crop the image or add a simple border.</span>
         </div>
         <div class="avatar-row__actions">
-          <a class="atm-btn atm-btn--secondary" href="/settings/avatar">Make a userpic</a>
+          <a class="atm-btn atm-btn--secondary" href={`/settings/avatar?scope=${data.scope}`}>Make a userpic</a>
           <a class="atm-btn atm-btn--secondary" href="/settings/notifications">Notifications</a>
+          <a class="atm-btn atm-btn--secondary" href="/settings/styles">Styles</a>
           {#if data.joinMode !== 'open'}
             <a class="atm-btn atm-btn--secondary" href="/settings/invites">Invites</a>
           {/if}
@@ -159,10 +186,11 @@
       </div>
 
       <div class="two">
-        <label class="atm-field">
-          <span class="atm-label">Display name</span>
-          <input class="atm-input" name="displayName" value={data.profile.displayName} maxlength="64" placeholder="Your name" />
-        </label>
+        <div class="atm-field">
+          <label class="atm-label" for="displayName">Display name</label>
+          {@render inheritance('displayName', 'display name')}
+          <input id="displayName" class="atm-input" name="displayName" value={data.profile.displayName} disabled={inherited.includes('displayName')} maxlength="64" placeholder="Your name" />
+        </div>
         <div class="atm-field">
           <span class="atm-label">Handle</span>
           <div class="readonly">@{data.handle}</div>
@@ -170,32 +198,36 @@
         </div>
       </div>
 
-      <label class="atm-field">
-        <span class="atm-label">Bio</span>
-        <textarea class="atm-textarea" name="description" rows="3" maxlength="256" placeholder="A line or two about you.">{data.profile.description}</textarea>
-      </label>
+      <div class="atm-field">
+        <label class="atm-label" for="description">Bio</label>
+        {@render inheritance('description', 'bio')}
+        <textarea id="description" class="atm-textarea" name="description" disabled={inherited.includes('description')} rows="3" maxlength="256" placeholder="A line or two about you.">{data.profile.description}</textarea>
+      </div>
 
       <div class="two">
-        <label class="atm-field">
-          <span class="atm-label">Pronouns</span>
-          <input class="atm-input" name="pronouns" value={data.profile.pronouns} maxlength="64" placeholder="they/them" />
-        </label>
-        <label class="atm-field">
-          <span class="atm-label">Website</span>
-          <input class="atm-input" name="website" value={data.profile.website} type="url" placeholder="https://…" />
-        </label>
+        <div class="atm-field">
+          <label class="atm-label" for="pronouns">Pronouns</label>
+          {@render inheritance('pronouns', 'pronouns')}
+          <input id="pronouns" class="atm-input" name="pronouns" value={data.profile.pronouns} disabled={inherited.includes('pronouns')} maxlength="64" placeholder="they/them" />
+        </div>
+        <div class="atm-field">
+          <label class="atm-label" for="website">Website</label>
+          {@render inheritance('website', 'website')}
+          <input id="website" class="atm-input" name="website" value={data.profile.website} disabled={inherited.includes('website')} type="url" placeholder="https://…" />
+        </div>
       </div>
 
       <div class="atm-field">
-        <span class="atm-label">Signature</span>
-        <textarea class="atm-textarea" name="signature" rows="2" bind:value={signature} placeholder="Add a forum signature"></textarea>
+        <label class="atm-label" for="signature">Signature</label>
+        {@render inheritance('signature', 'signature')}
+        <textarea id="signature" class="atm-textarea" name="signature" disabled={inherited.includes('signature')} rows="2" bind:value={signature} placeholder="Add a forum signature"></textarea>
         <input type="hidden" name="signature__images" value={signatureImagePayloads} />
         <input type="hidden" name="signature__image_order" value={signatureImageOrder} />
         <div class="signature-upload-row">
           <button
             class="atm-btn atm-btn--secondary"
             type="button"
-            disabled={signatureUploading > 0 || signatureBlockCount >= 3}
+            disabled={inherited.includes('signature') || signatureUploading > 0 || signatureBlockCount >= 3}
             onclick={() => signatureInput.click()}
           >
             {#if signatureUploading > 0}
@@ -221,9 +253,9 @@
                 {#if image.url}<img src={image.url} alt={image.alt} />{/if}
                 <label class="signature-image__alt">
                   <span class="atm-label">Image description</span>
-                  <input class="atm-input" bind:value={image.alt} maxlength="1000" placeholder="Describe this image" />
+                  <input class="atm-input" bind:value={image.alt} disabled={inherited.includes('signature')} maxlength="1000" placeholder="Describe this image" />
                 </label>
-                <button class="atm-btn atm-btn--ghost" type="button" onclick={() => removeSignatureImage(index)}>Remove</button>
+                <button class="atm-btn atm-btn--ghost" type="button" disabled={inherited.includes('signature')} onclick={() => removeSignatureImage(index)}>Remove</button>
               </div>
             {/each}
           </div>
@@ -238,15 +270,15 @@
             <div class="atm-sig sig"><RichText body={signaturePreview} /></div>
           </div>
         {/if}
-        <span class="atm-hint">Appears below your posts on atmobb forums.</span>
+        <span class="atm-hint">{data.scope === 'forum' ? `Appears below your posts on ${data.forum.name}.` : 'Appears below your posts unless a forum has its own signature choice.'}</span>
       </div>
 
       <div class="actions">
         <span class="status" aria-live="polite">
           {#if form?.message}<span class="atm-err">{form.message}</span>
           {:else if form?.restoredAvatar}<span class="atm-ok">Bluesky picture restored ✓</span>
-          {:else if form?.saved}<span class="atm-ok">Profile saved ✓</span>
-          {:else}<span class="atm-hint">Profile changes are saved to your account.</span>{/if}
+          {:else if form?.saved}<span class="atm-ok">{data.scope === 'forum' ? 'Forum profile saved' : 'Account defaults saved'} ✓</span>
+          {:else}<span class="atm-hint">{data.scope === 'forum' ? `Changes apply only to ${data.forum.name}.` : 'Changes apply to your account defaults.'}</span>{/if}
         </span>
         <a class="atm-btn atm-btn--ghost" href={profileHref(data.did)}>Cancel</a>
         <button class="atm-btn atm-btn--primary" disabled={saving || signatureUploading > 0 || signatureBlockCount > 3}>
@@ -263,6 +295,7 @@
 
   .edit { display: flex; flex-direction: column; gap: var(--space-4); }
   .lede { margin: 0; font: var(--type-meta); color: var(--forum-ink-soft); }
+  .inherit-choice { display: flex; align-items: center; gap: var(--space-2); font: var(--type-meta); color: var(--forum-ink-soft); }
 
   .avatar-row {
     display: flex; align-items: center; gap: var(--space-4);
@@ -325,6 +358,8 @@
   @media (max-width: 560px) {
     .two { grid-template-columns: 1fr; }
     .avatar-row { flex-wrap: wrap; }
+    .actions { flex-wrap: wrap; justify-content: flex-end; }
+    .status { width: 100%; }
     .signature-image { grid-template-columns: 80px 1fr; }
     .signature-image .atm-btn { grid-column: 2; justify-self: start; }
     .signature-image img { max-width: 80px; }

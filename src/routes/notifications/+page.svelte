@@ -32,6 +32,7 @@
     dashboardUrl={data.dashboardUrl}
     action="/settings/notifications"
     next="/notifications"
+    muted={data.avatarProfile?.notifications === false}
   />
 
   <Card title="Recent">

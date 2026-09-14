@@ -69,11 +69,25 @@ export const schemaDict = {
       main: {
         type: 'record',
         description:
-          "A user's atmoBB profile, global across all forums. Lives in the user's repo.",
+          "A user's atmoBB account defaults and per-forum overrides. Lives in the user's repo.",
         key: 'literal:self',
         record: {
           type: 'object',
           properties: {
+            notifications: {
+              type: 'boolean',
+              description:
+                'Whether connected forums may notify this account. Defaults to true; never grants relay permission.',
+            },
+            forumProfiles: {
+              type: 'array',
+              description:
+                'Per-forum overrides for profile fields and notification preferences. Other fields inherit account defaults.',
+              items: {
+                type: 'ref',
+                ref: 'lex:app.atmobb.actor.profile#forumProfile',
+              },
+            },
             theme: {
               type: 'string',
               description:
@@ -104,7 +118,7 @@ export const schemaDict = {
             description: {
               type: 'string',
               description:
-                "Free-text bio, shown on the profile's About panel. Global across forums.",
+                "Default free-text bio, shown on the profile's About panel unless overridden for a forum.",
               maxLength: 2560,
               maxGraphemes: 256,
             },
@@ -153,6 +167,79 @@ export const schemaDict = {
             createdAt: {
               type: 'string',
               format: 'datetime',
+            },
+          },
+        },
+      },
+      forumProfile: {
+        type: 'object',
+        required: ['forum', 'fields'],
+        properties: {
+          forum: {
+            type: 'string',
+            format: 'did',
+          },
+          fields: {
+            type: 'array',
+            description:
+              'Only listed fields override defaults. A listed field with no value explicitly clears it (avatar falls back to Bluesky); remove it from this list to inherit again.',
+            items: {
+              type: 'string',
+              knownValues: [
+                'displayName',
+                'description',
+                'pronouns',
+                'website',
+                'signature',
+                'avatar',
+                'title',
+                'notifications',
+              ],
+            },
+          },
+          displayName: {
+            type: 'string',
+            maxLength: 640,
+            maxGraphemes: 64,
+          },
+          description: {
+            type: 'string',
+            maxLength: 2560,
+            maxGraphemes: 256,
+          },
+          pronouns: {
+            type: 'string',
+            maxLength: 640,
+            maxGraphemes: 64,
+          },
+          website: {
+            type: 'string',
+            format: 'uri',
+          },
+          title: {
+            type: 'string',
+            maxLength: 640,
+            maxGraphemes: 64,
+          },
+          avatar: {
+            type: 'blob',
+            accept: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+            maxSize: 1000000,
+          },
+          notifications: {
+            type: 'boolean',
+          },
+          signature: {
+            type: 'array',
+            maxLength: 3,
+            items: {
+              type: 'union',
+              refs: [
+                'lex:app.atmobb.richtext.block#text',
+                'lex:app.atmobb.richtext.block#quote',
+                'lex:app.atmobb.richtext.block#code',
+                'lex:app.atmobb.richtext.block#image',
+              ],
             },
           },
         },

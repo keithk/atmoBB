@@ -1,6 +1,7 @@
 import { jsonToLex } from '@atproto/api';
 import { agentFor } from './atproto-oauth';
 import { parseAtUri } from '$lib/appview-paths';
+import { PROFILE_FIELDS, forumProfileOverride, type ForumProfileOverride, type ProfileField } from '$lib/profile-overrides';
 import { planUnwatch, planWatch, watchesForForum, type Watch } from '$lib/watch';
 import type { Poll, RichTextBlock } from './appview';
 import {
@@ -343,6 +344,7 @@ export interface AvatarUpload {
 export interface ProfileEdit {
   displayName?: string;
   description?: string;
+  notifications?: boolean;
   theme?: import('$lib/themes').ForumTheme | '';
   forumThemes?: { forum: string; theme: import('$lib/themes').ForumTheme | '' }[];
   signature?: unknown[];
@@ -357,7 +359,7 @@ export interface ProfileEdit {
  * Uploading an image replaces the local avatar override; null removes it so
  * clients fall back to Bluesky. An empty string clears a text field.
  */
-export async function saveProfile(did: string, edit: ProfileEdit): Promise<void> {
+export async function saveProfile(did: string, edit: ProfileEdit, forum?: string, inherit: ProfileField[] = []): Promise<void> {
   const uploaded = edit.avatar
     ? await uploadProfileBlob(did, edit.avatar.bytes, edit.avatar.mimeType)
     : null;
@@ -367,6 +369,7 @@ export async function saveProfile(did: string, edit: ProfileEdit): Promise<void>
   if ('signature' in edit) fields.signature = edit.signature?.length ? edit.signature : undefined;
   if ('pronouns' in edit) fields.pronouns = edit.pronouns || undefined;
   if ('website' in edit) fields.website = edit.website || undefined;
+  if ('notifications' in edit) fields.notifications = edit.notifications;
   if ('theme' in edit) fields.theme = edit.theme || undefined;
   if ('forumThemes' in edit) fields.forumThemes = edit.forumThemes?.length ? edit.forumThemes : undefined;
   if (uploaded) fields.avatar = uploaded;
@@ -374,6 +377,8 @@ export async function saveProfile(did: string, edit: ProfileEdit): Promise<void>
     did,
     fields,
     edit.avatar === null ? ['avatar'] : [],
+    forum,
+    inherit,
   );
 }
 
@@ -416,9 +421,39 @@ export async function patchActorProfile(
   did: string,
   fields: Record<string, unknown>,
   remove: string[] = [],
+  forum?: string,
+  inherit: ProfileField[] = [],
 ): Promise<void> {
   const agent = await agentFor(did);
-  const existing = (await getActorProfile(did)) ?? {};
+  let existing: ActorProfileRecord = {};
+  let swapRecord: string | null = null;
+  try {
+    const res = await agent.com.atproto.repo.getRecord({ repo: did, collection: ACTOR_PROFILE, rkey: 'self' });
+    existing = plainActorProfile(res.data.value as ActorProfileRecord);
+    swapRecord = res.data.cid ?? null;
+  } catch (error) {
+    if ((error as { error?: string }).error !== 'RecordNotFound') throw error;
+  }
+  if (forum) {
+    const previous = forumProfileOverride(existing, forum);
+    const override: ForumProfileOverride = { ...previous, forum, fields: [...(previous?.fields ?? [])] };
+    for (const key of PROFILE_FIELDS) {
+      if (key in fields || remove.includes(key)) {
+        if (!override.fields.includes(key)) override.fields.push(key);
+        if (fields[key] === undefined || remove.includes(key)) delete override[key];
+        else override[key] = fields[key];
+      }
+      if (inherit.includes(key)) {
+        override.fields = override.fields.filter((field) => field !== key);
+        delete override[key];
+      }
+    }
+    const forumProfiles = (Array.isArray(existing.forumProfiles) ? existing.forumProfiles : [])
+      .filter((entry) => entry.forum !== forum);
+    if (override.fields.length) forumProfiles.push(override);
+    fields = { forumProfiles: forumProfiles.length ? forumProfiles : undefined };
+    remove = [];
+  }
   const record: ActorProfileRecord = {
     ...existing,
     ...fields,
@@ -431,6 +466,8 @@ export async function patchActorProfile(
     repo: did,
     collection: ACTOR_PROFILE,
     rkey: 'self',
+    // A concurrent edit on another forum must fail, not silently lose its choices.
+    swapRecord,
     record,
   });
   avatarCache.set(did, {
