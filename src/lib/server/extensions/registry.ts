@@ -7,6 +7,7 @@ import { claimCollections, claimConflicts, newInstallId, normalizeGitUrl } from 
 import { ReleaseError, listRemoteTags, readRelease, type Release, type ReleaseSource, type RemoteTag } from './fetch';
 import { extensionsLockHeld } from './lock';
 import { admitExtension, checkPublishedLexicons, type LexiconResolver, type PublishedLexiconCheck } from './manifest';
+import { beforeDeadline } from './deadline';
 
 // Every installed extension, the release it runs, and the releases it ran
 // before. An install stays on its release until an admin moves it: installing
@@ -103,6 +104,8 @@ export interface UpdateOptions {
    * must not call registry mutations.
    */
   migrate?: (context: MigrationContext) => void | Promise<void>;
+  /** How long `migrate` may run before the update is refused; defaults to MIGRATE_TIMEOUT_MS. */
+  migrateTimeoutMs?: number;
 }
 
 export interface ChangedTag {
@@ -115,6 +118,13 @@ export type UpdateListing = { ok: true; newer: RemoteTag[]; changed: ChangedTag[
 
 /** Staged releases nobody confirmed are removed after this long. */
 export const STAGING_TTL_MS = 60 * 60_000;
+
+/**
+ * How long an update's migration may hold the registry. Well past the
+ * runtime's watchdog on one call (11 seconds at the default 5-second call
+ * timeout), so a migration call that times out fails as its own error first.
+ */
+export const MIGRATE_TIMEOUT_MS = 60_000;
 
 const STAGING_ID = /^[A-Za-z0-9_-]{22}$/;
 
@@ -522,12 +532,19 @@ export async function applyUpdate(installId: string, stagingId: string, options:
 
     const hadBundle = await exists(join(extensionsRoot(), installId, staged.sha));
     const dir = await moveIntoPlace(stagingId, installId, staged.sha);
+    const timeoutMs = options.migrateTimeoutMs ?? MIGRATE_TIMEOUT_MS;
     try {
-      await options.migrate?.({
-        install: structuredClone(install),
-        from: { tag: install.tag, sha: install.sha, manifest: install.manifest, dir: bundleDir(install) },
-        to: { tag: staged.tag, sha: staged.sha, manifest: staged.manifest, dir },
-      });
+      // Every later mutation waits on this one, so a migration that never
+      // settles is refused at the deadline. It may still be running then.
+      await beforeDeadline(
+        options.migrate?.({
+          install: structuredClone(install),
+          from: { tag: install.tag, sha: install.sha, manifest: install.manifest, dir: bundleDir(install) },
+          to: { tag: staged.tag, sha: staged.sha, manifest: staged.manifest, dir },
+        }),
+        timeoutMs,
+        () => new Error(`The migration took longer than ${timeoutMs / 1000} seconds`),
+      );
     } catch (error) {
       if (!hadBundle) await rm(dir, { recursive: true, force: true });
       const current = install.tag ?? shortSha(install.sha);
@@ -562,6 +579,15 @@ export function rollbackInstall(installId: string, sha: string): Promise<Install
       manifest = JSON.parse(await readFile(join(bundleDir({ id: installId, sha }), 'manifest.json'), 'utf8'));
     } catch {
       return refused('sha', `The bundle for ${record.tag ?? shortSha(sha)} is no longer on disk`);
+    }
+    // A collection this release declared may have been released and claimed by
+    // another repository since the install moved off it.
+    const claim = await claimCollections(install.normalizedUrl, manifest.collections);
+    if (!claim.ok) {
+      return {
+        ok: false,
+        errors: claim.conflicts.map(({ collection, heldBy }) => ({ field: 'collections', message: `${collection} belongs to ${heldBy}, which declared it first` })),
+      };
     }
     install.tag = record.tag;
     install.sha = sha;

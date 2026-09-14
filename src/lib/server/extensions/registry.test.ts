@@ -10,7 +10,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...actual, readFile: vi.fn(actual.readFile) };
 });
 import { startGitFixtures, validBundle, type FixtureRepo, type GitFixtures, type TreeSpec } from './fixtures/git-server';
-import { claimCollections, listClaims } from './claims';
+import { claimCollections, listClaims, releaseClaim } from './claims';
 import { acquireExtensionsLock } from './lock';
 import type { LexiconResolver } from './manifest';
 import {
@@ -266,6 +266,40 @@ describe('updates', () => {
     expect(current).toMatchObject({ sha: first, tag: 'v0.1.0' });
     expect(current.history.map((h) => h.sha)).toEqual([first]);
     expect(await exists(join(extensionsDir(), installed.id, second))).toBe(false);
+  });
+
+  it('refuses an update whose migrate callback never settles and keeps taking mutations', async () => {
+    const repo = newRepo();
+    const first = repo.tag('v0.1.0', withVersion('0.1.0'));
+    const installed = await install(repo);
+    const second = repo.tag('v0.2.0', withVersion('0.2.0', { dataVersion: 2 }));
+    const update = await stageUpdate(installed.id, 'v0.2.0', options);
+    if (!update.ok) throw new Error(update.errors[0].message);
+
+    const result = await applyUpdate(installed.id, update.review.stagingId, { migrate: () => new Promise<void>(() => {}), migrateTimeoutMs: 50 });
+    expect(result).toMatchObject({ ok: false, errors: [{ field: 'migrate', message: expect.stringMatching(/migration failed, so v0\.1\.0 stays active/) }] });
+    expect((await getInstall(installed.id))!).toMatchObject({ sha: first, tag: 'v0.1.0' });
+    expect(await exists(join(extensionsDir(), installed.id, second))).toBe(false);
+    expect(await disableInstall(installed.id)).toMatchObject({ ok: true, install: { state: 'disabled' } });
+  });
+
+  it('refuses rolling back to a release whose collection another repository has claimed since', async () => {
+    const chess = 'com.example.chess.game';
+    const repo = newRepo();
+    const first = repo.tag('v0.1.0', withVersion('0.1.0'));
+    const installed = await install(repo);
+    repo.tag('v0.2.0', validBundle({ manifest: { version: '0.2.0', collections: [chess], lexicons: ['lexicons/chess.json'] }, dist: { lexicons: { 'chess.json': JSON.stringify({ lexicon: 1, id: chess, defs: { main: { type: 'record', key: 'tid', record: { type: 'object', properties: {} } } } }) } } }));
+    const update = await stageUpdate(installed.id, 'v0.2.0', options);
+    if (!update.ok) throw new Error(update.errors[0].message);
+    const applied = await applyUpdate(installed.id, update.review.stagingId, {});
+    if (!applied.ok) throw new Error(applied.errors[0].message);
+
+    expect(await releaseClaim(GAME)).toBe(true);
+    await claimCollections('https://github.com/someone/else', [GAME]);
+    expect(await rollbackInstall(installed.id, first)).toMatchObject({ ok: false, errors: [{ field: 'collections', message: expect.stringMatching(/github\.com\/someone\/else/) }] });
+    const current = (await getInstall(installed.id))!;
+    expect(current.sha).toBe(applied.install.sha);
+    expect(current.manifest).toEqual(applied.install.manifest);
   });
 
   it('refuses rolling back to a release with an older data version', async () => {
