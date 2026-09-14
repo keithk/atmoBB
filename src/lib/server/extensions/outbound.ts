@@ -277,6 +277,17 @@ export interface DidDocument {
   service?: { id?: string; type?: string; serviceEndpoint?: string }[];
 }
 
+/**
+ * The endpoint of the PDS service a DID document lists for `did`, exactly as
+ * the document gives it (unchecked, trailing slashes kept), or undefined when
+ * it lists none.
+ */
+export function pdsServiceEndpoint(doc: DidDocument, did: string): string | undefined {
+  return doc.service?.find(
+    (service) => service.type === 'AtprotoPersonalDataServer' && (service.id === '#atproto_pds' || service.id === `${did}#atproto_pds`),
+  )?.serviceEndpoint;
+}
+
 const didDocumentCache = new Map<string, { doc: DidDocument; at: number }>();
 
 function cacheGet(did: string): DidDocument | undefined {

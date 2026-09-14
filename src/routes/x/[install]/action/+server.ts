@@ -1,11 +1,12 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { env } from '$env/dynamic/private';
 import { MAX_ACTION_NAME_LENGTH } from '$lib/extensions/bridge';
+import { isObject } from '$lib/extensions/contract';
 import { bindingAccess, bindingFor, type BindingAccess } from '$lib/server/extensions/bindings';
 import { ExtensionCallError, ExtensionRefusal, dispatchAction, type ExtensionCallErrorCode } from '$lib/server/extensions/host';
 import { extensionsLockHeld } from '$lib/server/extensions/lock';
 import { extensionsEnabled } from '$lib/server/extensions/manifest';
+import { forumJsonPostProblem } from '$lib/server/extensions/requests';
 import { banMessage, bannedFrom } from '$lib/server/standing';
 
 // A panel's action, forwarded by the forum page it's shown on:
@@ -24,8 +25,6 @@ import { banMessage, bannedFrom } from '$lib/server/standing';
 const NO_STORE = { 'cache-control': 'private, no-store' };
 
 const refuse = (status: number, code: string, message: string) => json({ code, message }, { status, headers: NO_STORE });
-
-const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const ACCESS_STATUS: Record<Exclude<BindingAccess, { ok: true }>['reason'], number> = {
   missing: 404,
@@ -50,10 +49,9 @@ const CALL_STATUS: Record<ExtensionCallErrorCode, number> = {
 };
 
 export const POST: RequestHandler = async ({ request, params, locals, getClientAddress }) => {
-  const origin = env.ATMOBB_APP_URL ? new URL(env.ATMOBB_APP_URL).origin : null;
-  if (!origin || request.headers.get('origin') !== origin) return refuse(403, 'bad_origin', 'Actions must come from this forum.');
-  const mediaType = request.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
-  if (mediaType !== 'application/json') return refuse(415, 'bad_request', 'Send the action as JSON.');
+  const problem = forumJsonPostProblem(request);
+  if (problem === 'origin') return refuse(403, 'bad_origin', 'Actions must come from this forum.');
+  if (problem === 'media-type') return refuse(415, 'bad_request', 'Send the action as JSON.');
 
   let body: unknown;
   try {

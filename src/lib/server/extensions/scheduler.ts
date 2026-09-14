@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { env } from '$env/dynamic/private';
 import type { TimerSet } from '$lib/extensions/contract';
+import { envInt } from './env';
 import { getInstall } from './registry';
 
 // Extensions have no job runner, so timed callbacks live in one JSON file at
@@ -41,12 +41,6 @@ const DEFAULT_TIMER_CAP = 200;
 /** Doubles per failed attempt, capped, so a broken dispatcher doesn't hammer a handler forever. */
 const BASE_BACKOFF_MS = 60_000;
 const MAX_BACKOFF_MS = 60 * 60_000;
-
-function envInt(name: string, fallback: number): number {
-  const raw = env[name];
-  const value = raw ? Number(raw) : NaN;
-  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
-}
 
 /** ATMOBB_EXTENSIONS_TIMER_MIN_DELAY_MS: how soon after scheduling a timer may fire. */
 const minDelayMs = () => envInt('ATMOBB_EXTENSIONS_TIMER_MIN_DELAY_MS', DEFAULT_MIN_DELAY_MS);

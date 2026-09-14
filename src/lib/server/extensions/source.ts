@@ -1,7 +1,9 @@
 import { Resolver } from 'node:dns/promises';
 import { isValidDid, isValidHandle } from '@atproto/syntax';
+import { isObject } from '$lib/extensions/contract';
 import { unresolvedSource, type SourceIdentity } from '$lib/extensions/source';
-import { outboundFetch, resolveDidDocument, type DidDocument, type OutboundFetchOptions, type OutboundFetchResult } from './outbound';
+import { outboundFetch, pdsServiceEndpoint, resolveDidDocument, type DidDocument, type OutboundFetchOptions, type OutboundFetchResult } from './outbound';
+import { RateWindows } from './rate-window';
 
 // Who a standalone page's source DID is, for the label atmoBB draws above a
 // panel: the handle its DID document claims, whether that handle resolves
@@ -40,9 +42,6 @@ export interface SourceResolverDeps {
 const dns = new Resolver({ timeout: HANDLE_TIMEOUT_MS, tries: 1 });
 const networkDeps: SourceResolverDeps = { resolveDidDocument, resolveTxt: (hostname) => dns.resolveTxt(hostname), fetch: outboundFetch };
 let deps = networkDeps;
-
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const decodeJson = (body: Uint8Array): unknown => {
   try {
@@ -85,9 +84,7 @@ type ForumCheck = { forum: boolean; forumName?: string; unavailable?: true };
 
 /** Whether the DID's own PDS holds a forum profile record for it. */
 async function forumProfile(did: string, doc: DidDocument): Promise<ForumCheck> {
-  const pds = doc.service?.find(
-    (service) => service.type === 'AtprotoPersonalDataServer' && (service.id === '#atproto_pds' || service.id === `${did}#atproto_pds`),
-  )?.serviceEndpoint;
+  const pds = pdsServiceEndpoint(doc, did);
   // No PDS means no repo, so no forum profile could be read from it.
   if (typeof pds !== 'string' || !pds) return { forum: false };
 
@@ -170,25 +167,12 @@ export async function sourceIdentity(did: string): Promise<SourceIdentity> {
 
 // --- rate limit (per client address, sliding minute) ----------------------------
 
-const clientWindows = new Map<string, number[]>();
+// Drops the least recently seen clients once too many are tracked; a dropped client starts a fresh window.
+const clientWindows = new RateWindows(CLIENT_WINDOWS_MAX);
 
 /** Take one of a client's lookups for this minute, or false when they've used them all. */
 export function takeSourceLookup(client: string, now = Date.now()): boolean {
-  const recent = (clientWindows.get(client) ?? []).filter((at) => now - at < MINUTE_MS);
-  if (recent.length >= SOURCE_LOOKUPS_PER_CLIENT_PER_MINUTE) {
-    clientWindows.set(client, recent);
-    return false;
-  }
-  recent.push(now);
-  clientWindows.delete(client);
-  clientWindows.set(client, recent);
-  // Drop the least recently seen clients once too many are tracked; a dropped client starts a fresh window.
-  while (clientWindows.size > CLIENT_WINDOWS_MAX) {
-    const oldest = clientWindows.keys().next().value;
-    if (oldest === undefined) break;
-    clientWindows.delete(oldest);
-  }
-  return true;
+  return clientWindows.take(client, SOURCE_LOOKUPS_PER_CLIENT_PER_MINUTE, MINUTE_MS, now);
 }
 
 // --- test seams -------------------------------------------------------------------

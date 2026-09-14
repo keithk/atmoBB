@@ -20,6 +20,7 @@ vi.mock('$lib/server/extensions/lock', () => ({ extensionsLockHeld: () => state.
 
 import { SOURCE_LOOKUPS_PER_CLIENT_PER_MINUTE, resetSourceForTests, setSourceDepsForTests } from '$lib/server/extensions/source';
 import { GET } from './+server';
+import { resetRegistryCacheForTests } from '$lib/server/extensions/registry';
 
 const encode = (value: unknown) => new TextEncoder().encode(typeof value === 'string' ? value : JSON.stringify(value));
 
@@ -78,6 +79,7 @@ async function writeInstall(installState: 'active' | 'disabled' = 'active') {
   await mkdir(join(directory, 'extensions'), { recursive: true });
   const install = { id: INSTALL, sha: 'abc', normalizedUrl: 'https://git.example/jack/diplomacy', state: installState, manifest: { name: 'Diplomacy', collections: [], ui: { entry: 'ui/index.html' } } };
   await writeFile(join(directory, 'extensions', 'registry.json'), JSON.stringify({ installs: [install] }));
+  resetRegistryCacheForTests();
 }
 
 async function lookup(did: string | null, { install = INSTALL, client = CLIENT }: { install?: string; client?: string } = {}) {

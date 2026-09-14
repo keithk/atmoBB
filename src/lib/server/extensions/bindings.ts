@@ -1,9 +1,11 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { isObject } from '$lib/extensions/contract';
 import { parseAtUri } from '$lib/appview-paths';
 import { THREAD_NSID, getBoardAccess, getThreadPage } from '../appview';
 import { listForumRecords } from '../forum-repo';
+import { hashRkey } from './hash-rkey';
 import { getInstall, listInstalls } from './registry';
 import { BINDING_COLLECTION } from './scopes';
 
@@ -32,16 +34,9 @@ interface BindingsStore {
   bindings: Record<string, ThreadBinding>;
 }
 
-const B32 = '234567abcdefghijklmnopqrstuvwxyz';
-
 /** The binding record's key for a thread: the first 160 bits of the at-uri's SHA-256, in base32. */
 export function bindingRkey(threadUri: string): string {
-  const digest = createHash('sha256').update(threadUri).digest().subarray(0, 20);
-  let bits = 0n;
-  for (const byte of digest) bits = (bits << 8n) | BigInt(byte);
-  let key = '';
-  for (let i = 31; i >= 0; i--) key += B32[Number((bits >> BigInt(i * 5)) & 31n)];
-  return key;
+  return hashRkey(threadUri);
 }
 
 const storePath = () => join(process.env.DATA_DIR ?? '.data', 'extensions', 'bindings.json');
@@ -100,9 +95,6 @@ export const uncacheBinding = (threadUri: string) =>
   withStore((store) => {
     delete store.bindings[threadUri];
   });
-
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Replace the cache with the forum repo's binding records, each mapped to the

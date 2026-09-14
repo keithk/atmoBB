@@ -41,6 +41,7 @@ vi.mock('$lib/server/extensions/host', () => ({
 }));
 
 import { load } from './+page.server';
+import { resetRegistryCacheForTests } from '$lib/server/extensions/registry';
 
 let directory: string;
 
@@ -54,6 +55,7 @@ async function writeInstall(options: { ui?: boolean; state?: string } = {}) {
     manifest: { name: 'Diplomacy', collections: [], ...(options.ui === false ? {} : { ui: { entry: 'ui/index.html' } }) },
   };
   await writeFile(join(directory, 'extensions', 'registry.json'), JSON.stringify({ installs: [install] }));
+  resetRegistryCacheForTests();
 }
 
 const visit = (did: string | null = STAFF, thread: string | null = THREAD) =>

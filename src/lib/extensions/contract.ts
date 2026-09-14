@@ -11,6 +11,10 @@ import type { Standing } from '../membership';
  */
 export const HOST_API_VERSION = '1.0';
 
+/** A plain JSON object: not null and not an array. */
+export const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
 /** Host function groups an extension can ask the admin to grant. */
 export const CAPABILITIES = ['kv', 'records', 'timers', 'notify'] as const;
 export type Capability = (typeof CAPABILITIES)[number];

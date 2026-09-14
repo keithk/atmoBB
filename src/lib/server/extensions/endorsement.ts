@@ -1,10 +1,11 @@
-import { createHash } from 'node:crypto';
 import { env } from '$env/dynamic/private';
+import { isObject } from '$lib/extensions/contract';
 import { parseAtUri } from '$lib/appview-paths';
 import { FORUM_DID } from '../appview';
 import { getForumRecord, listForumRecords, putForumRecord } from '../forum-repo';
 import { normalizeGitUrl } from './claims';
-import { OutboundFetchError, outboundFetch, resolveDidDocument } from './outbound';
+import { hashRkey } from './hash-rkey';
+import { OutboundFetchError, outboundFetch, pdsServiceEndpoint, resolveDidDocument } from './outbound';
 import { ENDORSEMENT_COLLECTION } from './scopes';
 
 // The trusted mark: an app.atmobb.extension.endorsement record in the
@@ -15,16 +16,9 @@ import { ENDORSEMENT_COLLECTION } from './scopes';
 // only, never a gate: any failure here reads as unverified and never blocks
 // an install.
 
-const B32 = '234567abcdefghijklmnopqrstuvwxyz';
-
 /** The endorsement record's key for a repository: the first 160 bits of its normalized git URL's SHA-256, in base32. */
 export function endorsementRkey(gitUrl: string): string {
-  const digest = createHash('sha256').update(normalizeGitUrl(gitUrl)).digest().subarray(0, 20);
-  let bits = 0n;
-  for (const byte of digest) bits = (bits << 8n) | BigInt(byte);
-  let key = '';
-  for (let i = 31; i >= 0; i--) key += B32[Number((bits >> BigInt(i * 5)) & 31n)];
-  return key;
+  return hashRkey(normalizeGitUrl(gitUrl));
 }
 
 export interface EndorsementRecord {
@@ -36,9 +30,6 @@ export interface EndorsementRecord {
   createdAt: string;
   updatedAt: string;
 }
-
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 function parseValue(uri: string, value: Record<string, unknown>): EndorsementRecord {
   const reviewed = Array.isArray(value.reviewed) ? value.reviewed.filter((s): s is string => typeof s === 'string') : [];
@@ -153,9 +144,7 @@ function counted(raw: unknown, directoryDid: string, rkey: string): EndorsementR
 async function fetchFromDirectoryPds(directoryDid: string, rkey: string): Promise<RawEndorsement> {
   const doc = await resolveDidDocument(directoryDid);
   if (doc.id !== directoryDid) throw new Error(`${directoryDid}'s DID document names a different DID`);
-  const endpoint = doc.service?.find(
-    (service) => service.type === 'AtprotoPersonalDataServer' && (service.id === '#atproto_pds' || service.id === `${directoryDid}#atproto_pds`),
-  )?.serviceEndpoint;
+  const endpoint = pdsServiceEndpoint(doc, directoryDid);
   if (!endpoint) throw new Error(`${directoryDid} lists no PDS`);
   const pds = endpoint.replace(/\/+$/, '');
   const params = new URLSearchParams({ repo: directoryDid, collection: ENDORSEMENT_COLLECTION, rkey });
@@ -179,7 +168,7 @@ async function rawEndorsementFor(gitUrl: string): Promise<RawEndorsement> {
   if (!directoryDid) return { found: false };
 
   const rkey = endorsementRkey(gitUrl);
-  const cacheKey = `${directoryDid} ${rkey}`;
+  const cacheKey = `${directoryDid}\u0000${rkey}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 

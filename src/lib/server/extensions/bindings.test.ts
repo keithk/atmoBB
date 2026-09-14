@@ -76,6 +76,10 @@ describe('binding record keys', () => {
     expect(bindingRkey(threadAt('3kone'))).toBe(key);
     expect(bindingRkey(threadAt('3ktwo'))).not.toBe(key);
   });
+
+  it('keeps the key existing binding records were written at', () => {
+    expect(bindingRkey(threadAt('3kone'))).toBe('qg6vpwmbgxtrvjnqal7ktdv6sj3hg6li');
+  });
 });
 
 describe('rebuildBindings', () => {

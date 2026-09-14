@@ -1,4 +1,4 @@
-import type { ThreadRef } from './contract';
+import { isObject, type ThreadRef } from './contract';
 
 // The messages an extension's panel and the forum page trade over
 // postMessage. The panel runs in a frame sandboxed to an opaque origin, so the
@@ -98,9 +98,6 @@ export type ActionOutcome = { ok: true; value: unknown } | { ok: false; error: B
 /** The answer to one action message, matched by its id. */
 export type ResultMessage = { type: 'atmobb:result'; v: typeof BRIDGE_VERSION; id: MessageId } & ActionOutcome;
 export type HostMessage = InitMessage | ResultMessage;
-
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const hasOnly = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).every((key) => keys.includes(key));
 

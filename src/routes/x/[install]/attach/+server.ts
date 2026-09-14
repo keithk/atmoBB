@@ -1,7 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { env } from '$env/dynamic/private';
+import { isObject } from '$lib/extensions/contract';
 import { attachThread } from '$lib/server/extensions/attach';
+import { forumJsonPostProblem } from '$lib/server/extensions/requests';
 
 // Staff attach an extension to a thread with the setup its attach form
 // collected: POST { thread: <at-uri>, params: <any JSON> }. SvelteKit's own
@@ -10,13 +11,10 @@ import { attachThread } from '$lib/server/extensions/attach';
 
 const refuse = (status: number, message: string) => json({ message }, { status });
 
-const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-
 export const POST: RequestHandler = async ({ request, params, locals }) => {
-  const origin = env.ATMOBB_APP_URL ? new URL(env.ATMOBB_APP_URL).origin : null;
-  if (!origin || request.headers.get('origin') !== origin) return refuse(403, 'Attach requests must come from this forum.');
-  const mediaType = request.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
-  if (mediaType !== 'application/json') return refuse(415, 'Send the attach request as JSON.');
+  const problem = forumJsonPostProblem(request);
+  if (problem === 'origin') return refuse(403, 'Attach requests must come from this forum.');
+  if (problem === 'media-type') return refuse(415, 'Send the attach request as JSON.');
 
   let body: unknown;
   try {

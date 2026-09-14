@@ -55,6 +55,7 @@ vi.mock('$lib/server/extensions/host', async () => {
 });
 import { ExtensionCallError, ExtensionRefusal } from '$lib/server/extensions/host';
 import { POST } from './+server';
+import { resetRegistryCacheForTests } from '$lib/server/extensions/registry';
 
 let directory: string;
 
@@ -62,6 +63,7 @@ async function writeRegistry(installState: 'active' | 'disabled' = 'active') {
   await mkdir(join(directory, 'extensions'), { recursive: true });
   const installs = [INSTALL, OTHER].map((id) => ({ id, normalizedUrl: `https://git.example/jack/${id}`, state: installState, manifest: { name: 'Diplomacy', collections: [] } }));
   await writeFile(join(directory, 'extensions', 'registry.json'), JSON.stringify({ installs }));
+  resetRegistryCacheForTests();
 }
 
 async function bindThread(installId: string) {

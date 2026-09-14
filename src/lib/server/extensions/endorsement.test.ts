@@ -83,6 +83,10 @@ describe('endorsementRkey', () => {
     expect(endorsementRkey('https://github.com/jack/diplomacy/')).toBe(key);
     expect(endorsementRkey(CHESS)).not.toBe(key);
   });
+
+  it('keeps the key existing endorsement records were written at', () => {
+    expect(endorsementRkey(DIPLOMACY)).toBe('ikvo6ae3eix3wbshxhuo7r2brvzu7hpt');
+  });
 });
 
 describe('endorsementFor', () => {

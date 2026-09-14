@@ -14,6 +14,7 @@ vi.mock('$env/dynamic/private', () => ({ env: state.env }));
 vi.mock('$lib/server/extensions/lock', () => ({ extensionsLockHeld: () => state.lockHeld }));
 
 import { load } from './+page.server';
+import { resetRegistryCacheForTests } from '$lib/server/extensions/registry';
 
 let directory: string;
 
@@ -27,6 +28,7 @@ async function writeInstall(id: string, options: { state?: string; ui?: boolean 
     manifest: { name: 'Diplomacy', collections: [], ...(options.ui === false ? {} : { ui: { entry: 'ui/index.html' } }) },
   };
   await writeFile(join(directory, 'extensions', 'registry.json'), JSON.stringify({ installs: [install] }));
+  resetRegistryCacheForTests();
 }
 
 const visit = (path: string, did: string | null = null) =>

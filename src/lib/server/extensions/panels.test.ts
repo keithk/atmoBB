@@ -38,6 +38,7 @@ vi.mock('./host', () => ({ hasHandler: state.hasHandler }));
 vi.mock('./endorsement', () => ({ endorsementFor: state.endorsementFor }));
 
 import { threadExtension } from './panels';
+import { resetRegistryCacheForTests } from './registry';
 
 let directory: string;
 
@@ -58,6 +59,7 @@ async function writeInstalls(...specs: InstallSpec[]) {
     manifest: { name, collections: [], ...(ui ? { ui } : {}) },
   }));
   await writeFile(join(directory, 'extensions', 'registry.json'), JSON.stringify({ installs }));
+  resetRegistryCacheForTests();
 }
 
 async function bindThread(installId: string) {

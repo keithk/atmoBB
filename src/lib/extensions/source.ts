@@ -1,3 +1,5 @@
+import { isObject } from './contract';
+
 // Where a standalone page's records come from. A panel names the source DID
 // with an `atmobb:source` message; the page asks its install's source endpoint
 // who that DID is and draws the answer outside the frame, since a panel could
@@ -22,9 +24,6 @@ export interface SourceIdentity {
 export type SourceState = { status: 'checking'; did: string } | { status: 'checked'; identity: SourceIdentity };
 
 export const unresolvedSource = (did: string): SourceIdentity => ({ did, handle: null, handleVerified: false, forum: false, unavailable: true });
-
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** The endpoint's answer about `did`, or an unresolved source for a refusal or anything malformed. */
 export function sourceFromResponse(did: string, status: number, body: unknown): SourceIdentity {

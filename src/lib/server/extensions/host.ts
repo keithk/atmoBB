@@ -8,6 +8,7 @@ import {
   HOST_FUNCTIONS,
   REFUSAL_CODE,
   REFUSAL_MESSAGE_MAX,
+  isObject,
   type ActionInput,
   type AttachInput,
   type ExtensionManifest,
@@ -32,9 +33,11 @@ import { senderDid } from '../notify/sender';
 import { readMember, setStatus } from '../notify/store';
 import { getPublicProfile } from '../profiles';
 import { bannedFrom } from '../standing';
+import { envInt } from './env';
 import { KvQuotaError, kvDelete, kvGet, kvList, kvSet } from './kv';
 import { extensionsLockHeld } from './lock';
 import { extensionsEnabled } from './manifest';
+import { RateWindows } from './rate-window';
 import { RecordError, createRecord, deleteRecord, getRecord, listRecords, putRecord, type RecordInstall } from './records';
 import { bundleDir, getInstall, type ExtensionInstall, type MigrationContext } from './registry';
 import { ExtensionLimitError, extensionRuntime, type ExtensionModule, type GuestLogLevel, type HostFunction } from './runtime';
@@ -95,12 +98,6 @@ const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 
-function envInt(name: string, fallback: number): number {
-  const raw = env[name];
-  const value = raw ? Number(raw) : NaN;
-  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
-}
-
 /** ATMOBB_EXTENSIONS_CALL_TIMEOUT_MS: wall-clock time for one call, host I/O included. */
 const callTimeoutMs = () => envInt('ATMOBB_EXTENSIONS_CALL_TIMEOUT_MS', 5_000);
 /** ATMOBB_EXTENSIONS_MEMORY_PAGES: guest memory ceiling, in 64 KiB pages. */
@@ -146,23 +143,17 @@ const NOTIFY_TITLE_MAX = 100;
 const NOTIFY_BODY_MAX = 500;
 
 // Sliding windows of event times, in memory. A restart forgets them, which
-// errs toward allowing; the PDS and relay keep their own limits.
-let windows = new Map<string, number[]>();
-
-/** Take a slot in the window `key`, or return false when `limit` slots in the last `spanMs` are taken. */
-function takeSlot(key: string, limit: number, spanMs: number, now = Date.now()): boolean {
-  const recent = (windows.get(key) ?? []).filter((at) => now - at < spanMs);
-  if (recent.length >= limit) {
-    windows.set(key, recent);
-    return false;
-  }
-  recent.push(now);
-  windows.set(key, recent);
-  return true;
-}
-
-const slotsLeft = (key: string, limit: number, spanMs: number, now = Date.now()) =>
-  limit - (windows.get(key) ?? []).filter((at) => now - at < spanMs).length;
+// errs toward allowing; the PDS and relay keep their own limits. Each kind of
+// window is capped on its own, so a flood of new viewers or client addresses
+// can only push out other viewers' windows, never an install's or a
+// recipient's.
+const WINDOW_KEYS_MAX = 10_000;
+/** Per install: record writes, notifications sent, and actions run. */
+const installWindows = new RateWindows(WINDOW_KEYS_MAX);
+/** Per signed-in viewer or signed-out client address: actions run on one install. */
+const viewerWindows = new RateWindows(WINDOW_KEYS_MAX);
+/** Per member: notifications one install sent them. */
+const recipientWindows = new RateWindows(WINDOW_KEYS_MAX);
 
 // --- install log -------------------------------------------------------------
 
@@ -187,7 +178,9 @@ function appendLog(installId: string, level: GuestLogLevel, text: string) {
 export const extensionLog = (installId: string): ExtensionLogLine[] => [...(logs.get(installId) ?? [])];
 
 export function resetHostLimitsForTests() {
-  windows = new Map();
+  installWindows.clear();
+  viewerWindows.clear();
+  recipientWindows.clear();
   logs = new Map();
   anonymousInFlight = new Set();
 }
@@ -221,9 +214,6 @@ class HostCallError extends Error {
 }
 
 const failure = (code: string, message: string): HostResult<never> => ({ ok: false, error: { code, message } satisfies HostError });
-
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 function requireStrings(payload: Record<string, unknown>, ...fields: string[]) {
   for (const field of fields) {
@@ -302,7 +292,7 @@ function hostFunction(name: HostFunctionName, op: HostOp<HostFunctionName> | nul
 
 function hostOps(installId: string, manifest: ExtensionManifest, records: RecordInstall): HostOps {
   const writeRecord = <T>(write: () => Promise<T>) => {
-    if (!takeSlot(`records|${installId}`, recordWritesPerHour(), HOUR_MS)) {
+    if (!installWindows.take(`records|${installId}`, recordWritesPerHour(), HOUR_MS)) {
       throw new HostCallError('rate_limited', `This extension may write ${recordWritesPerHour()} records an hour`);
     }
     return write();
@@ -389,7 +379,7 @@ async function notify(installId: string, extensionName: string, payload: Record<
   if (!senderDid()) throw new HostCallError('notify_unavailable', "This forum isn't set up to send notifications");
 
   const installKey = `notify|${installId}`;
-  if (slotsLeft(installKey, notifyPerInstallPerDay(), DAY_MS) <= 0) {
+  if (installWindows.left(installKey, notifyPerInstallPerDay(), DAY_MS) <= 0) {
     throw new HostCallError('rate_limited', `This extension may send ${notifyPerInstallPerDay()} notifications a day`);
   }
   const profile = (await getBoardIndex(FORUM_DID())).forum;
@@ -400,9 +390,9 @@ async function notify(installId: string, extensionName: string, payload: Record<
     if (!canHear(standing) || member?.status !== 'on') continue;
     if ((await getPublicProfile(did, undefined, true))?.notifications === false) continue;
     const recipientKey = `notify|${installId}|${did}`;
-    if (slotsLeft(recipientKey, notifyPerRecipientPerDay(), DAY_MS) <= 0) continue;
-    if (!takeSlot(installKey, notifyPerInstallPerDay(), DAY_MS)) break;
-    takeSlot(recipientKey, notifyPerRecipientPerDay(), DAY_MS);
+    if (recipientWindows.left(recipientKey, notifyPerRecipientPerDay(), DAY_MS) <= 0) continue;
+    if (!installWindows.take(installKey, notifyPerInstallPerDay(), DAY_MS)) break;
+    recipientWindows.take(recipientKey, notifyPerRecipientPerDay(), DAY_MS);
     const result = await send({
       recipient: did,
       title: cut(`${extensionName}: ${title}`, NOTIFY_TITLE_MAX),
@@ -550,10 +540,10 @@ function takeActionSlot(installId: string, viewerDid: string | null, client = 'u
   const [viewerKey, installKey, installLimit] = viewerDid
     ? [`actions|${installId}|${viewerDid}`, `actions|${installId}`, actionsPerInstallPerMinute()]
     : [`anonymous-actions|${installId}|${client}`, `anonymous-actions|${installId}`, anonymousActionsPerInstallPerMinute()];
-  if (slotsLeft(viewerKey, actionsPerViewerPerMinute(), MINUTE_MS) <= 0 || !takeSlot(installKey, installLimit, MINUTE_MS)) {
+  if (viewerWindows.left(viewerKey, actionsPerViewerPerMinute(), MINUTE_MS) <= 0 || !installWindows.take(installKey, installLimit, MINUTE_MS)) {
     throw new ExtensionCallError('rate_limited', 'Too many actions; try again in a minute');
   }
-  takeSlot(viewerKey, actionsPerViewerPerMinute(), MINUTE_MS);
+  viewerWindows.take(viewerKey, actionsPerViewerPerMinute(), MINUTE_MS);
 }
 
 // Installs with a signed-out action running or queued. Calls to an install run

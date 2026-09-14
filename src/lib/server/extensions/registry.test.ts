@@ -4,8 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 const state = vi.hoisted(() => ({ env: {} as Record<string, string | undefined> }));
 vi.mock('$env/dynamic/private', () => ({ env: state.env }));
+// Spies on `readFile` directly, so tests can count how often the store is read from disk.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, readFile: vi.fn(actual.readFile) };
+});
 import { startGitFixtures, validBundle, type FixtureRepo, type GitFixtures, type TreeSpec } from './fixtures/git-server';
 import { claimCollections, listClaims } from './claims';
+import { acquireExtensionsLock } from './lock';
 import type { LexiconResolver } from './manifest';
 import {
   applyUpdate,
@@ -22,6 +28,7 @@ import {
   stageUpdate,
   uninstall,
   listUninstalled,
+  resetRegistryCacheForTests,
   type InstallReview,
 } from './registry';
 
@@ -313,5 +320,47 @@ describe('disable, enable, uninstall', () => {
     const installed = await install(repo);
     expect(await uninstall(installed.id, { hasOpenWork: async () => false })).toMatchObject({ ok: true });
     expect(await uninstall(installed.id)).toMatchObject({ ok: false });
+  });
+});
+
+describe('reading the store', () => {
+  const storeReads = () => vi.mocked(readFile).mock.calls.filter(([path]) => path === join(extensionsDir(), 'registry.json')).length;
+
+  it('reads the file once while this process holds the extensions lock, and sees its own writes', async () => {
+    const lock = await acquireExtensionsLock();
+    expect(lock).not.toBeNull();
+    try {
+      const repo = newRepo();
+      repo.tag('v0.1.0', validBundle());
+      const installed = await install(repo);
+
+      resetRegistryCacheForTests();
+      vi.mocked(readFile).mockClear();
+      expect(await listInstalls()).toMatchObject([{ id: installed.id, state: 'active' }]);
+      expect((await getInstall(installed.id))!.state).toBe('active');
+      expect(storeReads()).toBe(1);
+
+      expect(await disableInstall(installed.id)).toMatchObject({ ok: true });
+      const disabled = (await getInstall(installed.id))!;
+      expect(disabled.state).toBe('disabled');
+      // Changing what a read returned doesn't change the next read.
+      disabled.state = 'active';
+      expect((await getInstall(installed.id))!.state).toBe('disabled');
+      // Only the mutation itself read the file.
+      expect(storeReads()).toBe(2);
+    } finally {
+      lock?.release();
+    }
+  });
+
+  it('reads the file every time without the lock', async () => {
+    const repo = newRepo();
+    repo.tag('v0.1.0', validBundle());
+    const installed = await install(repo);
+
+    vi.mocked(readFile).mockClear();
+    await getInstall(installed.id);
+    await getInstall(installed.id);
+    expect(storeReads()).toBe(2);
   });
 });

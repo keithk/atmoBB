@@ -93,7 +93,10 @@ vi.mock('postgres', () => ({
   },
 }));
 
-vi.mock('./outbound', () => ({ resolveDidDocument: state.resolveDid, outboundFetch: state.fetch }));
+vi.mock('./outbound', async () => {
+  const actual = await vi.importActual<typeof import('./outbound')>('./outbound');
+  return { ...actual, resolveDidDocument: state.resolveDid, outboundFetch: state.fetch };
+});
 
 import { createRecord, deleteRecord, getRecord, listRecords, putRecord, MAX_READ_PAGES, RecordError, type RecordInstall } from './records';
 

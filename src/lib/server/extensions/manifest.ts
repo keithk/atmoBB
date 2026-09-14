@@ -2,10 +2,10 @@ import { resolveTxt as dnsResolveTxt } from 'node:dns/promises';
 import { env } from '$env/dynamic/private';
 import { parseLexiconDoc, type LexiconDoc } from '@atproto/lexicon';
 import { NSID, isValidDid } from '@atproto/syntax';
-import { CAPABILITIES, HOST_API_VERSION, type ExtensionManifest } from '$lib/extensions/contract';
+import { CAPABILITIES, HOST_API_VERSION, isObject, type ExtensionManifest } from '$lib/extensions/contract';
 import authForum from '../../../../lexicons/app/atmobb/authForum.json';
 import authSysop from '../../../../lexicons/app/atmobb/authSysop.json';
-import { outboundFetch, resolveDidDocument, type DidDocument, type OutboundFetchOptions, type OutboundFetchResult } from './outbound';
+import { outboundFetch, pdsServiceEndpoint, resolveDidDocument, type DidDocument, type OutboundFetchOptions, type OutboundFetchResult } from './outbound';
 
 // The forum account's session already holds every authSysop collection plus
 // the moderation and stamp scopes, so the collections an admin approves here
@@ -61,9 +61,6 @@ export type Admission =
       lexicons: LexiconDoc[];
     }
   | { ok: false; errors: FieldError[] };
-
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** A repository-relative path with no absolute, parent, or backslash tricks. */
 function validRepoPath(value: unknown): value is string {
@@ -338,9 +335,7 @@ export function lexiconResolver(deps: LexiconResolverDeps = networkDeps): Lexico
 
     async publishedSchema(did, nsid) {
       const doc = await deps.resolveDidDocument(did);
-      const pds = doc.service?.find(
-        (service) => service.type === 'AtprotoPersonalDataServer' && (service.id === '#atproto_pds' || service.id === `${did}#atproto_pds`),
-      )?.serviceEndpoint;
+      const pds = pdsServiceEndpoint(doc, did);
       if (!pds) throw new Error(`${did} lists no PDS`);
       const query = new URLSearchParams({ repo: did, collection: 'com.atproto.lexicon.schema', rkey: nsid });
       const url = `${pds.replace(/\/+$/, '')}/xrpc/com.atproto.repo.getRecord?${query}`;

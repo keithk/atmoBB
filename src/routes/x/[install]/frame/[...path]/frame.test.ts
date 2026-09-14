@@ -17,6 +17,7 @@ vi.mock('$lib/server/extensions/lock', () => ({ extensionsLockHeld: () => state.
 
 import { isFramePath } from '$lib/server/extensions/frame';
 import { GET, trailingSlash } from './+server';
+import { resetRegistryCacheForTests } from '$lib/server/extensions/registry';
 
 let directory: string;
 
@@ -32,6 +33,7 @@ async function writeBundle(id: string, files: Record<string, string>, installSta
 async function writeRegistry(...installs: unknown[]) {
   await mkdir(join(directory, 'extensions'), { recursive: true });
   await writeFile(join(directory, 'extensions', 'registry.json'), JSON.stringify({ installs }));
+  resetRegistryCacheForTests();
 }
 
 interface FrameRequest {
@@ -219,6 +221,7 @@ describe('GET /x/[install]/frame/[...path]', () => {
 
   it('answers an unexpected failure with the full header set', async () => {
     await writeFile(join(directory, 'extensions', 'registry.json'), '{not json');
+    resetRegistryCacheForTests();
     const response = await frame({ path: 'index.html' });
     expect(response.status).toBe(500);
     expectFrameHeaders(response);

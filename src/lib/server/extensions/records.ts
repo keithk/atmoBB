@@ -1,14 +1,15 @@
 import { Lexicons, type LexiconDoc } from '@atproto/lexicon';
 import { isValidDid, isValidNsid, isValidRecordKey } from '@atproto/syntax';
-import type {
-  RecordCreate,
-  RecordDelete,
-  RecordGet,
-  RecordList,
-  RecordListResult,
-  RecordPut,
-  RecordRef,
-  StoredRecord,
+import {
+  isObject,
+  type RecordCreate,
+  type RecordDelete,
+  type RecordGet,
+  type RecordList,
+  type RecordListResult,
+  type RecordPut,
+  type RecordRef,
+  type StoredRecord,
 } from '$lib/extensions/contract';
 import { parseAtUri } from '$lib/appview-paths';
 import { FORUM_DID } from '../appview';
@@ -22,7 +23,7 @@ import {
   putForumRecord,
 } from '../forum-repo';
 import { reservedReason } from './manifest';
-import { OutboundFetchError, outboundFetch, resolveDidDocument } from './outbound';
+import { OutboundFetchError, outboundFetch, pdsServiceEndpoint, resolveDidDocument } from './outbound';
 
 // Extension records live only in the forum's repo, written as the forum
 // account, so nobody can forge one from their own repo and members never see a
@@ -73,9 +74,6 @@ export class RecordError extends Error {
     this.name = 'RecordError';
   }
 }
-
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 function checkCollection(install: RecordInstall, collection: unknown): asserts collection is string {
   if (typeof collection !== 'string' || !install.collections.has(collection)) {
@@ -173,9 +171,7 @@ async function pdsEndpoint(repo: string): Promise<string> {
     throw new RecordError('ReadFailed', `Couldn't resolve ${repo}${code}`);
   }
   if (doc.id !== repo) throw new RecordError('ReadFailed', `${repo}'s DID document names a different DID`);
-  const endpoint = doc.service?.find(
-    (service) => service.type === 'AtprotoPersonalDataServer' && (service.id === '#atproto_pds' || service.id === `${repo}#atproto_pds`),
-  )?.serviceEndpoint;
+  const endpoint = pdsServiceEndpoint(doc, repo);
   if (!endpoint) throw new RecordError('ReadFailed', `${repo} lists no PDS`);
   return endpoint.replace(/\/+$/, '');
 }

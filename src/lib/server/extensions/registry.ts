@@ -5,6 +5,7 @@ import type { LexiconDoc } from '@atproto/lexicon';
 import type { ExtensionManifest } from '$lib/extensions/contract';
 import { claimCollections, claimConflicts, newInstallId, normalizeGitUrl } from './claims';
 import { ReleaseError, listRemoteTags, readRelease, type Release, type ReleaseSource, type RemoteTag } from './fetch';
+import { extensionsLockHeld } from './lock';
 import { admitExtension, checkPublishedLexicons, type LexiconResolver, type PublishedLexiconCheck } from './manifest';
 
 // Every installed extension, the release it runs, and the releases it ran
@@ -141,28 +142,60 @@ interface RegistryStore {
   uninstalled?: Uninstalled[];
 }
 
-async function loadStore(): Promise<RegistryStore> {
+async function readStore(path: string): Promise<RegistryStore> {
   try {
-    return JSON.parse(await readFile(storePath(), 'utf8'));
+    return JSON.parse(await readFile(path, 'utf8'));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     return { installs: [] };
   }
 }
 
-async function saveStore(store: RegistryStore) {
+// Page views read the store several times each, so reads come from a parsed
+// copy in memory, keyed by the file it came from. Only while this process
+// holds the extensions lock: then every write to the file goes through
+// saveStore here. A process without the lock reads the file every time, since
+// the process that holds it may be writing.
+let cached: { path: string; store: RegistryStore } | null = null;
+/** Counts saves, so a read that overlapped one doesn't cache what it read. */
+let saves = 0;
+
+/** The store, as a copy the caller may change. */
+async function loadStore(): Promise<RegistryStore> {
   const path = storePath();
-  await mkdir(dirname(path), { recursive: true });
-  const tmp = `${path}.${randomUUID()}.tmp`;
-  await writeFile(tmp, JSON.stringify(store, null, 2));
-  await rename(tmp, path);
+  if (!extensionsLockHeld()) {
+    cached = null;
+    return readStore(path);
+  }
+  if (cached?.path === path) return structuredClone(cached.store);
+  const savesBefore = saves;
+  const store = await readStore(path);
+  if (saves === savesBefore && extensionsLockHeld()) cached = { path, store: structuredClone(store) };
+  return store;
 }
 
-// One mutation at a time; the store is a single JSON file.
+/** Test-only: forget the in-memory store, for tests that write registry.json themselves. */
+export function resetRegistryCacheForTests() {
+  cached = null;
+}
+
+async function saveStore(store: RegistryStore) {
+  const path = storePath();
+  const text = JSON.stringify(store, null, 2);
+  await mkdir(dirname(path), { recursive: true });
+  const tmp = `${path}.${randomUUID()}.tmp`;
+  await writeFile(tmp, text);
+  await rename(tmp, path);
+  saves += 1;
+  cached = extensionsLockHeld() ? { path, store: JSON.parse(text) } : null;
+}
+
+// One mutation at a time; the store is a single JSON file. A mutation always
+// starts from the file, never the in-memory copy.
 let chain: Promise<unknown> = Promise.resolve();
 function withStore<T>(fn: (store: RegistryStore) => Promise<T> | T): Promise<T> {
   const run = chain.then(async () => {
-    const store = await loadStore();
+    const store = await readStore(storePath());
     const out = await fn(store);
     await saveStore(store);
     return out;

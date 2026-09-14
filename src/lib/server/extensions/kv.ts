@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { env } from '$env/dynamic/private';
 import type { KvDelete, KvGet, KvGetResult, KvList, KvListResult, KvSet } from '$lib/extensions/contract';
+import { envInt } from './env';
+import { RateWindows } from './rate-window';
 
 // A private k/v store per extension install, namespaced by install id so two
 // installs' keys never collide, one JSON file at
@@ -35,12 +36,8 @@ const DEFAULT_MAX_KEY_LENGTH = 200;
 const DEFAULT_MAX_VALUE_BYTES = 64 * 1024;
 const DEFAULT_MAX_STORE_BYTES = 256 * 1024;
 const DEFAULT_MAX_WRITES_PER_MINUTE = 60;
-
-function envInt(name: string, fallback: number): number {
-  const raw = env[name];
-  const value = raw ? Number(raw) : NaN;
-  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
-}
+/** Installs whose write rate is tracked at once. */
+const WRITE_WINDOWS_MAX = 5_000;
 
 /** ATMOBB_KV_MAX_KEYS: key count per install. */
 const maxKeys = () => envInt('ATMOBB_KV_MAX_KEYS', DEFAULT_MAX_KEYS);
@@ -103,15 +100,11 @@ function withInstall<T>(installId: string, fn: () => Promise<T>): Promise<T> {
 
 // Sliding one-minute window of write timestamps, per install. Not persisted:
 // losing it on restart is fine, since the on-disk byte quota is the backstop.
-const writeTimes = new Map<string, number[]>();
+const writeWindows = new RateWindows(WRITE_WINDOWS_MAX);
 function checkWriteRate(installId: string): void {
-  const now = Date.now();
-  const recent = (writeTimes.get(installId) ?? []).filter((at) => now - at < 60_000);
-  if (recent.length >= maxWritesPerMinute()) {
+  if (!writeWindows.take(installId, maxWritesPerMinute(), 60_000)) {
     throw new KvQuotaError('rate_limited', `Install ${installId} is writing faster than ${maxWritesPerMinute()} times/minute`);
   }
-  recent.push(now);
-  writeTimes.set(installId, recent);
 }
 
 export async function kvGet(installId: string, payload: KvGet): Promise<KvGetResult> {
