@@ -27,12 +27,29 @@ const state = vi.hoisted(() => ({
   banned: new Set<string>(),
   forumWrites: [] as unknown[][],
   writeDelayMs: 0,
+  runtimeHas: vi.fn(),
   send: vi.fn(),
   setStatus: vi.fn(),
 }));
 
 vi.mock('$env/dynamic/private', () => ({ env: state.env }));
 vi.mock('./lock', () => ({ extensionsLockHeld: () => state.lockHeld }));
+// The real runtime, with its export checks counted.
+vi.mock('./runtime', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./runtime')>();
+  return {
+    ...actual,
+    extensionRuntime: (...args: Parameters<typeof actual.extensionRuntime>) => {
+      const runtime = actual.extensionRuntime(...args);
+      const has = runtime.has;
+      runtime.has = (installId, name) => {
+        state.runtimeHas(installId, name);
+        return has(installId, name);
+      };
+      return runtime;
+    },
+  };
+});
 vi.mock('./registry', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./registry')>()),
   getInstall: async (id: string) => state.installs.get(id) ?? null,
@@ -110,8 +127,8 @@ const manifest = (overrides: Partial<ExtensionManifest> = {}): ExtensionManifest
 
 let directory: string;
 
-async function addInstall(id: string, options: { manifest?: ExtensionManifest; state?: string; wasm?: 'probe' | 'bare' } = {}) {
-  const sha = `sha-${id}`;
+async function addInstall(id: string, options: { manifest?: ExtensionManifest; state?: string; wasm?: 'probe' | 'bare'; sha?: string } = {}) {
+  const sha = options.sha ?? `sha-${id}`;
   const dir = join(directory, 'extensions', id, sha);
   await mkdir(join(dir, 'lexicons'), { recursive: true });
   await writeFile(join(dir, 'lexicons', 'game.json'), JSON.stringify(lexicon));
@@ -151,6 +168,7 @@ beforeEach(async () => {
   state.banned = new Set();
   state.forumWrites = [];
   state.writeDelayMs = 0;
+  state.runtimeHas.mockReset();
   state.send.mockReset();
   state.send.mockResolvedValue({ ok: true, status: 200 });
   state.setStatus.mockReset();
@@ -269,6 +287,21 @@ describe('dispatchAction', () => {
     expect(replies.map((reply) => reply.ok)).toEqual([true, true, false]);
     expect(replies[2].error?.code).toBe('rate_limited');
     expect(state.forumWrites).toHaveLength(2);
+  });
+
+  it('refuses a timer whose name or payload is over the caps, without scheduling it', async () => {
+    state.env.ATMOBB_EXTENSIONS_TIMER_MAX_NAME_LENGTH = '10';
+    state.env.ATMOBB_EXTENSIONS_TIMER_MAX_PAYLOAD_BYTES = '100';
+    const id = nextId();
+    await addInstall(id);
+    const at = new Date(Date.now() + 120_000).toISOString();
+    // A string payload serializes with its two quotes.
+    expect(await hostCall(id, 'timer_set', { name: 'x'.repeat(10), at, payload: 'x'.repeat(98) })).toEqual([{ ok: true, value: null }]);
+    const [longName] = await hostCall(id, 'timer_set', { name: 'x'.repeat(11), at });
+    const [bigPayload] = await hostCall(id, 'timer_set', { name: 'big', at, payload: 'x'.repeat(99) });
+    for (const reply of [longName, bigPayload]) expect(reply).toMatchObject({ ok: false, error: { code: 'invalid_payload' } });
+    const timers = JSON.parse(await readFile(join(directory, 'extensions', 'timers.json'), 'utf8')).timers;
+    expect(timers.map((timer: { name: string }) => timer.name)).toEqual(['x'.repeat(10)]);
   });
 
   it('refuses a capability the manifest was not granted, without doing anything', async () => {
@@ -508,6 +541,19 @@ describe('optional handlers', () => {
     await addInstall(id, { wasm: 'bare' });
     expect(await hasHandler(id, 'attach')).toBe(false);
     expect((await callError(dispatchAttach(id, ALICE, { uri: THREAD }, {}))).code).toBe('no_handler');
+  });
+
+  it('remembers whether a release exports a handler, and asks again once the install moves to another release', async () => {
+    const id = nextId();
+    await addInstall(id);
+    expect(await hasHandler(id, 'attach')).toBe(true);
+    expect(await hasHandler(id, 'attach')).toBe(true);
+    expect(state.runtimeHas).toHaveBeenCalledTimes(1);
+
+    await addInstall(id, { wasm: 'bare', sha: 'sha-next' });
+    expect(await hasHandler(id, 'attach')).toBe(false);
+    expect(await hasHandler(id, 'attach')).toBe(false);
+    expect(state.runtimeHas).toHaveBeenCalledTimes(2);
   });
 
   it('no-ops a timer and reports no open work when the module lacks those exports', async () => {

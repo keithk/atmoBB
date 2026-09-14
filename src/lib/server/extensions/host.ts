@@ -137,6 +137,10 @@ const actionsPerViewerPerMinute = () => envInt('ATMOBB_EXTENSIONS_ACTIONS_PER_VI
 const actionsPerInstallPerMinute = () => envInt('ATMOBB_EXTENSIONS_ACTIONS_PER_INSTALL_PER_MINUTE', 300);
 /** ATMOBB_EXTENSIONS_ANONYMOUS_ACTIONS_PER_INSTALL_PER_MINUTE: actions one install runs for signed-out visitors, all addresses together. */
 const anonymousActionsPerInstallPerMinute = () => envInt('ATMOBB_EXTENSIONS_ANONYMOUS_ACTIONS_PER_INSTALL_PER_MINUTE', 60);
+/** ATMOBB_EXTENSIONS_TIMER_MAX_NAME_LENGTH: characters per timer name. */
+const timerMaxNameLength = () => envInt('ATMOBB_EXTENSIONS_TIMER_MAX_NAME_LENGTH', 200);
+/** ATMOBB_EXTENSIONS_TIMER_MAX_PAYLOAD_BYTES: serialized bytes per timer payload, which waits in the timer store until it fires. */
+const timerMaxPayloadBytes = () => envInt('ATMOBB_EXTENSIONS_TIMER_MAX_PAYLOAD_BYTES', 16 * 1024);
 
 const MAX_NOTIFY_RECIPIENTS = 50;
 const NOTIFY_TITLE_MAX = 100;
@@ -329,6 +333,13 @@ function hostOps(installId: string, manifest: ExtensionManifest, records: Record
     timer_set: async (p) => {
       requireStrings(p, 'name', 'at');
       if (!Number.isFinite(Date.parse(p.at))) throw new HostCallError('invalid_payload', 'at must be an ISO 8601 datetime');
+      if (p.name.length > timerMaxNameLength()) {
+        throw new HostCallError('invalid_payload', `name is ${p.name.length} characters; the limit is ${timerMaxNameLength()}`);
+      }
+      const payloadBytes = Buffer.byteLength(JSON.stringify(p.payload ?? null));
+      if (payloadBytes > timerMaxPayloadBytes()) {
+        throw new HostCallError('invalid_payload', `payload is ${payloadBytes} bytes; the limit is ${timerMaxPayloadBytes()} bytes`);
+      }
       await scheduleTimer(installId, { name: p.name, at: p.at, payload: p.payload });
       return null;
     },
@@ -428,6 +439,9 @@ async function moduleFor(installId: string, manifest: ExtensionManifest, dir: st
 /** The release each install's live instance was loaded from. */
 const loadedSha = new Map<string, string>();
 
+/** Which handlers each install's release exports, as learned so far, so a page asking again doesn't cold-start the instance. */
+const knownHandlers = new Map<string, { sha: string; exports: Map<HandlerExport, boolean> }>();
+
 async function loadInstall(installId: string): Promise<ExtensionModule> {
   const install = await getInstall(installId);
   if (!install) throw new ExtensionCallError('not_installed', 'No such extension install');
@@ -443,6 +457,7 @@ export async function closeExtensionHost(): Promise<void> {
   const closing = runtime;
   runtime = null;
   loadedSha.clear();
+  knownHandlers.clear();
   await closing?.close();
 }
 
@@ -454,7 +469,10 @@ function refuseUnlessRunning() {
 
 async function installFor(installId: string, requireActive: boolean): Promise<ExtensionInstall> {
   const install = await getInstall(installId);
-  if (!install) throw new ExtensionCallError('not_installed', 'No such extension install');
+  if (!install) {
+    knownHandlers.delete(installId);
+    throw new ExtensionCallError('not_installed', 'No such extension install');
+  }
   if (requireActive && install.state !== 'active') throw new ExtensionCallError('disabled', `${install.manifest.name} is disabled`);
   return install;
 }
@@ -463,6 +481,7 @@ const failureLabel = (error: unknown) => (error instanceof ExtensionCallError ? 
 
 /** Close the install's live instance when an update or rollback moved it to another release since the instance loaded. */
 async function evictMovedInstance(install: ExtensionInstall) {
+  if (knownHandlers.get(install.id)?.sha !== install.sha) knownHandlers.delete(install.id);
   const loaded = loadedSha.get(install.id);
   if (loaded !== undefined && loaded !== install.sha) await rt().evict(install.id);
 }
@@ -605,12 +624,25 @@ export async function dispatchAttach(installId: string, viewerDid: string, threa
   return handlerValue(output);
 }
 
-/** Whether an active install's release exports the handler `name`. */
+/**
+ * Whether an active install's release exports the handler `name`. The first
+ * ask for a release loads its instance; the answer is remembered until the
+ * install moves to another release or is uninstalled.
+ */
 export async function hasHandler(installId: string, name: HandlerExport): Promise<boolean> {
   refuseUnlessRunning();
   const install = await installFor(installId, true);
   await evictMovedInstance(install);
-  return rt().has(install.id, name);
+  const known = knownHandlers.get(install.id)?.exports.get(name);
+  if (known !== undefined) return known;
+  const exported = await rt().has(install.id, name);
+  // Only remember an answer from the release asked about; an update can land while the call waits its turn.
+  if (loadedSha.get(install.id) === install.sha) {
+    const entry = knownHandlers.get(install.id);
+    if (entry?.sha === install.sha) entry.exports.set(name, exported);
+    else knownHandlers.set(install.id, { sha: install.sha, exports: new Map([[name, exported]]) });
+  }
+  return exported;
 }
 
 /** The scheduler's dispatcher: run an install's `timer`, or nothing when it has none. */

@@ -86,7 +86,7 @@ timers.set({ name, at, payload? })  // ISO 8601; replaces a pending timer with t
 timers.cancel(name)
 ```
 
-`at` has to be at least `ATMOBB_EXTENSIONS_TIMER_MIN_DELAY_MS` (60 s) from now, and an install may have at most `ATMOBB_EXTENSIONS_TIMER_CAP` (200) pending. A poller checks every 30 seconds; delivery is at least once, so a `timer` handler has to tolerate a repeat. A failed dispatch retries with backoff starting at a minute and doubling up to an hour; a timer whose install is gone or disabled is dropped rather than fired or retried.
+`at` has to be at least `ATMOBB_EXTENSIONS_TIMER_MIN_DELAY_MS` (60 s) from now, and an install may have at most `ATMOBB_EXTENSIONS_TIMER_CAP` (200) pending. Names are capped at `ATMOBB_EXTENSIONS_TIMER_MAX_NAME_LENGTH` (200 characters) and payloads at `ATMOBB_EXTENSIONS_TIMER_MAX_PAYLOAD_BYTES` (16 KB) serialized. A poller checks every 30 seconds; delivery is at least once, so a `timer` handler has to tolerate a repeat. A failed dispatch retries with backoff starting at a minute and doubling up to an hour; a timer whose install is gone or disabled is dropped rather than fired or retried.
 
 **`notify`**: send to members who turned notifications on.
 
