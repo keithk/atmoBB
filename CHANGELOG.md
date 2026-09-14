@@ -6,6 +6,10 @@ means. Every entry names the Happyview release it was tested against.
 
 ## Unreleased
 
+## 0.3.1
+
+Tested against Happyview 2.14.0. No backfill is required.
+
 - Fixed Admin → Updates failing at the backup step with `sudo: The "no new privileges" flag is set`. The updater and hosting controller run `./atmobb` as root under systemd's `NoNewPrivileges`, and the script now skips `sudo` when it's already root. A 0.3.0 bundle install still runs its old installed updater, so update it once by hand: unpack the new bundle over the install directory, keeping `.env`, and rerun `./atmobb install --yes`.
 - Admin → Hosting can now edit the `/host` page's heading and body with the rich text editor, and turn invite codes off so anyone logged in can request a forum for approval. The request form asks, optionally, what the requester is building and for a link. Hosting itself stays optional and off unless `ATMOBB_HOSTING=1` is set.
 - Fixed the release installer failing with `invalid user: '10001'` on hosts whose `install` is uutils rather than GNU coreutils (Ubuntu 26.04 ships uutils by default).
