@@ -48,3 +48,18 @@ export function parseExtensionPagePath(pathname: string): { repository: string; 
   }
   return { repository: `${scheme}://${host}${rest.length ? `/${path}` : ''}`, page };
 }
+
+/**
+ * The href for a page a panel names inside its own standalone pages, given
+ * its install's `pageBase` (as sent in the bridge's `init` message) and a
+ * `page` from a bridge `link` message. Rebuilds the address from `pageBase`'s
+ * own repository rather than trusting string concatenation, and refuses
+ * anything that doesn't land back under `pageBase`'s `/-/` — the same
+ * boundary a shared link has to stay inside after a reinstall.
+ */
+export function extensionLinkHref(pageBase: string, page: string): string | null {
+  const parsed = parseExtensionPagePath(pageBase);
+  if (!parsed) return null;
+  const href = extensionPagePath(parsed.repository, page);
+  return href.startsWith(`${pageBase}/-/`) ? href : null;
+}

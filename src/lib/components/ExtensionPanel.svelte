@@ -5,9 +5,13 @@
   // its actions to the action endpoint as whoever is signed in. The name and
   // endorsement label are drawn here, outside the frame, so an extension can't
   // dress itself up as the forum. So is the source line on a standalone page:
-  // the panel only names a DID, and atmoBB checks who that is.
+  // the panel only names a DID, and atmoBB checks who that is. Same for a link
+  // to the extension's own pages: the panel only names a page path, and this
+  // component builds the href, since a link followed inside the sandboxed
+  // frame would just navigate the frame and close the panel.
   import { onMount } from 'svelte';
   import { actionOutcome, createPanelBridge, type ActionOutcome, type PanelMode } from '$lib/extensions/bridge';
+  import { extensionLinkHref } from '$lib/extensions/page-path';
   import { createSourceTracker, sourceFromResponse, sourceLine, type SourceIdentity, type SourceState } from '$lib/extensions/source';
 
   interface Props {
@@ -35,6 +39,7 @@
   let closed = $state(false);
   let source = $state<SourceState | null>(null);
   const line = $derived(source?.status === 'checked' ? sourceLine(source.identity) : null);
+  let link = $state<{ href: string; label: string } | null>(null);
 
   async function runAction(action: string, input: unknown): Promise<ActionOutcome> {
     const response = await fetch(`/x/${installId}/action`, {
@@ -71,6 +76,10 @@
       runAction,
       attach: onattach,
       source: (did) => sources.set(did),
+      link: (page, label) => {
+        const href = page ? extensionLinkHref(pageBase, page) : null;
+        link = href ? { href, label } : null;
+      },
       resize: (next) => (height = next),
       teardown: () => {
         frame.remove();
@@ -94,7 +103,12 @@
 
 <section class="atm-card atm-card--edge atm-extension" aria-label="{name} extension">
   <div class="atm-card__header atm-extension__header">
-    <span class="atm-extension__name">{name}</span>
+    <span class="atm-extension__header-start">
+      <span class="atm-extension__name">{name}</span>
+      {#if link}
+        <a class="atm-extension__link" href={link.href} aria-label="Open {link.label} on {name}'s page">{link.label}</a>
+      {/if}
+    </span>
     {#if endorsement === 'endorsed'}
       <span class="atm-chip atm-chip--ok">endorsed extension</span>
     {:else}
@@ -134,7 +148,9 @@
 
 <style>
   @layer atmobb {
+  .atm-extension__header-start { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-3); min-width: 0; }
   .atm-extension__name { font: var(--type-section); color: var(--forum-ink); }
+  .atm-extension__link { font: var(--type-ui); }
   .atm-extension__body { background: var(--forum-surface); }
   .atm-extension__source { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0; padding: var(--space-2) var(--space-4); border-bottom: var(--border-hair) solid var(--forum-line); font: var(--type-ui); color: var(--forum-ink); overflow-wrap: anywhere; }
   .atm-extension__did { font: var(--type-handle); user-select: all; }

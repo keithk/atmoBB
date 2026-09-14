@@ -109,6 +109,7 @@ isn't exactly one of these:
 | panel → page | `{ type: 'atmobb:resize', v: 1, height }` sizes the frame, within limits |
 | panel → page | `{ type: 'atmobb:attach', v: 1, params }` attaches the extension with this setup (attach page only) |
 | panel → page | `{ type: 'atmobb:source', v: 1, did }` names the repo the records you're showing come from (standalone page only) |
+| panel → page | `{ type: 'atmobb:link', v: 1, page, label }` draws a link to one of your standalone pages, outside the frame (thread and page modes only) |
 | page → panel | `{ type: 'atmobb:init', v: 1, mode, thread, signedIn, path, pageBase }` once the panel loads; `mode` is `thread`, `page`, or `attach`; `pageBase` is your standalone page's address |
 | page → panel | `{ type: 'atmobb:result', v: 1, id, ok, value }` or `{ ..., ok: false, error: { code, message } }` answers an action |
 
@@ -123,9 +124,16 @@ page, at `/ext/<repository host and path>` (for example
 run actions too, and `path` tells the panel which page it's on. That address
 follows the repository, so links keep working after a reinstall. Every mode's
 `init` carries it as `pageBase` (like `/ext/git.example/jack/diplomacy`), so a
-panel on a thread can tell signed-out readers where your standalone page is.
-Show it as text: the sandbox doesn't let the panel navigate the forum page, and
-following a link inside the frame closes the panel.
+panel on a thread knows where your standalone page is, but the sandbox doesn't
+let it navigate the forum page — following a link inside the frame closes the
+panel. Send `atmobb:link` instead, with `page` (the part of the address after
+`<pageBase>/-/`, like `games/spring-1901`) and `label` (its visible text, 1-80
+characters). atmoBB validates `page` strictly and rebuilds the address itself
+rather than trusting the string, then draws the link outside your frame, next
+to your extension's name — this is how a panel on a thread points signed-out
+readers at a page they can open without signing in. One link shows at a time;
+a later `atmobb:link` replaces it, and an empty `page` clears it. Ignored on
+the attach page.
 
 When your standalone page shows records from another repo, such as a replay of
 a game a forum published, send `atmobb:source` with that repo's DID. atmoBB

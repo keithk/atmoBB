@@ -6,6 +6,7 @@
 //                  { type: 'atmobb:resize', v: 1, height }
 //                  { type: 'atmobb:attach', v: 1, params }   (attach page only)
 //                  { type: 'atmobb:source', v: 1, did }      (standalone page only)
+//                  { type: 'atmobb:link', v: 1, page, label } (not on the attach page)
 //   page -> panel  { type: 'atmobb:init', v: 1, mode, thread, signedIn, path, pageBase }
 //                  { type: 'atmobb:result', v: 1, id, ok, value | error }
 //

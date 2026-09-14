@@ -82,6 +82,47 @@ describe('parseFrameMessage', () => {
     expect(parseFrameMessage({ type: 'atmobb:attach', v, params: {} }, 'thread')).toBeNull();
     expect(parseFrameMessage({ type: 'atmobb:attach', v, params: {} }, 'page')).toBeNull();
   });
+
+  it('accepts a link message in thread and page modes, trimming the label, but not in attach mode', () => {
+    expect(parseFrameMessage({ type: 'atmobb:link', v, page: 'games/spring-1901', label: '  Replay board  ' }, 'thread')).toEqual({
+      type: 'atmobb:link',
+      v,
+      page: 'games/spring-1901',
+      label: 'Replay board',
+    });
+    expect(parseFrameMessage({ type: 'atmobb:link', v, page: 'games/spring-1901', label: 'Replay board' }, 'page')).toEqual({
+      type: 'atmobb:link',
+      v,
+      page: 'games/spring-1901',
+      label: 'Replay board',
+    });
+    expect(parseFrameMessage({ type: 'atmobb:link', v, page: 'games/spring-1901', label: 'Replay board' }, 'attach')).toBeNull();
+  });
+
+  it('clears a link with an empty page, ignoring whatever label came with it', () => {
+    expect(parseFrameMessage({ type: 'atmobb:link', v, page: '', label: '' }, 'thread')).toEqual({ type: 'atmobb:link', v, page: '', label: '' });
+    expect(parseFrameMessage({ type: 'atmobb:link', v, page: '' }, 'page')).toEqual({ type: 'atmobb:link', v, page: '', label: '' });
+    expect(parseFrameMessage({ type: 'atmobb:link', v, page: '', label: 'ignored, even if too long: ' + 'x'.repeat(90) }, 'page')).toEqual({ type: 'atmobb:link', v, page: '', label: '' });
+  });
+
+  it('refuses a link page that could escape the extension or a bad label', () => {
+    const bad: unknown[] = [
+      { type: 'atmobb:link', v, page: 'https://evil.test', label: 'Go' },
+      { type: 'atmobb:link', v, page: '//evil.test', label: 'Go' },
+      { type: 'atmobb:link', v, page: '../x', label: 'Go' },
+      { type: 'atmobb:link', v, page: 'a/../x', label: 'Go' },
+      { type: 'atmobb:link', v, page: '/abs', label: 'Go' },
+      { type: 'atmobb:link', v, page: 'a\\b', label: 'Go' },
+      { type: 'atmobb:link', v, page: 'x'.repeat(513), label: 'Go' },
+      { type: 'atmobb:link', v, page: 'games', label: 'Go', extra: true },
+      { type: 'atmobb:link', v, page: 'games', label: 7 },
+      { type: 'atmobb:link', v, page: 'games', label: '' },
+      { type: 'atmobb:link', v, page: 'games', label: '   ' },
+      { type: 'atmobb:link', v, page: 'games', label: 'x'.repeat(81) },
+      { type: 'atmobb:link', v, page: 7, label: 'Go' },
+    ];
+    for (const data of bad) expect(parseFrameMessage(data, 'thread'), JSON.stringify(data)).toBeNull();
+  });
 });
 
 describe('clampHeight', () => {
@@ -249,5 +290,18 @@ describe('createPanelBridge', () => {
     const onPage = harness({ mode: 'page', thread: null, source });
     onPage.bridge.message({ source: { postMessage: vi.fn() } as unknown as Window, data: { type: 'atmobb:source', v, did: 'did:plc:forumone' } });
     expect(source).not.toHaveBeenCalled();
+  });
+
+  it('hands a link and its clear to the page, and ignores one on the attach page', () => {
+    const link = vi.fn();
+    const { bridge, frame } = harness({ link });
+    bridge.message({ source: frame as unknown as Window, data: { type: 'atmobb:link', v, page: 'games/spring-1901', label: 'Replay board' } });
+    bridge.message({ source: frame as unknown as Window, data: { type: 'atmobb:link', v, page: '', label: '' } });
+    expect(link.mock.calls).toEqual([['games/spring-1901', 'Replay board'], ['', '']]);
+
+    const attach = vi.fn();
+    const onAttach = harness({ mode: 'attach', link: attach });
+    onAttach.bridge.message({ source: onAttach.frame as unknown as Window, data: { type: 'atmobb:link', v, page: 'games/spring-1901', label: 'Replay board' } });
+    expect(attach).not.toHaveBeenCalled();
   });
 });

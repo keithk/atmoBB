@@ -20,6 +20,9 @@ export const MAX_PAYLOAD_BYTES = 64 * 1024;
 /** Actions one panel may have waiting on the server at once. */
 export const MAX_PENDING_ACTIONS = 8;
 
+export const MAX_LINK_PAGE_LENGTH = 512;
+export const MAX_LINK_LABEL_LENGTH = 80;
+
 /** Where the panel is shown: on a bound thread, on the extension's own page, or on the staff attach page. */
 export type PanelMode = 'thread' | 'page' | 'attach';
 
@@ -57,7 +60,21 @@ export interface SourceMessage {
   v: typeof BRIDGE_VERSION;
   did: string;
 }
-export type FrameMessage = ActionMessage | ResizeMessage | AttachMessage | SourceMessage;
+/**
+ * Thread and page modes only: point a link at a page of the extension's own
+ * standalone pages, drawn outside the frame next to the panel where a link
+ * inside the sandbox can't reach — following one there would just navigate
+ * the frame and close the panel. `page` is the part of the address after
+ * `<pageBase>/-/`. An empty `page` clears a link shown before; `label` is
+ * ignored then. A later link message replaces the one before it.
+ */
+export interface LinkMessage {
+  type: 'atmobb:link';
+  v: typeof BRIDGE_VERSION;
+  page: string;
+  label: string;
+}
+export type FrameMessage = ActionMessage | ResizeMessage | AttachMessage | SourceMessage | LinkMessage;
 
 // Page to frame.
 
@@ -107,6 +124,20 @@ const DID_SYNTAX = /^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$/;
 
 export const isDid = (value: unknown): value is string => typeof value === 'string' && value.length <= MAX_DID_LENGTH && DID_SYNTAX.test(value);
 
+// A page path stays relative, inside a safe character set, and never climbs
+// out of the extension's own pages: no scheme or host (`:` and `/` are
+// allowed characters, but `//` is how both `https://` and `//host` smuggle
+// one in), no `..` segment, and no backslashes.
+const LINK_PAGE_SYNTAX = /^[A-Za-z0-9._~:@%+\-/]+$/;
+
+const isValidLinkPage = (page: string): boolean =>
+  page.length > 0 &&
+  page.length <= MAX_LINK_PAGE_LENGTH &&
+  LINK_PAGE_SYNTAX.test(page) &&
+  !page.startsWith('/') &&
+  !page.includes('//') &&
+  !page.split('/').includes('..');
+
 /** The frame message `data` is, or null for anything outside the schema or not allowed in `mode`. */
 export function parseFrameMessage(data: unknown, mode: PanelMode): FrameMessage | null {
   if (!isObject(data) || data.v !== BRIDGE_VERSION) return null;
@@ -131,6 +162,15 @@ export function parseFrameMessage(data: unknown, mode: PanelMode): FrameMessage 
       const { did } = data;
       if (mode !== 'page' || !hasOnly(data, ['type', 'v', 'did']) || !isDid(did)) return null;
       return { type: 'atmobb:source', v: BRIDGE_VERSION, did };
+    }
+    case 'atmobb:link': {
+      const { page, label } = data;
+      if (mode === 'attach' || !hasOnly(data, ['type', 'v', 'page', 'label']) || typeof page !== 'string') return null;
+      if (page === '') return { type: 'atmobb:link', v: BRIDGE_VERSION, page: '', label: '' };
+      if (!isValidLinkPage(page) || typeof label !== 'string') return null;
+      const trimmedLabel = label.trim();
+      if (!trimmedLabel || trimmedLabel.length > MAX_LINK_LABEL_LENGTH) return null;
+      return { type: 'atmobb:link', v: BRIDGE_VERSION, page, label: trimmedLabel };
     }
     default:
       return null;
@@ -170,6 +210,8 @@ export interface PanelBridgeOptions {
   attach?: (params: unknown) => void;
   /** Page mode only: the DID whose repo the shown records come from. */
   source?: (did: string) => void;
+  /** Thread and page modes only: a link to a page of the extension's own, or '' to clear it. */
+  link?: (page: string, label: string) => void;
   resize: (height: number) => void;
   /** Remove the frame. Called at most once. */
   teardown: () => void;
@@ -234,6 +276,9 @@ export function createPanelBridge(options: PanelBridgeOptions): PanelBridge {
           return;
         case 'atmobb:source':
           options.source?.(message.did);
+          return;
+        case 'atmobb:link':
+          options.link?.(message.page, message.label);
           return;
         case 'atmobb:action': {
           if (pending >= MAX_PENDING_ACTIONS) {
