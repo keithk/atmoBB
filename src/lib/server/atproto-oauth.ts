@@ -8,6 +8,7 @@ import { Agent } from '@atproto/api';
 import { env } from '$env/dynamic/private';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
+import { extensionScope, scopeStatus, type ScopeStatus } from './extensions/scopes';
 
 // Blob scopes are requested directly: they can't be bundled into a permission
 // set. Members upload images; the forum account can also own custom webfonts.
@@ -21,6 +22,11 @@ import { join } from 'node:path';
 // outside app.atmobb, and a permission set may only carry methods under its
 // own authority (the PDS drops the rest when it expands the include), so it
 // is requested as a granular scope of its own, relay audience and all.
+//
+// Extensions add to the forum account's side only: a repo scope for each
+// collection approved for an active install (see extensions/scopes.ts). With
+// none installed, or ATMOBB_EXTENSIONS=off, the strings are exactly the base
+// ones below. Members never get extension scopes.
 export const NOTIFY_RELAY_DID = 'did:web:relay.atmo.pub';
 export const NOTIFY_RELAY_AUD = `${NOTIFY_RELAY_DID}#notif_relay`;
 const NOTIFY_SCOPE = `rpc:pub.atmo.notify.requestPermission?aud=${encodeURIComponent(NOTIFY_RELAY_AUD)}`;
@@ -33,8 +39,14 @@ export const STAMP_SCOPE = 'repo:app.atmobb.forum.stamp';
 const SYSOP_GRANTS = `include:app.atmobb.authSysop ${MODERATION_SCOPE} ${STAMP_SCOPE}`;
 const MEMBER_SET = `include:app.atmobb.authForum ${NOTIFY_SCOPE}`;
 export const MEMBER_SCOPE = `atproto ${MEMBER_SET} blob:image/*`;
-export const SYSOP_SCOPE = `atproto ${SYSOP_GRANTS} blob:image/* blob:font/*`;
-export const OAUTH_SCOPE = `atproto ${MEMBER_SET} ${SYSOP_GRANTS} blob:image/* blob:font/*`;
+const SYSOP_BASE_SCOPE = `atproto ${SYSOP_GRANTS} blob:image/* blob:font/*`;
+const OAUTH_BASE_SCOPE = `atproto ${MEMBER_SET} ${SYSOP_GRANTS} blob:image/* blob:font/*`;
+
+const withExtensions = (base: string) => [base, extensionScope()].filter(Boolean).join(' ');
+/** What the sysop connect flow asks the forum account for. */
+export const sysopScope = () => withExtensions(SYSOP_BASE_SCOPE);
+/** Everything the client may ask for, as client metadata declares it. */
+export const oauthScope = () => withExtensions(OAUTH_BASE_SCOPE);
 
 const appUrl = () => env.ATMOBB_APP_URL ?? 'http://127.0.0.1:5173';
 
@@ -64,7 +76,10 @@ class FileStore<T> {
   }
 }
 
-let client: NodeOAuthClient | null = null;
+// The client is built from client metadata, which changes with the
+// extension scopes (in dev the loopback client_id embeds the scope), so it's
+// rebuilt whenever the scope it was built with goes stale.
+let client: { instance: NodeOAuthClient; scope: string } | null = null;
 
 // In production (https app URL) the client_id is the hosted metadata document,
 // which the /oauth-client-metadata.json route serves. In dev it's the atproto
@@ -73,15 +88,16 @@ export function clientMetadata() {
   const base = appUrl();
   const redirectUri = `${base}/oauth/callback`;
   const isLocal = base.startsWith('http://');
+  const scope = oauthScope();
   const clientId = isLocal
-    ? `http://localhost?redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(OAUTH_SCOPE)}`
+    ? `http://localhost?redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}`
     : `${base}/oauth-client-metadata.json`;
   return {
     client_id: clientId,
     client_name: isLocal ? 'atmoBB (dev)' : 'atmoBB',
     client_uri: base,
     redirect_uris: [redirectUri] as [string],
-    scope: OAUTH_SCOPE,
+    scope,
     grant_types: ['authorization_code', 'refresh_token'] as ['authorization_code', 'refresh_token'],
     response_types: ['code'] as ['code'],
     application_type: 'web' as const,
@@ -91,14 +107,27 @@ export function clientMetadata() {
 }
 
 export function oauthClient(): NodeOAuthClient {
-  if (client) return client;
-  client = new NodeOAuthClient({
-    clientMetadata: clientMetadata(),
+  const metadata = clientMetadata();
+  if (client?.scope === metadata.scope) return client.instance;
+  const instance = new NodeOAuthClient({
+    clientMetadata: metadata,
     stateStore: new FileStore<NodeSavedState>('oauth-state'),
     sessionStore: new FileStore<NodeSavedSession>('oauth-sessions'),
     requestLock: requestLocalLock,
   });
-  return client;
+  client = { instance, scope: metadata.scope };
+  return instance;
+}
+
+/**
+ * Whether the forum account's stored session was granted every scope
+ * extensions currently need; `missing` lists what a reconnect would add.
+ * Throws when the account has no session.
+ */
+export async function forumScopeStatus(forumDid: string): Promise<ScopeStatus> {
+  const session = await oauthClient().restore(forumDid, false);
+  const { scope } = await session.getTokenInfo(false);
+  return scopeStatus(scope);
 }
 
 export async function agentFor(did: string): Promise<Agent> {
