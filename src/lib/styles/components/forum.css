@@ -234,7 +234,7 @@ a.atm-post__permalink:hover { text-decoration: underline; }
 /* ---- BoardRow (three-column board list) ---- */
 .atm-boardrow {
   display: grid;
-  grid-template-columns: 34px 1fr 130px 220px;
+  grid-template-columns: minmax(0, 1fr) 130px 220px;
   align-items: center;
   gap: var(--space-4);
   padding: var(--space-4);
@@ -358,7 +358,7 @@ a.atm-memberrow__name:hover { color: var(--forum-link); text-decoration: none; }
 @media (max-width: 720px) {
   .atm-topic-filters__form, .atm-topic-filters__form--board { grid-template-columns: 1fr 1fr; }
   .atm-topic-filters__search { grid-column: 1 / -1; }
-  .atm-boardrow { grid-template-columns: 34px minmax(0, 1fr); }
+  .atm-boardrow { grid-template-columns: minmax(0, 1fr); }
   .atm-boardrow__counts, .atm-boardrow__last { display: none; }
   .atm-threadrow { grid-template-columns: 26px minmax(0, 1fr); }
   .atm-threadrow__nums, .atm-threadrow__last { display: none; }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import BoardColorInput from '$lib/components/BoardColorInput.svelte';
-  import BoardMarker from '$lib/components/BoardMarker.svelte';
+  import BoardLabel from '$lib/components/BoardLabel.svelte';
   import { boardOrderPeers, groupBoards } from '$lib/board-presentation';
 
   let { data, form } = $props();
@@ -53,8 +53,7 @@
                     <summary>
                       <span class="atm-adminrow__name">
                         {#if board.value.parent}<span class="row__sub">↳</span>{/if}
-                        <BoardMarker color={board.value.color} />
-                        {board.value.name}
+                        <BoardLabel board={board.value} />
                       </span>
                       <span class="atm-adminrow__meta">
                         {#if board.value.access?.space}<span class="row__private">private</span> · {/if}
@@ -73,13 +72,18 @@
                         <input class="atm-input" name="description" maxlength="1000" value={board.value.description ?? ''} />
                       </div>
                       <div class="atm-field">
-                        <label class="atm-label" for="board-color-{groupIndex}-{i}">Color</label>
+                        <label class="atm-label" for="board-emoji-{groupIndex}-{i}">Emoji icon (optional)</label>
+                        <input class="atm-input" id="board-emoji-{groupIndex}-{i}" name="emoji" value={board.value.emoji ?? ''} placeholder="e.g. 🎵" aria-describedby="board-emoji-help-{groupIndex}-{i}" />
+                        <span class="field-help" id="board-emoji-help-{groupIndex}-{i}">Paste one emoji. Leave blank for no emoji icon.</span>
+                      </div>
+                      <div class="atm-field">
+                        <label class="atm-label" for="board-color-{groupIndex}-{i}">Board identity color</label>
                         <BoardColorInput
                           id="board-color-{groupIndex}-{i}"
                           value={board.value.color}
                           describedBy="board-color-help-{groupIndex}-{i}"
                         />
-                        <span class="field-help" id="board-color-help-{groupIndex}-{i}">Full six-digit hex color used for this board's marker.</span>
+                        <span class="field-help" id="board-color-help-{groupIndex}-{i}">The square beside this board's name identifies it in navigation and topic lists. Choose a six-digit hex color; blank uses the forum accent.</span>
                       </div>
                       <div class="atm-field">
                         <span class="atm-label">Category</span>
@@ -140,9 +144,14 @@
             <input class="atm-input" name="description" maxlength="1000" placeholder="What belongs here" />
           </div>
           <div class="atm-field">
-            <label class="atm-label" for="new-board-color">Color</label>
+            <label class="atm-label" for="new-board-emoji">Emoji icon (optional)</label>
+            <input class="atm-input" id="new-board-emoji" name="emoji" placeholder="e.g. 🎵" aria-describedby="new-board-emoji-help" />
+            <span class="field-help" id="new-board-emoji-help">Paste one emoji. Leave blank for no emoji icon.</span>
+          </div>
+          <div class="atm-field">
+            <label class="atm-label" for="new-board-color">Board identity color</label>
             <BoardColorInput id="new-board-color" describedBy="new-board-color-help" />
-            <span class="field-help" id="new-board-color-help">Full six-digit hex color used for this board's marker.</span>
+            <span class="field-help" id="new-board-color-help">The square beside this board's name identifies it in navigation and topic lists. Choose a six-digit hex color; blank uses the forum accent.</span>
           </div>
           <div class="atm-editform__row">
             <div class="atm-field">

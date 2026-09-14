@@ -2,6 +2,17 @@ import type { BoardIndex } from '$lib/server/appview';
 
 export const BOARD_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 
+/** RGI sequences include flags, skin tones, and joined family emoji. */
+export function parseBoardEmoji(value: FormDataEntryValue | null):
+  | { valid: true; emoji?: string }
+  | { valid: false } {
+  const emoji = String(value ?? '').trim();
+  if (!emoji) return { valid: true };
+  return /^\p{RGI_Emoji}$/v.test(emoji)
+    ? { valid: true, emoji }
+    : { valid: false };
+}
+
 /** Accept only CSS-safe, full-length hex colors from indexed or form data. */
 export function normalizeBoardColor(value: unknown): string | undefined {
   return typeof value === 'string' && BOARD_COLOR_PATTERN.test(value.trim())

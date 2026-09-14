@@ -4,7 +4,7 @@
   import Card from '$lib/components/Card.svelte';
   import LoginCard from '$lib/components/LoginCard.svelte';
   import MemberLink from '$lib/components/MemberLink.svelte';
-  import BoardMarker from '$lib/components/BoardMarker.svelte';
+  import BoardLabel from '$lib/components/BoardLabel.svelte';
   import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
   import TopicList from '$lib/components/TopicList.svelte';
   import { relTime } from '$lib/reltime';
@@ -87,12 +87,9 @@
       <div class="atm-board-section">{group.title}</div>
       {#each group.boards as board}
         <article class="atm-boardrow">
-          <span class="atm-boardrow__icon {board.value.topic ? 'atmo__icon' : ''}" aria-hidden="true">
-            {#if board.value.color}<BoardMarker color={board.value.color} />{:else}{board.value.topic ? '⁂' : '▤'}{/if}
-          </span>
           <div>
             <div class="atm-boardrow__name">
-              <a href={boardPath(board.uri, data.forumDid)}>{board.value.name}</a>
+              <a href={boardPath(board.uri, data.forumDid)}><BoardLabel board={board.value} /></a>
               {#if board.value.access?.space}
                 <span class="atm-chip" title="members-only board">🔒</span>
               {/if}
@@ -106,7 +103,7 @@
             {#if board.children.length}
               <div class="atm-boardrow__subs">
                 {#each board.children as child}
-                  <a href={boardPath(child.uri, data.forumDid)}>↳ {child.value.name}</a>
+                  <a href={boardPath(child.uri, data.forumDid)}>↳ <BoardLabel board={child.value} /></a>
                 {/each}
               </div>
             {/if}
@@ -316,11 +313,10 @@
   .atm-home-main--split { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
   .atm-home-categories { display: grid; gap: var(--space-5); min-width: 0; }
   .atm-home-main--split .atm-boardrow {
-    grid-template-columns: 34px minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: var(--space-3);
   }
   .atm-home-main--split .atm-boardrow__last { display: none; }
-  .atmo__icon { background: var(--forum-accent-soft); color: var(--forum-link); }
   .atmo__explainer {
     position: relative;
     justify-self: start;

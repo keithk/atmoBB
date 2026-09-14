@@ -125,6 +125,7 @@ export interface BoardIndex {
       name: string;
       description?: string;
       color?: string;
+      emoji?: string;
       parent?: string;
       category?: string;
       topic?: string;

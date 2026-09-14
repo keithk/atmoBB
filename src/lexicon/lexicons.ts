@@ -911,6 +911,12 @@ export const schemaDict = {
               maxLength: 10000,
               maxGraphemes: 1000,
             },
+            emoji: {
+              type: 'string',
+              maxLength: 64,
+              maxGraphemes: 1,
+              description: 'Optional emoji icon. Omit for no icon.',
+            },
             color: {
               type: 'string',
               maxLength: 7,

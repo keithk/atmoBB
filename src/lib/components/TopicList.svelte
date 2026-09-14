@@ -5,6 +5,7 @@
   import Avatar from './Avatar.svelte';
   import MemberLink from './MemberLink.svelte';
   import TopicReadStatus from './TopicReadStatus.svelte';
+  import BoardLabel from './BoardLabel.svelte';
 
   let {
     threads,
@@ -34,7 +35,6 @@
   {#if sectionTitle}<div class="atm-board-section">{sectionTitle}</div>{/if}
   {#each threads as thread}
     <article class="atm-threadrow">
-      <span class="atm-threadrow__flag" aria-hidden="true">▤</span>
       <div class="atm-threadrow__main">
         <div class="atm-threadrow__title"><a href={threadPath(thread.uri)}>{thread.title}</a></div>
         {#if thread.tags?.length}
@@ -47,7 +47,7 @@
         <div class="atm-threadrow__sub">
           <span>by <MemberLink did={thread.author}>{name(thread)}</MemberLink></span>
           {#if showBoard && thread.boardName}
-            <span>in <a href={boardPath(thread.board, forumDid ?? '')}>{thread.boardName}</a></span>
+            <span>in <a href={boardPath(thread.board, forumDid ?? '')}><BoardLabel uri={thread.board} name={thread.boardName} /></a></span>
           {/if}
           {#if thread.origin}
             <span>· via <span class="atm-via">{thread.origin.name ?? thread.origin.did.slice(8, 24)}</span></span>
@@ -85,13 +85,13 @@
   @layer atmobb {
     .atm-topic-list { container-type: inline-size; }
     .atm-topic-list > :last-child { border-bottom: none; }
-    .atm-threadrow { grid-template-columns: 26px minmax(0, 1fr) 70px 200px; }
+    .atm-threadrow { grid-template-columns: minmax(0, 1fr) 70px 200px; }
     .atm-threadrow__main { min-width: 0; overflow-wrap: anywhere; }
     .atm-threadrow__last { flex-wrap: wrap; }
     @container (max-width: 650px) {
-      .atm-threadrow { grid-template-columns: 20px minmax(0, 1fr); gap: var(--space-2); }
-      .atm-threadrow__nums { display: block; grid-column: 2; text-align: left; }
-      .atm-threadrow__last { display: flex; grid-column: 2; }
+      .atm-threadrow { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
+      .atm-threadrow__nums { display: block; grid-column: 1; text-align: left; }
+      .atm-threadrow__last { display: flex; grid-column: 1; }
     }
   }
 </style>

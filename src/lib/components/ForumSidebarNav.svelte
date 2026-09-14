@@ -1,6 +1,7 @@
 <script lang="ts">
   import { boardPath } from '$lib/appview-paths';
   import type { BoardGroup } from '$lib/board-presentation';
+  import BoardLabel from './BoardLabel.svelte';
 
   let {
     groups,
@@ -24,7 +25,6 @@
     { label: 'Members', href: '/members', icon: 'M15 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M3 21v-2a6 6 0 0 1 12 0v2M18 3a4 4 0 0 1 0 8M21 21v-2a6 6 0 0 0-3-5.2' },
     { label: 'Rules', href: '/rules', icon: 'M14 2H5v20h14V7ZM14 2v5h5M8 12h8M8 16h8' },
   ];
-  const boardIcon = 'M21 11.5a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-4-.9L3 21l1.9-5.5a9 9 0 0 1-.9-4A8.5 8.5 0 0 1 12.5 3h.5a8.5 8.5 0 0 1 8 8v.5Z';
   const lockIcon = 'M5 10h14v11H5ZM8 10V7a4 4 0 0 1 8 0v3';
   const active = (href: string) =>
     href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
@@ -88,8 +88,7 @@
                 aria-current={active(href) ? 'page' : undefined}
                 onclick={onNavigate}
               >
-                <span class="atm-sidebar-nav__icon">{@render icon(boardIcon)}</span>
-                <span class="atm-sidebar-nav__label">{board.value.name}</span>
+                <span class="atm-sidebar-nav__label"><BoardLabel board={board.value} /></span>
                 {#if board.value.access?.space}<span class="atm-sidebar-nav__lock" role="img" aria-label="Members only">{@render icon(lockIcon)}</span>{/if}
               </a>
             </li>
@@ -103,8 +102,7 @@
                   aria-current={active(childHref) ? 'page' : undefined}
                   onclick={onNavigate}
                 >
-                  <span class="atm-sidebar-nav__icon">{@render icon(boardIcon)}</span>
-                  <span class="atm-sidebar-nav__label">{child.value.name}</span>
+                  <span class="atm-sidebar-nav__label"><BoardLabel board={child.value} /></span>
                   {#if child.value.access?.space}<span class="atm-sidebar-nav__lock" role="img" aria-label="Members only">{@render icon(lockIcon)}</span>{/if}
                 </a>
               </li>
