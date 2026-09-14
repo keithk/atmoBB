@@ -3,6 +3,7 @@ import type { RichTextBlock } from '$lib/richtext/bbcode';
 import { mintSessionCookie } from './happyview-session';
 import { parseAtUri } from '$lib/appview-paths';
 import type { Ban } from '$lib/standing';
+import { profileForForum } from '$lib/profile-overrides';
 
 const HV = () => env.HAPPYVIEW_URL ?? 'http://127.0.0.1:3000';
 const CLIENT_KEY = () => env.HAPPYVIEW_CLIENT_KEY ?? '';
@@ -124,6 +125,7 @@ export interface BoardIndex {
       name: string;
       description?: string;
       color?: string;
+      emoji?: string;
       parent?: string;
       category?: string;
       topic?: string;
@@ -337,6 +339,23 @@ class AppviewError extends Error {
   }
 }
 
+/** Indexed responses embed raw actor records in lists, participants, and posts. */
+function resolveProfiles(value: unknown, forum: string): void {
+  if (!value || typeof value !== 'object') return;
+  if (Array.isArray(value)) {
+    for (const item of value) resolveProfiles(item, forum);
+    return;
+  }
+  const object = value as Record<string, unknown>;
+  for (const [key, child] of Object.entries(object)) {
+    if (['authorProfile', 'subjectProfile', 'requesterProfile', 'profile'].includes(key)) {
+      object[key] = profileForForum(child as ActorProfile | null, forum);
+    } else if (!['value', 'record', 'body', 'forum'].includes(key)) {
+      resolveProfiles(child, forum);
+    }
+  }
+}
+
 async function xrpc<T>(
   method: 'GET' | 'POST',
   nsid: string,
@@ -359,6 +378,7 @@ async function xrpc<T>(
   if (!res.ok) {
     throw new AppviewError(res.status, (data as { error?: string; message?: string }).message ?? (data as { error?: string }).error ?? `appview error ${res.status}`);
   }
+  resolveProfiles(data, opts.params?.forum ?? FORUM_DID());
   return data as T;
 }
 

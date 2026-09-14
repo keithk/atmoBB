@@ -8,6 +8,7 @@ import {
 } from './appview';
 import { presenceSnapshot } from './presence';
 import { blobCid } from '$lib/avatar/profile-image';
+import { profileForForum } from '$lib/profile-overrides';
 
 export { blobCid } from '$lib/avatar/profile-image';
 
@@ -164,9 +165,9 @@ export async function resolveActor(actor: string): Promise<Identity | null> {
 // --- global identity (from the member's PDS) --------------------------------
 
 /** The member's actor.profile record, read straight from their PDS (public, unauthed). */
-export async function getPublicProfile(did: string, pds?: string): Promise<ActorProfile | null> {
+export async function getPublicProfile(did: string, pds?: string, requireAvailable = false): Promise<ActorProfile | null> {
   const hit = profileCache.get(did);
-  if (fresh(hit)) return hit.profile;
+  if (fresh(hit) && (!requireAvailable || hit.profile !== null)) return profileForForum(hit.profile, FORUM_DID());
   const endpoint = pds ?? (await resolveDidDoc(did)).pds;
   let profile: ActorProfile | null = null;
   if (endpoint) {
@@ -179,13 +180,17 @@ export async function getPublicProfile(did: string, pds?: string): Promise<Actor
       if (res.ok) {
         const j = (await res.json()) as { value?: ActorProfile };
         profile = j.value ?? null;
+      } else if (res.status === 400 || res.status === 404) {
+        const body = await res.json();
+        if (body.error === 'RecordNotFound') profile = {};
       }
     } catch {
       // PDS unreachable — fall through with a null profile
     }
   }
+  if (requireAvailable && profile === null) throw new Error('Profile preferences are unavailable.');
   profileCache.set(did, { profile, at: Date.now() });
-  return profile;
+  return profileForForum(profile, FORUM_DID());
 }
 
 // --- public atmobb participation --------------------------------------------

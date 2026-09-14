@@ -3,6 +3,8 @@ import type { Actions, PageServerLoad } from './$types';
 import { profileImagePath } from '$lib/avatar/profile-image';
 import { getActorProfile, saveProfile } from '$lib/server/pds';
 import { bustProfileCache } from '$lib/server/profiles';
+import { FORUM_DID } from '$lib/server/appview';
+import { profileForForum } from '$lib/profile-overrides';
 
 const MAX_AVATAR_BYTES = 200_000;
 
@@ -15,18 +17,23 @@ function isHundredPixelPng(bytes: Uint8Array): boolean {
   return view.getUint32(16) === 100 && view.getUint32(20) === 100;
 }
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
   if (!locals.user) redirect(302, '/login');
-  const profile = await getActorProfile(locals.user.did);
+  const scope = url.searchParams.get('scope') === 'all' ? 'all' : 'forum';
+  const accountProfile = await getActorProfile(locals.user.did);
+  const profile = scope === 'forum' ? profileForForum(accountProfile, FORUM_DID()) : accountProfile;
   return {
+    scope,
     did: locals.user.did,
     currentAvatar: profileImagePath(locals.user.did, profile?.avatar),
   };
 };
 
 export const actions: Actions = {
-  save: async ({ request, locals }) => {
+  save: async ({ request, locals, url }) => {
     if (!locals.user) return fail(401, { message: 'Log in to save an avatar.' });
+    const scope = url.searchParams.get('scope');
+    if (scope !== 'forum' && scope !== 'all') return fail(400, { message: 'Choose where to apply your avatar.' });
 
     const form = await request.formData();
     const avatar = form.get('avatar');
@@ -43,7 +50,7 @@ export const actions: Actions = {
     }
 
     try {
-      await saveProfile(locals.user.did, { avatar: { bytes, mimeType: 'image/png' } });
+      await saveProfile(locals.user.did, { avatar: { bytes, mimeType: 'image/png' } }, scope === 'forum' ? FORUM_DID() : undefined);
       bustProfileCache(locals.user.did);
       return { saved: true };
     } catch (error) {

@@ -2,11 +2,10 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { env } from '$env/dynamic/private';
+import { fleetEnabled, fleetStatus, provisionHostedInstance } from './hosting-host';
 
-// Invite-gated signup for hosted tenant forums. Requests queue in DATA_DIR;
-// an admin approves one and this module provisions the site through the
-// deploy dashboard API. Only a deployment with ATMOBB_HOSTING=1 and a
-// dashboard session token gets any of this; tenant builds never do.
+// Invite requests stay in the app; the root-owned host service owns capacity
+// reservations and isolated installations. Legacy dashboard sites are read-only.
 
 export interface HostingInvite {
   code: string;
@@ -30,6 +29,7 @@ export interface HostingRequest {
   createdAt: string;
   status: HostingRequestStatus;
   siteId?: string;
+  isolated?: boolean;
   error?: string;
   notifiedAt?: string;
 }
@@ -40,18 +40,17 @@ interface HostingStore {
 }
 
 export const hostingEnabled = () =>
-  env.ATMOBB_HOSTING === '1' && Boolean(env.DEPLOY_SESSION_TOKEN);
+  fleetEnabled() || (env.ATMOBB_HOSTING === '1' && Boolean(env.DEPLOY_SESSION_TOKEN));
 export const hostingDomainSuffix = () => env.ATMOBB_HOSTING_DOMAIN_SUFFIX ?? 'atmobb.app';
 export const tenantDomain = (subdomain: string) => `${subdomain}.${hostingDomainSuffix()}`;
-const deployApi = () => env.DEPLOY_API ?? 'https://admin.keith.is';
-const tenantGitUrl = () => env.ATMOBB_HOSTING_GIT_URL ?? 'https://github.com/keithk/atmoBB.git';
 
 const storePath = () => join(process.env.DATA_DIR ?? '.data', 'hosting.json');
 
 async function loadStore(): Promise<HostingStore> {
   try {
     return JSON.parse(await readFile(storePath(), 'utf8'));
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     return { invites: [], requests: [] };
   }
 }
@@ -107,32 +106,16 @@ the handle change works without any DNS setup.
 
 Boards, the forum name, and theming all live in /admin.
 
-Hosted forums have no members-only boards. If you outgrow that,
-self-hosting is the same software:
+Your isolated installation supports members-only boards and Admin → Updates.
+Your infrastructure operator remains trusted with the app and database.
+Self-hosting is the same software:
 https://github.com/keithk/atmoBB`;
-}
-
-async function dashboard<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${deployApi()}${path}`, {
-    method,
-    headers: {
-      cookie: `session=${env.DEPLOY_SESSION_TOKEN}`,
-      'content-type': 'application/json',
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`deploy API ${method} ${path}: ${res.status} ${detail}`.slice(0, 300));
-  }
-  return (res.status === 204 ? null : await res.json()) as T;
 }
 
 export const SUBDOMAIN_RULE =
   'Use 3–30 lowercase letters, numbers, or hyphens. Start and end with a letter or number.';
 const SUBDOMAIN_RE = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
-// Non-site names that must never become tenants. Collisions with existing
-// dashboard sites are caught against the live site list at submit time.
+// The queue and host registry also reserve existing forum names.
 const RESERVED = new Set([
   'www', 'mail', 'smtp', 'hv', 'admin', 'api', 'app',
   'atmobb', 'forum', 'forums', 'dev', 'staging', 'test',
@@ -172,11 +155,12 @@ export async function submitRequest(input: {
   requesterHandle: string;
   email?: string;
 }): Promise<{ error: string } | { request: HostingRequest }> {
-  // Site-name collisions come from the dashboard, outside the store lock.
+  if (!fleetEnabled()) return { error: 'New hosting requests are paused until isolated hosting is configured.' };
   let takenNames: Set<string>;
   try {
-    const sites = await dashboard<{ name: string }[]>('GET', '/api/sites');
-    takenNames = new Set(sites.map((s) => s.name));
+    const fleet = await fleetStatus();
+    if (fleet.used >= fleet.limit) return { error: 'Hosting is currently full. Try again when the operator opens more places.' };
+    takenNames = new Set(fleet.instances.map((s) => s.subdomain));
   } catch {
     return { error: "We can't accept hosting requests right now. Try again in a bit." };
   }
@@ -217,41 +201,19 @@ export async function submitRequest(input: {
   });
 }
 
-/**
- * Provision an approved request through the deploy dashboard: create the
- * site, make it public with persistent storage, write the tenant env, and
- * deploy. Mirrors infra/provision-tenant.sh minus the Happyview client key,
- * which the runbook covers minting by hand. Safe to rerun after a failure.
- */
+/** Stable request IDs make approval retries idempotent at the host service. */
 export function approveRequest(id: string): Promise<HostingRequest | null> {
   return withStore(async (store) => {
     const r = store.requests.find((q) => q.id === id);
     if (!r || (r.status !== 'pending' && r.status !== 'failed')) return r ?? null;
     try {
-      if (!r.siteId) {
-        const site = await dashboard<{ id: string }>('POST', '/api/sites', {
-          name: r.subdomain,
-          git_url: tenantGitUrl(),
-          sleep_enabled: true,
-          sleep_after_minutes: 60,
-        });
-        r.siteId = site.id;
-      }
-      await dashboard('PATCH', `/api/sites/${r.siteId}`, {
-        visibility: 'public',
-        persistent_storage: true,
-        custom_domains: [tenantDomain(r.subdomain)],
+      if (r.siteId) throw new Error('Legacy dashboard installations require an explicit migration; automatic reprovisioning is disabled.');
+      const instance = await provisionHostedInstance({
+        id: r.id, subdomain: r.subdomain, forumDid: r.forumDid, adminHandle: r.requesterHandle,
       });
-      const origin = `https://${tenantDomain(r.subdomain)}`;
-      await dashboard('PATCH', `/api/sites/${r.siteId}/env`, {
-        ORIGIN: origin,
-        ATMOBB_APP_URL: origin,
-        HAPPYVIEW_URL: env.HAPPYVIEW_URL ?? 'https://hv.atmobb.app',
-        ATMOBB_FORUM_DID: r.forumDid,
-        ATMOBB_COOKIE_SECRET: randomBytes(32).toString('hex'),
-      });
-      await dashboard('POST', `/api/sites/${r.siteId}/deploy`);
-      r.status = 'provisioning';
+      r.isolated = true;
+      // checkProvisioning handles the live transition and notification.
+      r.status = instance.status === 'failed' ? 'failed' : 'provisioning';
       delete r.error;
     } catch (e) {
       r.status = 'failed';
@@ -264,6 +226,9 @@ export function approveRequest(id: string): Promise<HostingRequest | null> {
 export function rejectRequest(id: string): Promise<void> {
   return withStore((store) => {
     const r = store.requests.find((q) => q.id === id);
+    if (r?.isolated || r?.siteId) throw new Error('An installation may exist. Reconcile it on the host before rejecting this request.');
+    // Even a timed-out approval may have reserved a slot. Fail closed.
+    if (r?.status === 'failed') throw new Error('Retry approval to reconcile this failed request before rejecting it.');
     if (r && (r.status === 'pending' || r.status === 'failed')) {
       r.status = 'rejected';
       if (r.email && !r.notifiedAt) {
@@ -278,27 +243,22 @@ export function rejectRequest(id: string): Promise<void> {
   });
 }
 
-/** Flip 'provisioning' requests to 'live' once their site serves the DID. */
+/** Reconcile durable host state, including approvals whose response was lost. */
 export function checkProvisioning(): Promise<void> {
   return withStore(async (store) => {
-    const waiting = store.requests.filter((r) => r.status === 'provisioning');
-    await Promise.all(
-      waiting.map(async (r) => {
-        try {
-          const res = await fetch(`https://${tenantDomain(r.subdomain)}/.well-known/atproto-did`, {
-            signal: AbortSignal.timeout(3000),
-          });
-          if (res.ok && (await res.text()) === r.forumDid) {
-            r.status = 'live';
-            if (r.email && !r.notifiedAt) {
-              r.notifiedAt = new Date().toISOString();
-              void sendMail(r.email, 'your forum is live', liveEmail(r));
-            }
-          }
-        } catch {
-          // still building, or asleep; the next admin page load checks again
-        }
-      }),
-    );
+    if (!fleetEnabled()) return;
+    const fleet = await fleetStatus();
+    for (const r of store.requests) {
+      if (r.siteId) continue;
+      const instance = fleet.instances.find((i) => i.id === r.id);
+      if (!instance) continue;
+      r.isolated = true;
+      r.status = instance.status;
+      r.error = instance.error;
+      if (r.status === 'live' && r.email && !r.notifiedAt) {
+        r.notifiedAt = new Date().toISOString();
+        void sendMail(r.email, 'your forum is live', liveEmail(r));
+      }
+    }
   });
 }

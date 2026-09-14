@@ -5,6 +5,8 @@ import { getActorProfile, saveProfile } from '$lib/server/pds';
 import { blobCid, bustProfileCache, getBskyProfile } from '$lib/server/profiles';
 import type { RichTextBlock } from '$lib/richtext/bbcode';
 import { attachImages, resolveBodyImages } from '$lib/server/richtext';
+import { FORUM_DID } from '$lib/server/appview';
+import { PROFILE_FIELDS, forumProfileOverride, profileForForum } from '$lib/profile-overrides';
 
 const SIG_BLOCK = 'app.atmobb.richtext.block#text';
 const SIG_IMAGE_BLOCK = 'app.atmobb.richtext.block#image';
@@ -26,12 +28,14 @@ function imageKeys(imagesRaw: string, orderRaw: string): string[] {
   }
 }
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
   if (!locals.user) redirect(302, '/login');
-  const [profile, bskyProfile] = await Promise.all([
+  const scope = url.searchParams.get('scope') === 'all' ? 'all' : 'forum';
+  const [accountProfile, bskyProfile] = await Promise.all([
     getActorProfile(locals.user.did),
     getBskyProfile(locals.user.did),
   ]);
+  const profile = scope === 'forum' ? profileForForum(accountProfile, FORUM_DID()) : accountProfile;
   const signature = (profile?.signature ?? []) as RichTextBlock[];
   await resolveBodyImages([{ author: locals.user.did, body: signature }]);
   const sigText =
@@ -42,6 +46,8 @@ export const load: PageServerLoad = async ({ locals }) => {
     return cid ? [{ key: `${cid}:${index}`, cid, blob: block.image, url: block.url, alt: block.alt ?? '' }] : [];
   });
   return {
+    scope,
+    overriddenFields: forumProfileOverride(accountProfile, FORUM_DID())?.fields ?? [],
     handle: locals.user.handle,
     did: locals.user.did,
     avatarProfile: profile,
@@ -60,19 +66,24 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-  restoreAvatar: async ({ locals }) => {
+  restoreAvatar: async ({ locals, url }) => {
     if (!locals.user) return fail(401, { message: 'Log in to edit your profile.' });
+    const scope = url.searchParams.get('scope');
+    if (scope !== 'forum' && scope !== 'all') return fail(400, { message: 'Choose where to apply your avatar.' });
     try {
-      await saveProfile(locals.user.did, { avatar: null });
+      await saveProfile(locals.user.did, { avatar: null }, scope === 'all' ? undefined : FORUM_DID());
       bustProfileCache(locals.user.did);
       return { restoredAvatar: true };
     } catch (e) {
       return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t restore your Bluesky picture. Try again.' });
     }
   },
-  save: async ({ request, locals }) => {
+  save: async ({ request, locals, url }) => {
     if (!locals.user) return fail(401, { message: 'Log in to edit your profile.' });
     const fd = await request.formData();
+    const scope = url.searchParams.get('scope');
+    if (scope !== 'forum' && scope !== 'all') return fail(400, { message: 'Choose where to apply your profile.' });
+    const inherit = scope === 'forum' ? PROFILE_FIELDS.filter((field) => fd.getAll('inherit').includes(field)) : [];
     const displayName = String(fd.get('displayName') ?? '').trim();
     const description = String(fd.get('description') ?? '').trim();
     const sigText = String(fd.get('signature') ?? '').trim();
@@ -82,7 +93,7 @@ export const actions: Actions = {
     const website = String(fd.get('website') ?? '').trim();
     const avatarFile = fd.get('avatar');
 
-    if (website && !/^https?:\/\//i.test(website)) {
+    if (!inherit.includes('website') && website && !/^https?:\/\//i.test(website)) {
       return fail(400, { message: 'Website must start with http:// or https://.' });
     }
     if (avatarFile instanceof File && avatarFile.size > MAX_AVATAR_BYTES) {
@@ -110,7 +121,7 @@ export const actions: Actions = {
       : undefined;
 
     try {
-      await saveProfile(locals.user.did, { displayName, description, signature, pronouns, website, avatar });
+      await saveProfile(locals.user.did, { displayName, description, signature, pronouns, website, avatar }, scope === 'forum' ? FORUM_DID() : undefined, inherit);
       bustProfileCache(locals.user.did);
       return { saved: true };
     } catch (e) {

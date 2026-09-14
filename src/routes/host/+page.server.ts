@@ -4,6 +4,7 @@ import {
   hostingEnabled,
   hostingDomainSuffix,
   requestsFor,
+  checkProvisioning,
   submitRequest,
   SUBDOMAIN_RULE,
 } from '$lib/server/hosting';
@@ -11,6 +12,8 @@ import { resolveActor } from '$lib/server/profiles';
 
 export const load: PageServerLoad = async ({ locals }) => {
   if (!hostingEnabled()) error(404, 'Not found');
+  // Refresh only after sign-in; do not expose operator errors or fleet data.
+  if (locals.user) await checkProvisioning().catch(() => {});
   const mine = locals.user ? await requestsFor(locals.user.did) : [];
   return { suffix: hostingDomainSuffix(), mine, subdomainRule: SUBDOMAIN_RULE };
 };

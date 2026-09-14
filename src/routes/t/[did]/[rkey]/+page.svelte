@@ -3,6 +3,7 @@
   import { invalidateAll } from '$app/navigation';
   import { enhance } from '$app/forms';
   import PostMeta from '$lib/components/PostMeta.svelte';
+  import BoardLabel from '$lib/components/BoardLabel.svelte';
   import RichText from '$lib/components/RichText.svelte';
   import RichTextEditor from '$lib/components/RichTextEditor.svelte';
   import PostEditor from '$lib/components/PostEditor.svelte';
@@ -134,7 +135,7 @@
 {:else}
   <nav class="atm-crumbs atm-crumbs--spaced">
     <a href="/">{data.forum.name}</a><span class="atm-crumbs__sep">›</span>
-    <a href={boardPath(data.thread.value.board, data.forumDid)}>{data.boardName ?? 'Board'}</a><span class="atm-crumbs__sep">›</span>
+    <a href={boardPath(data.thread.value.board, data.forumDid)}><BoardLabel uri={data.thread.value.board} name={data.boardName} /></a><span class="atm-crumbs__sep">›</span>
     <span class="atm-crumbs__current">{data.thread.value.title}</span>
     {#if data.thread.pinned}<span class="atm-chip" title="pinned to the top of its board">📌 pinned</span>{/if}
     {#if data.thread.locked}<span class="atm-chip" title="no new replies">🔒 locked</span>{/if}

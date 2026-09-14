@@ -265,7 +265,7 @@
 
       {#if sig.length}
         <Card title="Signature">
-          <p class="muted sig-note">This signature appears on posts across atmobb forums.</p>
+          <p class="muted sig-note">This signature appears on posts on this forum.</p>
           <div class="atm-sig sig">
             <RichText body={sig} />
           </div>

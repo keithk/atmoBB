@@ -1,0 +1,9 @@
+# Operator forum only. Never include this overlay in tenant installations.
+services:
+  atmobb:
+    environment:
+      ATMOBB_HOSTING: "1"
+      ATMOBB_HOSTING_TOKEN: ${ATMOBB_HOSTING_TOKEN:?configure the hosting service first}
+      ATMOBB_HOSTING_DOMAIN_SUFFIX: ${ATMOBB_HOSTING_DOMAIN_SUFFIX:?set the hosting domain}
+    volumes:
+      - /run/atmobb-hosting:/run/atmobb-hosting:ro

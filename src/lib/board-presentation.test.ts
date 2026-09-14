@@ -4,6 +4,7 @@ import {
   groupBoards,
   normalizeBoardColor,
   parseBoardColor,
+  parseBoardEmoji,
   withBoardColor,
 } from './board-presentation';
 
@@ -12,6 +13,22 @@ const board = (uri: string, name: string, extra: Record<string, unknown> = {}) =
   value: { name, ...extra },
   threadCount: 0,
   replyCount: 0,
+});
+
+describe('board emoji', () => {
+  it('accepts one emoji including multi-codepoint sequences and allows clearing it', () => {
+    for (const emoji of ['🎵', '👩🏽‍💻', '🇺🇸', '👨‍👩‍👧‍👦', '❤️']) {
+      expect(parseBoardEmoji(` ${emoji} `)).toEqual({ valid: true, emoji });
+    }
+    expect(parseBoardEmoji(' ')).toEqual({ valid: true });
+    expect(parseBoardEmoji(null)).toEqual({ valid: true });
+  });
+
+  it('rejects text, multiple emoji, and incomplete sequences', () => {
+    for (const value of ['music', '🎵🎸', '🎵 music', '🇺', '<svg>']) {
+      expect(parseBoardEmoji(value)).toEqual({ valid: false });
+    }
+  });
 });
 
 describe('board colors', () => {

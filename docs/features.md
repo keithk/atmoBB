@@ -17,7 +17,7 @@ Everything an atmobb forum does today. What I haven't built is listed at the [bo
 ## Members and identity
 
 - **atproto login, no local accounts.** Members sign in with any atproto account over OAuth. The consent screen requests a published permission set (`app.atmobb.authForum`) scoped to exactly the seven collections atmobb writes, plus a separate `rpc` scope that lets the forum ask atmo.pub to deliver notifications.
-- **One profile, every forum.** Display name, bio, avatar, signature, user title, pronouns, and website live in a single `app.atmobb.actor.profile` record in the member's own repo, so the same profile follows them to every atmobb forum.
+- **Account defaults, forum-specific profiles.** Display name, bio, avatar, signature, user title, pronouns, and website live in a single `app.atmobb.actor.profile` record in the member's own repo. Profile settings let each editable field inherit the account default or override it on this forum. An empty forum signature hides the default; “Use my account default” removes that override. Forum choices are public, not private profiles. The userpic maker saves to the selected scope too.
 - **Signatures.** Up to three blocks of text and images, phpBB style, rendered under every post, with a live preview in settings.
 - **Avatars.** Upload an image (1 MB), or fall back to a generated monogram with a hue seeded from the DID. Blobs are fetched by resolving the DID's *current* PDS, so avatars survive migrations.
 - **The userpic maker.** A built-in 100 × 100 forum-icon builder: crop and zoom a photo, then leave it plain or add a simple border. The finished icon is a real avatar blob, so it works on forums that never heard of the maker.
@@ -68,6 +68,7 @@ Joining a forum is an `app.atmobb.forum.membership` record in the member's own r
 
 ## Notifications
 
+- **Account and forum preferences.** Set notifications on or off across atmobb, or override that default for one forum, in `/settings/notifications`. Preferences live publicly in the account profile and may take up to five minutes to reach another forum. Existing forum choices stay unchanged when the account default changes. A preference never grants permission: delivery still requires that forum's separate atmo.pub connection. If preferences cannot be read, new alerts are withheld.
 - **Delivered by atmo.pub.** Members turn notifications on from settings, approve the forum once at [atmo.pub](https://atmo.pub), and pick their channels there: web push, email, Telegram, Bluesky DM, or a webhook. The forum sends; atmo.pub delivers. I didn't build any of the channels myself.
 - **What pings you.** A reply in a thread you started, a reply or quote aimed at one of your posts, an @mention, and a new thread in a board you watch. One alert per post, even when several apply. Only posts written through this forum's site trigger them; replies that arrive through topic federation or another client don't, yet.
 - **The prompt.** The home page and the thread page after your first post ask once whether you want to hear back. Say no and it never asks again; the switch stays in settings.

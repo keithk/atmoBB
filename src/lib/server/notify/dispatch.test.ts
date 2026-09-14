@@ -37,6 +37,7 @@ function fakeDeps(overrides: Partial<DispatchDeps> = {}): Partial<DispatchDeps> 
     forumDid: () => forum,
     getWatchers: vi.fn(async () => []),
     boardMembers: vi.fn(async () => []),
+    notificationsEnabled: vi.fn(async () => true),
     send: vi.fn(async () => result({ ok: true, status: 200, delivered: 1 })),
     now: () => clock,
     ...overrides,
@@ -82,6 +83,27 @@ afterEach(async () => {
   if (originalDataDir === undefined) delete process.env.DATA_DIR;
   else process.env.DATA_DIR = originalDataDir;
   vi.restoreAllMocks();
+});
+
+it('suppresses muted recipients and profile lookup failures without changing relay consent', async () => {
+  const deps = fakeDeps({ notificationsEnabled: async (did) => {
+    if (did === carol) throw new Error('PDS unavailable');
+    return false;
+  } });
+  await notifyForPost(publicReply, deps);
+  expect(deps.send).not.toHaveBeenCalled();
+  expect((await readMember(alice))?.entries).toEqual([]);
+  expect((await readMember(carol))?.entries).toEqual([]);
+  expect((await readMember(alice))?.status).toBe('on');
+});
+
+it('an enabled account preference cannot notify a member who has not connected this forum', async () => {
+  await setStatus(alice, 'off');
+  const deps = fakeDeps();
+  await notifyForPost(publicReply, deps);
+  expect(deps.notificationsEnabled).not.toHaveBeenCalledWith(alice);
+  expect((await readMember(alice))?.entries).toEqual([]);
+  expect((await readMember(carol))?.entries).toHaveLength(1);
 });
 
 const entriesOf = async (did: string) => (await readMember(did))?.entries ?? [];

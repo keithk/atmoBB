@@ -13,7 +13,7 @@ import { privateBoardsEnabled } from '$lib/server/happyview-session';
 import { createForumRecord, deleteForumRecord, putForumRecord } from '$lib/server/forum-repo';
 import { savedRedirect } from '$lib/server/saved-redirect';
 import { parseAtUri } from '$lib/appview-paths';
-import { boardOrderPeers, parseBoardColor, withBoardColor } from '$lib/board-presentation';
+import { boardOrderPeers, parseBoardColor, parseBoardEmoji, withBoardColor } from '$lib/board-presentation';
 
 const NS = 'app.atmobb';
 const SPACE_ACCESS = `${NS}.forum.board#space`;
@@ -73,6 +73,8 @@ export const actions: Actions = {
     if (!name) return fail(400, { message: 'Enter a name for the board.' });
     const parsedColor = parseBoardColor(form.get('color'));
     if (!parsedColor.valid) return fail(400, { message: 'Board color must be a full hex color such as #1a73e8.' });
+    const parsedEmoji = parseBoardEmoji(form.get('emoji'));
+    if (!parsedEmoji.valid) return fail(400, { message: 'Choose one emoji, or leave it blank for no icon.' });
     if (form.get('private') === 'on' && !privateBoardsEnabled()) {
       return fail(400, { message: 'Members-only boards aren\'t available on this deployment.' });
     }
@@ -87,6 +89,7 @@ export const actions: Actions = {
     const maxOrder = Math.max(-1, ...peers.map((b) => b.value.order ?? -1));
     const value = withBoardColor<Record<string, unknown>>({
       name,
+      ...(parsedEmoji.emoji ? { emoji: parsedEmoji.emoji } : {}),
       description: optional(form.get('description')),
       category,
       parent,
@@ -145,14 +148,18 @@ export const actions: Actions = {
     if (!name) return fail(400, { message: 'Enter a name for the board.' });
     const parsedColor = parseBoardColor(form.get('color'));
     if (!parsedColor.valid) return fail(400, { message: 'Board color must be a full hex color such as #1a73e8.' });
+    const parsedEmoji = parseBoardEmoji(form.get('emoji'));
+    if (!parsedEmoji.valid) return fail(400, { message: 'Choose one emoji, or leave it blank for no icon.' });
     const record = withBoardColor({
       ...board.value,
       name,
+      emoji: parsedEmoji.emoji,
       description: optional(form.get('description')),
       category: optional(form.get('category')),
     }, parsedColor.color);
     if (!record.description) delete record.description;
     if (!record.category) delete record.category;
+    if (!record.emoji) delete record.emoji;
 
     // Privacy toggle: create the space on public→private, or (with an explicit
     // confirm) tear it down on private→public — deleting a space cascades to
@@ -217,6 +224,7 @@ export const actions: Actions = {
         (b.value.description ?? undefined) === record.description &&
         (b.value.category ?? undefined) === record.category &&
         (b.value.color ?? undefined) === record.color &&
+        (b.value.emoji ?? undefined) === record.emoji &&
         spaceOfBoard(b.value.access) === spaceOfBoard(record.access)
       );
     });

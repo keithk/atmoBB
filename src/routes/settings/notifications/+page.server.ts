@@ -3,8 +3,9 @@ import type { Actions, PageServerLoad } from './$types';
 import { FORUM_DID, getBoardIndex } from '$lib/server/appview';
 import { boardPath } from '$lib/appview-paths';
 import { agentFor } from '$lib/server/atproto-oauth';
-import { getWatches, unwatchBoard, watchFailureMessage } from '$lib/server/pds';
-import { blobCid, blobUrl } from '$lib/server/profiles';
+import { getActorProfile, saveProfile, getWatches, unwatchBoard, watchFailureMessage } from '$lib/server/pds';
+import { blobCid, blobUrl, bustProfileCache } from '$lib/server/profiles';
+import { forumProfileOverride, profileForForum } from '$lib/profile-overrides';
 import { canRetryTurnOn, enableNotifications, forumPermissionDetails, optInDeps, recheckPending } from '$lib/server/notify/optin';
 import { safeReturnPath } from '$lib/server/notify/return-path';
 import { readMember, setPromptDismissed, setStatus } from '$lib/server/notify/store';
@@ -27,13 +28,16 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   if (!locals.user) redirect(302, '/login');
   const did = locals.user.did;
   const deps = optInDeps(agentFor);
-  const [watches, index] = await Promise.all([getWatches(did, FORUM_DID()), getBoardIndex(FORUM_DID())]);
+  const [watches, index, profile] = await Promise.all([getWatches(did, FORUM_DID()), getBoardIndex(FORUM_DID()), getActorProfile(did)]);
   // KTD14: a member who approved in atmo.pub since their last visit flips to
   // on here, since the relay does not call this forum back yet.
   if (deps) await recheckPending({ did, deps, ...(await permissionDetails(index)) });
   const member = await readMember(did).catch(() => null);
   const names = new Map(index.boards.map((b) => [b.uri, b.value.name]));
   return {
+    globalNotifications: profile?.notifications !== false ? 'on' : 'off',
+    localNotifications: forumProfileOverride(profile, FORUM_DID())?.fields.includes('notifications')
+      ? (profileForForum(profile, FORUM_DID())?.notifications !== false ? 'on' : 'off') : 'inherit',
     status: member?.status ?? 'off',
     canSend: deps !== null,
     canRetry: canRetryTurnOn(member, Date.now()),
@@ -52,6 +56,23 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 };
 
 export const actions: Actions = {
+  preferences: async ({ request, locals }) => {
+    if (!locals.user) return fail(401, { message: 'Log in to change your notifications.' });
+    const fd = await request.formData();
+    const scope = fd.get('scope');
+    const preference = fd.get('notifications');
+    if ((scope !== 'all' && scope !== 'forum') ||
+        (preference !== 'on' && preference !== 'off' && !(scope === 'forum' && preference === 'inherit'))) {
+      return fail(400, { message: 'Choose a valid notification preference and scope.' });
+    }
+    try {
+      await saveProfile(locals.user.did, { notifications: preference === 'on' }, scope === 'forum' ? FORUM_DID() : undefined, preference === 'inherit' ? ['notifications'] : []);
+      bustProfileCache(locals.user.did);
+      return { saved: true };
+    } catch (error) {
+      return fail(502, { message: error instanceof Error ? error.message : 'Could not save notification preferences.' });
+    }
+  },
   enable: async ({ request, locals, url }) => {
     if (!locals.user) return fail(401, { message: 'Log in to change your notifications.' });
     const did = locals.user.did;

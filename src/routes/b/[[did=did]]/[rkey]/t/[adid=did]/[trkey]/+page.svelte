@@ -2,6 +2,7 @@
   import { invalidateAll } from '$app/navigation';
   import { enhance } from '$app/forms';
   import PostMeta from '$lib/components/PostMeta.svelte';
+  import BoardLabel from '$lib/components/BoardLabel.svelte';
   import RichText from '$lib/components/RichText.svelte';
   import RichTextEditor from '$lib/components/RichTextEditor.svelte';
   import { page } from '$app/state';
@@ -67,7 +68,7 @@
 {#if data.thread}
   <nav class="atm-crumbs atm-crumbs--spaced">
     <a href="/">{data.forum.name}</a><span class="atm-crumbs__sep">›</span>
-    <a href={data.boardPath}>{data.boardName ?? 'Board'}</a><span class="atm-crumbs__sep">›</span>
+    <a href={data.boardPath}><BoardLabel uri={data.thread.value.board} name={data.boardName} /></a><span class="atm-crumbs__sep">›</span>
     <span class="atm-crumbs__current">{data.thread.value.title}</span>
     <span class="atm-chip" title="members-only board">🔒 members-only</span>
   </nav>

@@ -11,6 +11,7 @@ vi.mock('./atproto-oauth', () => ({
 }));
 
 import { getOwnAvatarProfile, saveProfile } from './pds';
+import { profileForForum } from '$lib/profile-overrides';
 
 beforeEach(() => {
   repo.getRecord.mockReset();
@@ -19,6 +20,57 @@ beforeEach(() => {
 });
 
 describe('profile avatars', () => {
+  it('preserves defaults and other forums across local edits, clearing, and inheritance', async () => {
+    let existing: Record<string, unknown> = { displayName: 'Keith', signature: [{ text: 'Global' }], theme: 'forest', notifications: false,
+      forumProfiles: [{ forum: 'did:plc:other', fields: ['signature'], signature: [{ text: 'Other' }] }], extension: 'keep' };
+    repo.getRecord.mockImplementation(async () => ({ data: { value: existing } }));
+    repo.putRecord.mockImplementation(async ({ record }) => { existing = record; });
+    const did = 'did:plc:scope-test';
+    const forum = 'did:plc:friends';
+    await saveProfile(did, { signature: [{ text: 'Titular Keith' }], notifications: true }, forum);
+    expect(profileForForum(existing, forum)).toMatchObject({ displayName: 'Keith', signature: [{ text: 'Titular Keith' }], notifications: true });
+    await saveProfile(did, { signature: [], website: '' }, forum);
+    expect(profileForForum(existing, forum)).not.toHaveProperty('signature');
+    expect(profileForForum(existing, forum).notifications).toBe(true);
+    expect(existing.signature).toEqual([{ text: 'Global' }]);
+    await saveProfile(did, { displayName: 'Account name' });
+    expect(profileForForum(existing, forum)).not.toHaveProperty('signature');
+    await saveProfile(did, {}, forum, ['signature', 'website', 'notifications']);
+    expect(profileForForum(existing, forum)).toMatchObject({ displayName: 'Account name', signature: [{ text: 'Global' }], notifications: false, theme: 'forest', extension: 'keep' });
+    expect(existing.forumProfiles).toEqual([{ forum: 'did:plc:other', fields: ['signature'], signature: [{ text: 'Other' }] }]);
+  });
+
+  it('uploads and restores forum avatars without removing the account avatar', async () => {
+    let existing: Record<string, unknown> = { avatar: { ref: { $link: 'global' } } };
+    repo.getRecord.mockImplementation(async () => ({ data: { value: existing } }));
+    repo.putRecord.mockImplementation(async ({ record }) => { existing = record; });
+    repo.uploadBlob.mockResolvedValue({ data: { blob: { ref: { $link: 'local' } } } });
+    await saveProfile('did:plc:avatar-scope', { avatar: { bytes: new Uint8Array([1]), mimeType: 'image/png' } }, 'did:plc:friends');
+    expect(profileForForum(existing, 'did:plc:friends').avatar).toEqual({ ref: { $link: 'local' } });
+    await saveProfile('did:plc:avatar-scope', { avatar: null }, 'did:plc:friends');
+    expect(profileForForum(existing, 'did:plc:friends')).not.toHaveProperty('avatar');
+    expect(existing.avatar).toEqual({ ref: { $link: 'global' } });
+    await saveProfile('did:plc:avatar-scope', {}, 'did:plc:friends', ['avatar']);
+    expect(existing).not.toHaveProperty('forumProfiles');
+    expect(profileForForum(existing, 'did:plc:friends').avatar).toEqual({ ref: { $link: 'global' } });
+  });
+
+  it('never replaces the account record when reading it fails', async () => {
+    repo.getRecord.mockRejectedValue(new Error('PDS unavailable'));
+    await expect(saveProfile('did:plc:unavailable', { signature: [] }, 'did:plc:friends')).rejects.toThrow('PDS unavailable');
+    expect(repo.putRecord).not.toHaveBeenCalled();
+  });
+
+  it('guards writes against concurrent edits and asserts absence for a new profile', async () => {
+    repo.getRecord.mockResolvedValue({ data: { value: { displayName: 'Keith' }, cid: 'bafy-current' } });
+    repo.putRecord.mockRejectedValueOnce(new Error('InvalidSwap'));
+    await expect(saveProfile('did:plc:race', { signature: [] }, 'did:plc:friends')).rejects.toThrow('InvalidSwap');
+    expect(repo.putRecord.mock.calls[0][0].swapRecord).toBe('bafy-current');
+    repo.getRecord.mockRejectedValue({ error: 'RecordNotFound' });
+    await saveProfile('did:plc:new', { displayName: 'New member' });
+    expect(repo.putRecord.mock.calls[1][0]).toMatchObject({ swapRecord: null, record: { displayName: 'New member' } });
+  });
+
   it('persists forum opt-outs, preserves them during profile edits, and clears them from the layout cache', async () => {
     let existing = { displayName: 'Keep me', theme: 'forest' };
     repo.getRecord.mockImplementation(async () => ({ data: { value: existing } }));

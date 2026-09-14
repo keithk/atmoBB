@@ -12,6 +12,7 @@ dist/
 .data/
 .svelte-kit/
 build/
+__pycache__/
 .playwright-cli/
 .amp/portals/
 

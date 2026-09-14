@@ -6,6 +6,7 @@ import { resolveRecipients, type PostRecord, type Recipient } from '$lib/notify/
 import { send, type SendInput, type SendResult } from './relay';
 import { senderDid } from './sender';
 import { appendEntry, bumpStats, readMember, setStatus, updateEntry, type NotifyDelivery } from './store';
+import { getPublicProfile } from '../profiles';
 
 // Everything that happens after a post is written: who to tell, what to say,
 // one relay attempt each, and the local send log (KTD6, KTD7, KTD8, KTD13).
@@ -37,6 +38,7 @@ export interface DispatchDeps {
   forumDid: () => string;
   getWatchers: (forum: string, board: string) => Promise<string[]>;
   boardMembers: (space: string) => Promise<{ did: string }[]>;
+  notificationsEnabled: (did: string) => Promise<boolean>;
   send: (input: SendInput) => Promise<SendResult>;
   store: {
     readMember: typeof readMember;
@@ -55,6 +57,7 @@ const defaultDeps: DispatchDeps = {
   forumDid: FORUM_DID,
   getWatchers,
   boardMembers,
+  notificationsEnabled: async (did) => (await getPublicProfile(did, undefined, true))?.notifications !== false,
   send,
   store: { readMember, appendEntry, updateEntry, setStatus, bumpStats },
   now: Date.now,
@@ -123,7 +126,9 @@ async function dispatch(input: NotifyForPostInput, deps: DispatchDeps) {
       }),
     ),
   );
-  const on = recipients.filter((_, i) => states[i]?.status === 'on');
+  const connected = recipients.filter((_, i) => states[i]?.status === 'on');
+  const enabled = await Promise.all(connected.map((r) => deps.notificationsEnabled(r.did).catch(() => false)));
+  const on = connected.filter((_, i) => enabled[i]);
   if (!on.length) return;
 
   const sender = deps.senderDid();

@@ -8,6 +8,7 @@
 # The web app and Happyview listen on loopback only. Either run Caddy on the
 # host (docs/self-hosting.md) or add the bundled proxy:
 #   docker compose -f compose.yml -f compose.caddy.yml up -d
+# ATMOBB_INSTANCE_CONFIG_VERSION=1
 
 services:
   postgres:
@@ -32,7 +33,7 @@ services:
     image: ghcr.io/gamesgamesgamesgamesgames/happyview:2.14.0
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${ATMOBB_HAPPYVIEW_PORT:-3000}:3000"
     environment:
       DATABASE_URL: postgres://happyview:${POSTGRES_PASSWORD}@postgres/happyview
       PUBLIC_URL: https://${HAPPYVIEW_HOST:?run ./atmobb install}
@@ -71,7 +72,7 @@ services:
     image: ghcr.io/keithk/atmobb:0.2.1
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3001:3001"
+      - "127.0.0.1:${ATMOBB_APP_PORT:-3001}:3001"
     environment:
       ORIGIN: https://${APP_HOST:?run ./atmobb install}
       ATMOBB_APP_URL: https://${APP_HOST}
@@ -81,10 +82,14 @@ services:
       HAPPYVIEW_SESSION_SECRET: ${SESSION_SECRET}
       HAPPYVIEW_CLIENT_KEY: ${HAPPYVIEW_CLIENT_KEY:-}
       ATMOBB_AVATAR_BUILDER_URL: ${ATMOBB_AVATAR_BUILDER_URL:-}
+      ATMOBB_UPDATER_TOKEN: ${ATMOBB_UPDATER_TOKEN:-}
     volumes:
       # OAuth sessions for every member and the forum account. Owned by uid
       # 10001 on the host; back it up with Postgres (`./atmobb backup`).
       - ${ATMOBB_DATA_DIR:-/var/lib/atmobb/oauth}:/data
+      # A fixed-action, authenticated host service owns Docker access. The web
+      # app can request stable or main; it cannot run commands or use Docker.
+      - ${ATMOBB_UPDATER_SOCKET_DIR:-/run/atmobb-updater}:/run/atmobb-updater
     depends_on:
       setup:
         condition: service_completed_successfully

@@ -242,12 +242,13 @@
 
 <div class="wrap">
   <nav class="atm-crumbs">
-    <a href="/settings/profile">edit profile</a><span class="atm-crumbs__sep">›</span>
+    <a href={`/settings/profile?scope=${data.scope}`}>edit profile</a><span class="atm-crumbs__sep">›</span>
     <span class="atm-crumbs__current">create a userpic</span>
   </nav>
 
   <Card title="Create a 100 × 100 userpic">
     <p class="lede">Choose a picture, crop it to a square, and add a border if you like.</p>
+    <p class="lede">{data.scope === 'forum' ? `This avatar will apply only to ${data.forum.name}.` : 'This avatar will be your account default; forum overrides stay unchanged.'}</p>
 
     <div class="builder">
       <section class="preview" aria-labelledby="preview-title">
@@ -344,7 +345,7 @@
     <form
       bind:this={saveForm}
       method="POST"
-      action="?/save"
+      action={`?/save&scope=${data.scope}`}
       enctype="multipart/form-data"
       class="actions"
       use:enhance={() => {

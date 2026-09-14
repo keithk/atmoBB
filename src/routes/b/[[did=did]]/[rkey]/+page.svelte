@@ -4,6 +4,7 @@
   import { page } from '$app/state';
   import { relTime } from '$lib/reltime';
   import Avatar from '$lib/components/Avatar.svelte';
+  import BoardLabel from '$lib/components/BoardLabel.svelte';
   import MemberLink from '$lib/components/MemberLink.svelte';
   import RichTextEditor from '$lib/components/RichTextEditor.svelte';
   import TopicReadStatus from '$lib/components/TopicReadStatus.svelte';
@@ -44,13 +45,13 @@
 
 <nav class="atm-crumbs">
   <a href="/">{data.forum.name}</a><span class="atm-crumbs__sep">›</span>
-  <span class="atm-crumbs__current">{data.board?.name}</span>
+  <span class="atm-crumbs__current"><BoardLabel uri={data.boardUri} name={data.board?.name} /></span>
 </nav>
 
 <div class="head">
   <div>
     <h1 class="head__title">
-      {data.board?.name}
+      <BoardLabel uri={data.boardUri} name={data.board?.name} />
       {#if data.private}
         <span class="atm-chip" title="members-only board">🔒 members-only</span>
       {/if}

@@ -11,6 +11,7 @@
     reconsented = false,
     action = '',
     next,
+    muted = false,
   }: {
     status: string;
     canSend: boolean;
@@ -19,6 +20,7 @@
     reconsented?: boolean;
     action?: string;
     next: string;
+    muted?: boolean;
   } = $props();
 </script>
 
@@ -34,10 +36,10 @@
     {#if !canSend}
       <p class="atm-notice">This forum can't send notifications yet: it needs to run on an https address first.</p>
     {:else if status === 'on'}
-      <p class="state">Notifications are on.</p>
+      <p class="state">{muted ? 'This forum is connected, but notifications are off in your preferences.' : 'Notifications are on.'}</p>
       <form method="POST" action="{action}?/disable">
         <input type="hidden" name="next" value={next} />
-        <button class="atm-btn atm-btn--secondary">Turn off</button>
+        <button class="atm-btn atm-btn--secondary">{muted ? 'Disable forum delivery' : 'Turn off'}</button>
       </form>
     {:else if status === 'pending'}
       <p class="state">
