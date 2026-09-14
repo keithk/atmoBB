@@ -45,6 +45,7 @@
     "@tiptap/extensions": "^3.30.5",
     "@tiptap/pm": "^3.30.5",
     "@tiptap/starter-kit": "^3.30.5",
+    "isomorphic-git": "1.42.2",
     "postgres": "^3.4.9",
     "satori": "^0.26.0"
   },
