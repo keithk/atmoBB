@@ -10,7 +10,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   return { ...actual, rename: vi.fn(actual.rename) };
 });
-import { KV_UNINSTALL_GRACE_MS, KvQuotaError, kvDelete, kvGet, kvList, kvSet, purgeUninstalledKv } from './kv';
+import { KV_UNINSTALL_GRACE_MS, KvQuotaError, kvDelete, kvGet, kvList, kvRestore, kvSet, kvSnapshot, purgeUninstalledKv } from './kv';
 
 let directory: string;
 const storePath = (installId: string) => join(directory, 'extensions', installId, 'kv.json');
@@ -155,6 +155,32 @@ describe('durability', () => {
     vi.mocked(rename).mockRejectedValueOnce(new Error('disk full'));
     await expect(kvSet(INSTALL, { key: 'a', value: 2 })).rejects.toThrow('disk full');
     expect(await readFile(storePath(INSTALL), 'utf8')).toBe(before);
+  });
+});
+
+describe('snapshots and migration writes', () => {
+  it('restores a snapshot exactly, including a store that did not exist yet', async () => {
+    const empty = await kvSnapshot(INSTALL);
+    await kvSet(INSTALL, { key: 'a', value: 1 });
+    const before = await kvSnapshot(INSTALL);
+    await kvSet(INSTALL, { key: 'a', value: 2 });
+    await kvSet(INSTALL, { key: 'b', value: 3 });
+    await kvRestore(INSTALL, before);
+    expect(await readFile(storePath(INSTALL), 'utf8')).toBe(before);
+    await kvRestore(INSTALL, empty);
+    expect(await kvList(INSTALL, { prefix: '' })).toEqual({ keys: [], cursor: null });
+  });
+
+  it("doesn't count a migration's writes against the rate cap, and refuses them once its signal aborts", async () => {
+    state.env.ATMOBB_KV_MAX_WRITES_PER_MINUTE = '1';
+    const migration = new AbortController();
+    await kvSet(INSTALL, { key: 'a', value: 1 });
+    await kvSet(INSTALL, { key: 'b', value: 2 }, { migration: migration.signal });
+    await kvDelete(INSTALL, { key: 'a' }, { migration: migration.signal });
+    migration.abort();
+    await expect(kvSet(INSTALL, { key: 'c', value: 3 }, { migration: migration.signal })).rejects.toThrow(/abandoned/);
+    await expect(kvDelete(INSTALL, { key: 'b' }, { migration: migration.signal })).rejects.toThrow(/abandoned/);
+    expect(await kvList(INSTALL, { prefix: '' })).toEqual({ keys: ['b'], cursor: null });
   });
 });
 

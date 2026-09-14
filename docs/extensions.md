@@ -54,7 +54,7 @@ When your authority publishes its lexicons (see [Lexicons](lexicons.md)), review
 
 ### Capabilities and their limits
 
-Every host call needs its capability granted in the manifest; an ungranted call throws a `HostCallError` with `code: 'capability_not_granted'`. Every call, granted or not, runs under one budget: `ATMOBB_EXTENSIONS_CALL_TIMEOUT_MS` (5 s default) wall clock including host I/O, `ATMOBB_EXTENSIONS_MEMORY_PAGES` (1024 default, 64 MiB) of guest memory, `ATMOBB_EXTENSIONS_CALL_HOST_CALLS` (100) host calls, `ATMOBB_EXTENSIONS_CALL_ARG_BYTES` (256 KB) sent to the host, `ATMOBB_EXTENSIONS_CALL_RETURN_BYTES` (1 MB) returned to the guest plus the handler's own output, and `ATMOBB_EXTENSIONS_HOST_IO_MS` (3 s, capped at 80% of the call timeout) spent waiting on host functions. Going past any of these fails the call. An install's instance closes after 5 minutes idle and cold-starts on its next call.
+Every host call needs its capability granted in the manifest; an ungranted call throws a `HostCallError` with `code: 'capability_not_granted'`. Every call, granted or not, runs under one budget: `ATMOBB_EXTENSIONS_CALL_TIMEOUT_MS` (5 s default) wall clock including host I/O, `ATMOBB_EXTENSIONS_MEMORY_PAGES` (1024 default, 64 MiB) of guest memory, `ATMOBB_EXTENSIONS_CALL_HOST_CALLS` (100) host calls (`ATMOBB_EXTENSIONS_MIGRATE_HOST_CALLS` (2000) for a `migrate` call), `ATMOBB_EXTENSIONS_CALL_ARG_BYTES` (256 KB) sent to the host, `ATMOBB_EXTENSIONS_CALL_RETURN_BYTES` (1 MB) returned to the guest plus the handler's own output, and `ATMOBB_EXTENSIONS_HOST_IO_MS` (3 s, capped at 80% of the call timeout) spent waiting on host functions. Going past any of these fails the call. An install's instance closes after 5 minutes idle and cold-starts on its next call.
 
 **`kv`**: a private JSON store per install, namespaced so installs never see each other's keys.
 
@@ -65,7 +65,7 @@ kv.delete(key)
 kv.list(prefix, { limit, cursor })
 ```
 
-Caps: `ATMOBB_KV_MAX_KEYS` (500) keys, `ATMOBB_KV_MAX_KEY_LENGTH` (200 characters), `ATMOBB_KV_MAX_VALUE_BYTES` (64 KB) per value, `ATMOBB_KV_MAX_STORE_BYTES` (256 KB) for the whole store, `ATMOBB_KV_MAX_WRITES_PER_MINUTE` (60) sets and deletes a minute. The store survives disable and lives 30 days past uninstall before a purge removes it.
+Caps: `ATMOBB_KV_MAX_KEYS` (500) keys, `ATMOBB_KV_MAX_KEY_LENGTH` (200 characters), `ATMOBB_KV_MAX_VALUE_BYTES` (64 KB) per value, `ATMOBB_KV_MAX_STORE_BYTES` (256 KB) for the whole store, `ATMOBB_KV_MAX_WRITES_PER_MINUTE` (60) sets and deletes a minute, not counting writes from `migrate`. The store survives disable, and lives 30 days past uninstall before a purge removes it; reinstalling the same repository in that time gets it back.
 
 **`records`**: create, put, delete, get, and list records in your declared collections, always written to the forum's repo as the forum account.
 
@@ -86,7 +86,7 @@ timers.set({ name, at, payload? })  // ISO 8601; replaces a pending timer with t
 timers.cancel(name)
 ```
 
-`at` has to be at least `ATMOBB_EXTENSIONS_TIMER_MIN_DELAY_MS` (60 s) from now, and an install may have at most `ATMOBB_EXTENSIONS_TIMER_CAP` (200) pending. Names are capped at `ATMOBB_EXTENSIONS_TIMER_MAX_NAME_LENGTH` (200 characters) and payloads at `ATMOBB_EXTENSIONS_TIMER_MAX_PAYLOAD_BYTES` (16 KB) serialized. A poller checks every 30 seconds; delivery is at least once, so a `timer` handler has to tolerate a repeat. A failed dispatch retries with backoff starting at a minute and doubling up to an hour; a timer whose install is gone or disabled is dropped rather than fired or retried.
+`at` has to be at least `ATMOBB_EXTENSIONS_TIMER_MIN_DELAY_MS` (60 s) from now, and an install may have at most `ATMOBB_EXTENSIONS_TIMER_CAP` (200) pending. Names are capped at `ATMOBB_EXTENSIONS_TIMER_MAX_NAME_LENGTH` (200 characters) and payloads at `ATMOBB_EXTENSIONS_TIMER_MAX_PAYLOAD_BYTES` (16 KB) serialized. A poller checks every 30 seconds; delivery is at least once, so a `timer` handler has to tolerate a repeat. A failed dispatch retries with backoff starting at a minute and doubling up to an hour; a timer whose install is disabled waits and fires, late, once it's enabled again; a timer whose install is gone is dropped.
 
 **`notify`**: send to members who turned notifications on.
 
@@ -104,7 +104,7 @@ notify({ to, title, message, link? })  // up to 50 DIDs; the host prefixes your 
 - **`attach(input)`**, optional. Staff attached you to a thread; `input` is `{ viewer, thread, forum, input }`, with `input.input` whatever your attach form collected. Refusing or throwing undoes the attach, and atmoBB removes the binding it already wrote. Without this handler you can never be attached to a thread.
 - **`timer({ name, at, payload, forum })`**, optional. A `timers.set` call came due.
 - **`openWork()`**, optional, returns a boolean. Whether there's work in progress an admin should know about before disabling or uninstalling you.
-- **`migrate({ from, to })`**, optional. Runs once, before an update takes effect, when the new release's `dataVersion` is higher than the version your stored data is at. Throwing keeps the previous release active.
+- **`migrate({ from, to })`**, optional. Runs once, before an update takes effect, when the new release's `dataVersion` is higher than the version your stored data is at. Throwing keeps the previous release active and puts your k/v store back as it was before `migrate` ran; records it already wrote stay written. It may write records only in collections both the old and the new release declare, since the forum's login doesn't cover a collection the update adds until the update is live; write those from the new release's other handlers instead.
 
 `forum.did` is the forum account's DID, the repo every record you write lands in, so you can build at-uris to your own records without writing one first.
 
@@ -167,7 +167,8 @@ Enter a repository's `https://` URL and, optionally, a tag; atmoBB fetches the t
 - the records it would publish, all under one NSID authority, and whether that authority's published lexicons match what's shipped: **Verified** (they match), **Unpublished** (nothing to check against), or refused outright if they differ;
 - one of three trust marks: **Unverified extension** (the atmobb.app directory hasn't endorsed this repository; you can still install it, but only if you trust who publishes it), **Endorsed repository** (the directory endorses the repository but hasn't reviewed this exact release), or **Trusted** (the directory endorses the repository and reviewed this exact release);
 - what it can do, from its declared capabilities;
-- what it can see: the account (DID) of every signed-in member who opens a thread it's attached to, and whether they're a member, staff, or banned here.
+- what it can see: the account (DID) of every signed-in member who opens a thread it's attached to, and whether they're a member, staff, or banned here;
+- when the same repository was uninstalled here within the last 30 days, that the data it saved comes back.
 
 Confirming claims the collections, moves the bundle into place, and installs it active. An update shows the same review plus a diff against the manifest currently running: added or removed collections and capabilities, a host API bump, and whether stored data needs a `migrate`.
 
@@ -177,13 +178,13 @@ Installing or updating an extension that declares new collections widens the OAu
 
 ### Updates, rollback, and migrate
 
-**Admin → Extensions → an install** lists version tags newer than the one running, and any tag already run whose commit has since changed underneath it. Staging and applying an update works like install: review, then confirm. If the new release's `dataVersion` is higher, its `migrate` handler runs against the install's stored data before it switches over; if `migrate` throws, the previous release stays active and nothing moves.
+**Admin → Extensions → an install** lists version tags newer than the one running, and any tag already run whose commit has since changed underneath it. Staging and applying an update works like install: review, then confirm. If the new release's `dataVersion` is higher, its `migrate` handler runs against the install's stored data before it switches over. If `migrate` throws or goes past its limits, the previous release stays active and the install's k/v store is put back as it was; k/v writes from a migration that's still running are refused from then on. Records it already wrote to the forum's repo aren't undone. A migration's k/v writes don't count against the per-minute write rate, and it may only write records in collections both releases declare.
 
 Rollback switches an install back to a release it has run before, as long as that release's bundle is still on disk and its recorded `dataVersion` still matches what's currently active. A successful `migrate` forecloses rolling back past it, since the data it converted is no longer at the old version.
 
 ### Disabling and uninstalling
 
-Disable stops an install from running; enable turns it back on. Both, and uninstall, first ask the install's `openWork` handler, if it has one, whether there's work in progress; if it says yes, atmoBB refuses and the page offers to **force** it through instead. Uninstalling also removes the install's bundles; its k/v store and pending timers survive for 30 days in case of a reinstall, then a daily purge removes them. Records it already published, and its collection claims, are never touched by uninstalling.
+Disable stops an install from running; enable turns it back on. Both, and uninstall, first ask the install's `openWork` handler, if it has one, whether there's work in progress; if it says yes, atmoBB refuses and the page offers to **force** it through instead. Uninstalling also removes the install's bundles; its k/v store and pending timers survive for 30 days, then a daily purge removes them. Reinstalling the same repository inside those 30 days picks the install back up under its old id, with its k/v store and any timers that haven't come due yet (a timer that came due while it was uninstalled was dropped). The install review says so. The reinstalled release's `migrate` doesn't run, even when its `dataVersion` is higher, so the data comes back as the earlier release left it. Records it already published, and its collection claims, are never touched by uninstalling.
 
 ### Claims
 

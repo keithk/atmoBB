@@ -14,6 +14,7 @@ const ALICE = 'did:plc:alice';
 const BOB = 'did:plc:bob';
 const CAROL = 'did:plc:carol';
 const GAME = 'com.example.diplomacy.game';
+const ORDER = 'com.example.diplomacy.order';
 const SENTINEL = 'SENTINEL-7d1c4e';
 const THREAD = `at://${ALICE}/app.atmobb.discussion.thread/3kthread`;
 
@@ -28,13 +29,18 @@ const state = vi.hoisted(() => ({
   forumWrites: [] as unknown[][],
   writeDelayMs: 0,
   runtimeHas: vi.fn(),
+  migrateAs: null as unknown,
+  migrateOutput: null as string | null,
   send: vi.fn(),
   setStatus: vi.fn(),
 }));
 
 vi.mock('$env/dynamic/private', () => ({ env: state.env }));
 vi.mock('./lock', () => ({ extensionsLockHeld: () => state.lockHeld }));
-// The real runtime, with its export checks counted.
+// The real runtime, with its export checks counted. While `migrateAs` is set,
+// a migrate call runs the probe's `action` with that input instead, on the
+// migrate call's own module and budget, so a test can have a migration call
+// any host function.
 vi.mock('./runtime', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./runtime')>();
   return {
@@ -45,6 +51,12 @@ vi.mock('./runtime', async (importOriginal) => {
       runtime.has = (installId, name) => {
         state.runtimeHas(installId, name);
         return has(installId, name);
+      };
+      const call = runtime.call;
+      runtime.call = async (installId, name, input, options) => {
+        if (name !== 'migrate' || !state.migrateAs) return call(installId, name, input, options);
+        state.migrateOutput = await call(installId, 'action', JSON.stringify(state.migrateAs), options);
+        return state.migrateOutput;
       };
       return runtime;
     },
@@ -169,6 +181,8 @@ beforeEach(async () => {
   state.forumWrites = [];
   state.writeDelayMs = 0;
   state.runtimeHas.mockReset();
+  state.migrateAs = null;
+  state.migrateOutput = null;
   state.send.mockReset();
   state.send.mockResolvedValue({ ok: true, status: 200 });
   state.setStatus.mockReset();
@@ -576,12 +590,52 @@ describe('optional handlers', () => {
     const { install, dir } = await addInstall(id);
     const from = { tag: 'v0.1.0', sha: install.sha, manifest: install.manifest, dir };
     const to = { tag: 'v0.2.0', sha: 'sha-next', manifest: manifest({ dataVersion: 2 }), dir };
-    const context = { install: install as never, from, to };
+    const context = { install: install as never, from, to, signal: new AbortController().signal };
 
     await migrate({ ...context, to: { ...to, manifest: manifest({ dataVersion: 1 }) } });
     expect(await kvGet(id, { key: 'migrated' })).toEqual({ value: null });
 
     await migrate(context);
     expect(await kvGet(id, { key: 'migrated' })).toEqual({ value: { from: 1, to: 2 } });
+  });
+
+  async function migrationContext(toManifest: ExtensionManifest) {
+    const id = nextId();
+    const { install, dir } = await addInstall(id);
+    const from = { tag: 'v0.1.0', sha: install.sha, manifest: install.manifest, dir };
+    const to = { tag: 'v0.2.0', sha: 'sha-next', manifest: toManifest, dir };
+    return { id, context: { install: install as never, from, to, signal: new AbortController().signal } };
+  }
+
+  /** Run a migration that calls `fn` through the host `times` times, and return the host's replies. */
+  async function migrateCalling(context: Parameters<typeof migrate>[0], fn: string, payload: unknown, times = 1) {
+    state.migrateAs = { action: 'host', input: { fn, payload, times } };
+    await migrate(context);
+    return (JSON.parse(state.migrateOutput!) as { value: { ok: boolean; value?: unknown; error?: { code: string } }[] }).value;
+  }
+
+  it("gives a migration its own host-call budget and doesn't count its k/v writes against the write rate", async () => {
+    state.env.ATMOBB_EXTENSIONS_CALL_HOST_CALLS = '5';
+    state.env.ATMOBB_KV_MAX_WRITES_PER_MINUTE = '2';
+    const { id, context } = await migrationContext(manifest({ dataVersion: 2 }));
+
+    const replies = await migrateCalling(context, 'kv_set', { key: 'converted', value: true }, 10);
+    expect(replies).toEqual(Array(10).fill({ ok: true, value: null }));
+    expect(await kvGet(id, { key: 'converted' })).toEqual({ value: true });
+
+    // An ordinary call is still held to both.
+    const ordinary = await hostCall(id, 'kv_set', { key: 'x', value: 1 }, 3);
+    expect(ordinary.map((reply) => reply.ok)).toEqual([true, true, false]);
+    expect((await callError(hostCall(id, 'kv_get', { key: 'x' }, 6))).code).toBe('call_limit');
+  });
+
+  it('lets a migration write records only in collections both releases declare', async () => {
+    const { context } = await migrationContext(manifest({ dataVersion: 2, collections: [GAME, ORDER] }));
+
+    const [added] = await migrateCalling(context, 'record_create', { collection: ORDER, record: { turn: 1 } });
+    expect(added).toMatchObject({ ok: false, error: { code: 'CollectionNotApproved' } });
+    const [shared] = await migrateCalling(context, 'record_create', { collection: GAME, record: { turn: 1 } });
+    expect(shared).toMatchObject({ ok: true });
+    expect(state.forumWrites).toEqual([[GAME, { turn: 1, $type: GAME }, undefined]]);
   });
 });

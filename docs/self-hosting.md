@@ -387,6 +387,7 @@ The rest tune the sandbox's resource and rate limits, each with a code default t
 | `ATMOBB_EXTENSIONS_CALL_TIMEOUT_MS` | `5000` |
 | `ATMOBB_EXTENSIONS_MEMORY_PAGES` | `1024` (64 KiB pages, so 64 MiB) |
 | `ATMOBB_EXTENSIONS_CALL_HOST_CALLS` | `100` |
+| `ATMOBB_EXTENSIONS_MIGRATE_HOST_CALLS` | `2000` |
 | `ATMOBB_EXTENSIONS_CALL_ARG_BYTES` | `262144` (256 KB) |
 | `ATMOBB_EXTENSIONS_CALL_RETURN_BYTES` | `1048576` (1 MB) |
 | `ATMOBB_EXTENSIONS_HOST_IO_MS` | `3000`, always capped at 80% of the call timeout |

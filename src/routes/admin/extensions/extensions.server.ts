@@ -126,6 +126,7 @@ export function reviewView(review: InstallReview, current: ExtensionManifest | n
     endorsement,
     unverified: !endorsement?.repositoryEndorsed,
     changes: current ? manifestChanges(current, manifest) : null,
+    restoresData: review.restoresData,
   };
 }
 

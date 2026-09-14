@@ -11,6 +11,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 });
 import { startGitFixtures, validBundle, type FixtureRepo, type GitFixtures, type TreeSpec } from './fixtures/git-server';
 import { claimCollections, listClaims, releaseClaim } from './claims';
+import { KV_UNINSTALL_GRACE_MS, kvGet, kvSet } from './kv';
 import { acquireExtensionsLock } from './lock';
 import type { LexiconResolver } from './manifest';
 import {
@@ -283,6 +284,55 @@ describe('updates', () => {
     expect(await disableInstall(installed.id)).toMatchObject({ ok: true, install: { state: 'disabled' } });
   });
 
+  it('puts k/v back exactly as it was when the migration writes some keys and then throws', async () => {
+    const repo = newRepo();
+    repo.tag('v0.1.0', withVersion('0.1.0'));
+    const installed = await install(repo);
+    repo.tag('v0.2.0', withVersion('0.2.0', { dataVersion: 2 }));
+    const update = await stageUpdate(installed.id, 'v0.2.0', options);
+    if (!update.ok) throw new Error(update.errors[0].message);
+    await kvSet(installed.id, { key: 'game', value: { turn: 3 } });
+    const storePath = join(extensionsDir(), installed.id, 'kv.json');
+    const before = await readFile(storePath, 'utf8');
+
+    const result = await applyUpdate(installed.id, update.review.stagingId, {
+      migrate: async ({ install: migrating, signal }) => {
+        await kvSet(migrating.id, { key: 'game', value: { turn: 3, version: 2 } }, { migration: signal });
+        await kvSet(migrating.id, { key: 'players', value: [] }, { migration: signal });
+        throw new Error('players cannot be converted');
+      },
+    });
+    expect(result).toMatchObject({ ok: false, errors: [{ field: 'migrate' }] });
+    expect(await readFile(storePath, 'utf8')).toBe(before);
+  });
+
+  it("refuses a migration's k/v writes after the update gives up on it", async () => {
+    const repo = newRepo();
+    repo.tag('v0.1.0', withVersion('0.1.0'));
+    const installed = await install(repo);
+    repo.tag('v0.2.0', withVersion('0.2.0', { dataVersion: 2 }));
+    const update = await stageUpdate(installed.id, 'v0.2.0', options);
+    if (!update.ok) throw new Error(update.errors[0].message);
+
+    let lateWrite: Promise<string> | undefined;
+    const result = await applyUpdate(installed.id, update.review.stagingId, {
+      migrateTimeoutMs: 50,
+      migrate: ({ install: migrating, signal }) =>
+        new Promise<void>(() => {
+          setTimeout(() => {
+            lateWrite = kvSet(migrating.id, { key: 'game', value: 'converted' }, { migration: signal }).then(
+              () => 'written',
+              (error: Error) => error.message,
+            );
+          }, 100);
+        }),
+    });
+    expect(result).toMatchObject({ ok: false, errors: [{ field: 'migrate' }] });
+    await vi.waitFor(() => expect(lateWrite).toBeDefined());
+    expect(await lateWrite).toMatch(/abandoned/);
+    expect(await kvGet(installed.id, { key: 'game' })).toEqual({ value: null });
+  });
+
   it('refuses rolling back to a release whose collection another repository has claimed since', async () => {
     const chess = 'com.example.chess.game';
     const repo = newRepo();
@@ -343,9 +393,50 @@ describe('disable, enable, uninstall', () => {
     expect(await exists(join(extensionsDir(), installed.id, installed.sha))).toBe(false);
     // Private data outlives the bundles until the uninstall grace period ends.
     expect(await exists(join(extensionsDir(), installed.id, 'kv.json'))).toBe(true);
-    expect(await listUninstalled()).toEqual([{ installId: installed.id, uninstalledAt: expect.any(String) }]);
+    expect(await listUninstalled()).toEqual([{ installId: installed.id, uninstalledAt: expect.any(String), normalizedUrl: `https://git.test/${repo.name}` }]);
     expect(await listClaims()).toMatchObject({ [GAME]: { gitUrl: `https://git.test/${repo.name}` } });
     expect(JSON.parse(await readFile(join(extensionsDir(), 'registry.json'), 'utf8'))).toMatchObject({ installs: [] });
+  });
+
+  it('gives a reinstall of the same repository inside the grace period its install id and data back', async () => {
+    const repo = newRepo();
+    repo.tag('v0.1.0', validBundle());
+    const installed = await install(repo);
+    await kvSet(installed.id, { key: 'game', value: { turn: 3 } });
+    expect(await uninstall(installed.id)).toMatchObject({ ok: true });
+
+    const review = await staged(repo.url, 'v0.1.0');
+    expect(review.restoresData).toBe(true);
+    const result = await confirmInstall(review.stagingId);
+    expect(result).toMatchObject({ ok: true, install: { id: installed.id } });
+    expect(await kvGet(installed.id, { key: 'game' })).toEqual({ value: { turn: 3 } });
+    expect(await listUninstalled()).toEqual([]);
+
+    const other = newRepo();
+    other.tag('v0.1.0', validBundle({ manifest: { collections: [], lexicons: [] } }));
+    const otherReview = await staged(other.url, 'v0.1.0');
+    expect(otherReview.restoresData).toBe(false);
+    const fresh = await confirmInstall(otherReview.stagingId);
+    if (!fresh.ok) throw new Error(fresh.errors[0].message);
+    expect(fresh.install.id).not.toBe(installed.id);
+  });
+
+  it('gives a reinstall a new install id once the grace period has passed', async () => {
+    const repo = newRepo();
+    repo.tag('v0.1.0', validBundle());
+    const installed = await install(repo);
+    expect(await uninstall(installed.id)).toMatchObject({ ok: true });
+    const registry = JSON.parse(await readFile(join(extensionsDir(), 'registry.json'), 'utf8'));
+    registry.uninstalled[0].uninstalledAt = new Date(Date.now() - KV_UNINSTALL_GRACE_MS - 1_000).toISOString();
+    await writeFile(join(extensionsDir(), 'registry.json'), JSON.stringify(registry));
+    resetRegistryCacheForTests();
+
+    const review = await staged(repo.url, 'v0.1.0');
+    expect(review.restoresData).toBe(false);
+    const result = await confirmInstall(review.stagingId);
+    if (!result.ok) throw new Error(result.errors[0].message);
+    expect(result.install.id).not.toBe(installed.id);
+    expect(await listUninstalled()).toEqual([expect.objectContaining({ installId: installed.id })]);
   });
 
   it('uninstalls without asking when there is no open work', async () => {

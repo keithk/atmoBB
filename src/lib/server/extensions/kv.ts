@@ -75,13 +75,15 @@ function serialize(map: Map<string, unknown>): string {
   return JSON.stringify({ keys } satisfies KvFile);
 }
 
-async function saveMap(installId: string, map: Map<string, unknown>): Promise<void> {
+async function saveText(installId: string, text: string): Promise<void> {
   const path = storePath(installId);
   await mkdir(dirname(path), { recursive: true });
   const tmp = `${path}.${randomUUID()}.tmp`;
-  await writeFile(tmp, serialize(map), { mode: 0o600 });
+  await writeFile(tmp, text, { mode: 0o600 });
   await rename(tmp, path);
 }
+
+const saveMap = (installId: string, map: Map<string, unknown>) => saveText(installId, serialize(map));
 
 // One write at a time per install; different installs never block each other.
 const chains = new Map<string, Promise<unknown>>();
@@ -107,12 +109,27 @@ function checkWriteRate(installId: string): void {
   }
 }
 
+/** Options for a write made by an update's migration. */
+export interface KvWriteOptions {
+  /**
+   * Set for a migration's writes: they don't count against the write rate, and
+   * once the signal aborts (the update gave up on the migration) they're
+   * refused, checked in turn with the store's other writes so none lands
+   * after a kvRestore that followed the abort.
+   */
+  migration?: AbortSignal;
+}
+
+function checkMigration(options: KvWriteOptions): void {
+  if (options.migration?.aborted) throw new Error('The migration was abandoned, so its k/v writes are refused');
+}
+
 export async function kvGet(installId: string, payload: KvGet): Promise<KvGetResult> {
   const map = await loadMap(installId);
   return { value: map.has(payload.key) ? (map.get(payload.key) ?? null) : null };
 }
 
-export async function kvSet(installId: string, payload: KvSet): Promise<void> {
+export async function kvSet(installId: string, payload: KvSet, options: KvWriteOptions = {}): Promise<void> {
   const { key, value } = payload;
   if (key.length > maxKeyLength()) {
     throw new KvQuotaError('key_too_long', `Key is ${key.length} characters; the limit is ${maxKeyLength()}`);
@@ -128,7 +145,8 @@ export async function kvSet(installId: string, payload: KvSet): Promise<void> {
   }
 
   await withInstall(installId, async () => {
-    checkWriteRate(installId);
+    checkMigration(options);
+    if (!options.migration) checkWriteRate(installId);
     const map = await loadMap(installId);
     const isNewKey = !map.has(key);
     if (isNewKey && map.size >= maxKeys()) {
@@ -144,8 +162,9 @@ export async function kvSet(installId: string, payload: KvSet): Promise<void> {
   });
 }
 
-export async function kvDelete(installId: string, payload: KvDelete): Promise<void> {
+export async function kvDelete(installId: string, payload: KvDelete, options: KvWriteOptions = {}): Promise<void> {
   await withInstall(installId, async () => {
+    checkMigration(options);
     const map = await loadMap(installId);
     if (!map.has(payload.key)) return;
     map.delete(payload.key);
@@ -162,6 +181,26 @@ export async function kvList(installId: string, payload: KvList): Promise<KvList
   const page = matches.slice(from, from + limit);
   const cursor = from + page.length < matches.length ? page[page.length - 1] : null;
   return { keys: page, cursor };
+}
+
+/** An install's whole store as it stood at one moment, or null when it had none. */
+export type KvSnapshot = string | null;
+
+/** Read the install's store, in turn with its writes. */
+export function kvSnapshot(installId: string): Promise<KvSnapshot> {
+  return withInstall(installId, async () => {
+    try {
+      return await readFile(storePath(installId), 'utf8');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      return null;
+    }
+  });
+}
+
+/** Put the install's store back as `snapshot` found it, in turn with its writes. */
+export function kvRestore(installId: string, snapshot: KvSnapshot): Promise<void> {
+  return withInstall(installId, () => (snapshot === null ? rm(storePath(installId), { force: true }) : saveText(installId, snapshot)));
 }
 
 /** One install's uninstall time, as input to purgeUninstalledKv. */

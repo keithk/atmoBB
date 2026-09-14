@@ -60,6 +60,13 @@
       <dd>atmoBB extension API {review.hostApi}</dd>
     </dl>
 
+    {#if review.restoresData}
+      <p class="review__plain">
+        This repository was uninstalled here within the last 30 days, so the data it saved on this server comes back, just as
+        the earlier install left it.
+      </p>
+    {/if}
+
     {#if changes}
       <section class="review__section">
         <h3 class="review__heading">What changes from {changes.version.from}</h3>

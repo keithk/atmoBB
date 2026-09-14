@@ -110,10 +110,13 @@ interface CallLimits {
   ioMs: number;
 }
 
-function callLimits(): CallLimits {
+/** The limits for one call to the export `name`. */
+function callLimits(name: string): CallLimits {
   return {
-    /** ATMOBB_EXTENSIONS_CALL_HOST_CALLS: host function calls per call. */
-    hostCalls: envInt('ATMOBB_EXTENSIONS_CALL_HOST_CALLS', 100),
+    // ATMOBB_EXTENSIONS_CALL_HOST_CALLS: host function calls per call.
+    // ATMOBB_EXTENSIONS_MIGRATE_HOST_CALLS: host function calls for a migrate
+    // call instead, since a migration may read and rewrite every key.
+    hostCalls: name === 'migrate' ? envInt('ATMOBB_EXTENSIONS_MIGRATE_HOST_CALLS', 2_000) : envInt('ATMOBB_EXTENSIONS_CALL_HOST_CALLS', 100),
     /** ATMOBB_EXTENSIONS_CALL_ARG_BYTES: payload bytes the guest passes to host functions over one call. */
     argBytes: envInt('ATMOBB_EXTENSIONS_CALL_ARG_BYTES', 256 * 1024),
     /** ATMOBB_EXTENSIONS_CALL_RETURN_BYTES: bytes host functions return over one call, and bytes the export outputs. */
@@ -294,7 +297,8 @@ function hostFunction(name: HostFunctionName, op: HostOp<HostFunctionName> | nul
   };
 }
 
-function hostOps(installId: string, manifest: ExtensionManifest, records: RecordInstall): HostOps {
+/** `migration` is set for a migrate call's module, whose k/v writes go through kv's migration path. */
+function hostOps(installId: string, manifest: ExtensionManifest, records: RecordInstall, migration?: AbortSignal): HostOps {
   const writeRecord = <T>(write: () => Promise<T>) => {
     if (!installWindows.take(`records|${installId}`, recordWritesPerHour(), HOUR_MS)) {
       throw new HostCallError('rate_limited', `This extension may write ${recordWritesPerHour()} records an hour`);
@@ -308,12 +312,12 @@ function hostOps(installId: string, manifest: ExtensionManifest, records: Record
     },
     kv_set: async (p) => {
       requireStrings(p, 'key');
-      await kvSet(installId, p);
+      await kvSet(installId, p, { migration });
       return null;
     },
     kv_delete: async (p) => {
       requireStrings(p, 'key');
-      await kvDelete(installId, p);
+      await kvDelete(installId, p, { migration });
       return null;
     },
     kv_list: (p) => {
@@ -419,11 +423,18 @@ async function notify(installId: string, extensionName: string, payload: Record<
 
 // --- modules and the runtime -----------------------------------------------------
 
-async function moduleFor(installId: string, manifest: ExtensionManifest, dir: string): Promise<ExtensionModule> {
+interface MigrationAccess {
+  /** The collections both releases declare, the only ones the forum login is sure to cover while the old release is live. */
+  collections: string[];
+  signal: AbortSignal;
+}
+
+async function moduleFor(installId: string, manifest: ExtensionManifest, dir: string, migration?: MigrationAccess): Promise<ExtensionModule> {
   const lexicons: LexiconDoc[] = await Promise.all(
     manifest.lexicons.map(async (path) => JSON.parse(await readFile(join(dir, ...path.split('/')), 'utf8'))),
   );
-  const ops = hostOps(installId, manifest, { collections: new Set(manifest.collections), lexicons });
+  const collections = new Set(migration?.collections ?? manifest.collections);
+  const ops = hostOps(installId, manifest, { collections, lexicons }, migration?.signal);
   const granted = new Set(manifest.capabilities);
   // Every host function is importable, since a module importing one the host
   // didn't provide couldn't start at all; ungranted ones only refuse.
@@ -491,7 +502,7 @@ async function runCall(install: ExtensionInstall, name: string, input: unknown, 
   const started = performance.now();
   try {
     if (!module) await evictMovedInstance(install);
-    const budget = new CallBudget(callLimits());
+    const budget = new CallBudget(callLimits(name));
     let output: string | null;
     try {
       output = await rt().call(install.id, name, JSON.stringify(input), { hostContext: budget, maxOutputBytes: budget.limits.returnBytes, module });
@@ -663,11 +674,15 @@ export async function openWork(installId: string): Promise<boolean> {
 /**
  * The registry's update hook: when the new release raises the data version,
  * run its `migrate` over the install's data before the install switches to it.
+ * Its k/v writes skip the write rate, and it may write records only in
+ * collections both releases declare: the forum login's scopes follow the live
+ * release, so a collection the update adds isn't covered until it's applied.
  */
-export async function migrate({ install, from, to }: MigrationContext): Promise<void> {
+export async function migrate({ install, from, to, signal }: MigrationContext): Promise<void> {
   refuseUnlessRunning();
   if (to.manifest.dataVersion <= from.manifest.dataVersion) return;
-  const module = await moduleFor(install.id, to.manifest, to.dir);
+  const collections = to.manifest.collections.filter((collection) => from.manifest.collections.includes(collection));
+  const module = await moduleFor(install.id, to.manifest, to.dir, { collections, signal });
   const input: MigrateInput = { from: from.manifest.dataVersion, to: to.manifest.dataVersion };
   await runCall(install, 'migrate', input, module);
 }
