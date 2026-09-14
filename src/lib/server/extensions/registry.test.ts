@@ -14,6 +14,7 @@ import {
   disableInstall,
   enableInstall,
   getInstall,
+  latestReleaseTag,
   listInstalls,
   listUpdates,
   rollbackInstall,
@@ -191,6 +192,17 @@ describe('stage and confirm', () => {
 });
 
 describe('updates', () => {
+  it('picks the newest release tag, skipping prereleases and tags that are not versions', async () => {
+    const repo = newRepo();
+    expect(await latestReleaseTag(repo.url)).toBeNull();
+    repo.tag('nightly', withVersion('nightly'));
+    repo.tag('v0.3.0-beta.1', withVersion('0.3.0-beta.1'));
+    expect(await latestReleaseTag(repo.url)).toBeNull();
+    repo.tag('v0.2.0', withVersion('0.2.0'));
+    repo.tag('v0.10.0', withVersion('0.10.0'));
+    expect(await latestReleaseTag(repo.url)).toBe('v0.10.0');
+  });
+
   it('lists only tags newer than the installed one and flags a re-pointed tag', async () => {
     const repo = newRepo();
     repo.tag('v0.1.0', withVersion('0.1.0'));

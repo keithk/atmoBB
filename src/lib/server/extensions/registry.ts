@@ -438,6 +438,19 @@ export async function listUpdates(installId: string): Promise<UpdateListing> {
   return { ok: true, newer, changed };
 }
 
+/**
+ * The newest version tag that isn't a prerelease, for an install that doesn't
+ * name a tag, or null when the repository has none. Throws a ReleaseError when
+ * the repository can't be read.
+ */
+export async function latestReleaseTag(gitUrl: string): Promise<string | null> {
+  const releases = (await listRemoteTags(gitUrl))
+    .map((tag) => ({ name: tag.name, version: parseVersionTag(tag.name) }))
+    .filter((entry): entry is { name: string; version: Version } => entry.version !== null && !entry.version.pre.length)
+    .sort((a, b) => compareVersions(b.version, a.version));
+  return releases[0]?.name ?? null;
+}
+
 /** Fetch and admit a release to update an install to. A local project is re-read; `tag` is ignored for it. */
 export async function stageUpdate(installId: string, tag: string | null, options: StageOptions = {}): Promise<StageResult> {
   const install = await getInstall(installId);

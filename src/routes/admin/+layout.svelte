@@ -11,6 +11,7 @@
     { label: 'Staff', href: '/admin/staff' },
     { label: 'Members', href: '/admin/members' },
     { label: 'Topics', href: '/admin/topics' },
+    { label: 'Extensions', href: '/admin/extensions' },
     ...(data.hostingEnabled ? [{ label: 'Hosting', href: '/admin/hosting' }] : []),
     { label: 'Updates', href: '/admin/updates' },
     { label: 'Connection', href: '/admin/connect' },
