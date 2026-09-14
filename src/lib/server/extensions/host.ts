@@ -34,13 +34,13 @@ import { readMember, setStatus } from '../notify/store';
 import { getPublicProfile } from '../profiles';
 import { bannedFrom } from '../standing';
 import { envInt } from './env';
-import { KvQuotaError, kvDelete, kvGet, kvList, kvSet } from './kv';
+import { KvQuotaError, kvDelete, kvGet, kvList, kvRestore, kvSet, kvSnapshot } from './kv';
 import { extensionsLockHeld } from './lock';
 import { extensionsEnabled } from './manifest';
 import { RateWindows } from './rate-window';
 import { RecordError, createRecord, deleteRecord, getRecord, listRecords, putRecord, type RecordInstall } from './records';
 import { bundleDir, getInstall, type ExtensionInstall, type MigrationContext } from './registry';
-import { ExtensionLimitError, extensionRuntime, type ExtensionModule, type GuestLogLevel, type HostFunction } from './runtime';
+import { ExtensionLimitError, extensionRuntime, type CallOptions, type ExtensionModule, type GuestLogLevel, type HostFunction } from './runtime';
 import { TimerCapExceededError, TimerDelayTooShortError, cancelTimer, scheduleTimer } from './scheduler';
 
 // The one way into extension code. Every call is refused unless extensions are
@@ -297,9 +297,17 @@ function hostFunction(name: HostFunctionName, op: HostOp<HostFunctionName> | nul
   };
 }
 
-/** `migration` is set for a migrate call's module, whose k/v writes go through kv's migration path. */
+/**
+ * `migration` is set for a migrate call's module, whose k/v writes go through
+ * kv's migration path. Once it aborts, the module's record and timer writes are
+ * refused as its k/v writes are.
+ */
 function hostOps(installId: string, manifest: ExtensionManifest, records: RecordInstall, migration?: AbortSignal): HostOps {
+  const checkMigration = (writes: string) => {
+    if (migration?.aborted) throw new Error(`The migration was abandoned, so its ${writes} writes are refused`);
+  };
   const writeRecord = <T>(write: () => Promise<T>) => {
+    checkMigration('record');
     if (!installWindows.take(`records|${installId}`, recordWritesPerHour(), HOUR_MS)) {
       throw new HostCallError('rate_limited', `This extension may write ${recordWritesPerHour()} records an hour`);
     }
@@ -344,11 +352,13 @@ function hostOps(installId: string, manifest: ExtensionManifest, records: Record
       if (payloadBytes > timerMaxPayloadBytes()) {
         throw new HostCallError('invalid_payload', `payload is ${payloadBytes} bytes; the limit is ${timerMaxPayloadBytes()} bytes`);
       }
+      checkMigration('timer');
       await scheduleTimer(installId, { name: p.name, at: p.at, payload: p.payload });
       return null;
     },
     timer_cancel: async (p) => {
       requireStrings(p, 'name');
+      checkMigration('timer');
       await cancelTimer(installId, p.name);
       return null;
     },
@@ -498,14 +508,25 @@ async function evictMovedInstance(install: ExtensionInstall) {
 }
 
 /** Run an export under a fresh budget. Null when the module doesn't export it. */
-async function runCall(install: ExtensionInstall, name: string, input: unknown, module?: ExtensionModule): Promise<string | null> {
+async function runCall(install: ExtensionInstall, name: string, input: unknown, options: Pick<CallOptions, 'module' | 'around'> = {}): Promise<string | null> {
   const started = performance.now();
   try {
-    if (!module) await evictMovedInstance(install);
+    if (!options.module) await evictMovedInstance(install);
     const budget = new CallBudget(callLimits(name));
-    let output: string | null;
+    // A call past its budget fails inside its turn, so `around` sees that failure too.
+    const metered = async (invoke: () => Promise<string | null>) => {
+      const output = await invoke();
+      if (budget.exceeded) throw new ExtensionCallError('call_limit', `The extension went past its ${budget.exceeded} limit`);
+      return output;
+    };
+    const { module, around } = options;
     try {
-      output = await rt().call(install.id, name, JSON.stringify(input), { hostContext: budget, maxOutputBytes: budget.limits.returnBytes, module });
+      return await rt().call(install.id, name, JSON.stringify(input), {
+        hostContext: budget,
+        maxOutputBytes: budget.limits.returnBytes,
+        module,
+        around: around ? (invoke) => around(() => metered(invoke)) : metered,
+      });
     } catch (error) {
       if (error instanceof ExtensionCallError) throw error;
       if (error instanceof ExtensionLimitError) {
@@ -515,8 +536,6 @@ async function runCall(install: ExtensionInstall, name: string, input: unknown, 
       appendLog(install.id, 'error', error instanceof Error ? error.message : String(error));
       throw new ExtensionCallError('failed', 'The extension failed while handling the call');
     }
-    if (budget.exceeded) throw new ExtensionCallError('call_limit', `The extension went past its ${budget.exceeded} limit`);
-    return output;
   } catch (error) {
     console.warn(`[extensions] ${install.id} ${name} ${failureLabel(error)} after ${Math.round(performance.now() - started)}ms`);
     throw error;
@@ -677,12 +696,37 @@ export async function openWork(installId: string): Promise<boolean> {
  * Its k/v writes skip the write rate, and it may write records only in
  * collections both releases declare: the forum login's scopes follow the live
  * release, so a collection the update adds isn't covered until it's applied.
+ *
+ * The install's k/v store is snapshotted in the migrate call's own turn on the
+ * install's queue, so calls the old release ran ahead of it keep their writes.
+ * When the call fails, or the update gives up on it, the migration's writes
+ * are refused from then on and the snapshot is put back, still inside that
+ * turn. A migration the update gave up on before its turn came never runs.
  */
 export async function migrate({ install, from, to, signal }: MigrationContext): Promise<void> {
   refuseUnlessRunning();
   if (to.manifest.dataVersion <= from.manifest.dataVersion) return;
   const collections = to.manifest.collections.filter((collection) => from.manifest.collections.includes(collection));
-  const module = await moduleFor(install.id, to.manifest, to.dir, { collections, signal });
+  const failed = new AbortController();
+  const abandoned = AbortSignal.any([signal, failed.signal]);
+  const module = await moduleFor(install.id, to.manifest, to.dir, { collections, signal: abandoned });
   const input: MigrateInput = { from: from.manifest.dataVersion, to: to.manifest.dataVersion };
-  await runCall(install, 'migrate', input, module);
+  await runCall(install, 'migrate', input, {
+    module,
+    around: async (invoke) => {
+      // Thrown rather than returned, so no caller takes a migration that never ran for one that succeeded.
+      if (abandoned.aborted) throw new ExtensionCallError('failed', 'The update gave up on the migration before it ran');
+      const snapshot = await kvSnapshot(install.id);
+      try {
+        const output = await invoke();
+        if (abandoned.aborted) throw new ExtensionCallError('failed', 'The update gave up on the migration while it ran');
+        return output;
+      } catch (error) {
+        // Abort before restoring, so a write the guest still has on its way is refused instead of landing after the restore.
+        failed.abort();
+        await kvRestore(install.id, snapshot);
+        throw error;
+      }
+    },
+  });
 }

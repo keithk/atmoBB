@@ -136,6 +136,13 @@ describe('quota caps', () => {
     await expect(kvSet(INSTALL, { key: 'd', value: 4 })).rejects.toMatchObject({ code: 'rate_limited' });
   });
 
+  it('counts deletes against the per-minute rate cap', async () => {
+    state.env.ATMOBB_KV_MAX_WRITES_PER_MINUTE = '2';
+    await kvSet(INSTALL, { key: 'a', value: 1 });
+    await kvDelete(INSTALL, { key: 'a' });
+    await expect(kvDelete(INSTALL, { key: 'b' })).rejects.toMatchObject({ code: 'rate_limited' });
+  });
+
   it('every quota rejection is a KvQuotaError', async () => {
     state.env.ATMOBB_KV_MAX_KEY_LENGTH = '3';
     await expect(kvSet(INSTALL, { key: 'toolong', value: 1 })).rejects.toBeInstanceOf(KvQuotaError);

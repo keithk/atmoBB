@@ -28,7 +28,9 @@ const state = vi.hoisted(() => ({
   banned: new Set<string>(),
   forumWrites: [] as unknown[][],
   writeDelayMs: 0,
+  onForumWrite: null as (() => void) | null,
   runtimeHas: vi.fn(),
+  runtimeCall: vi.fn(),
   migrateAs: null as unknown,
   migrateOutput: null as string | null,
   send: vi.fn(),
@@ -37,10 +39,11 @@ const state = vi.hoisted(() => ({
 
 vi.mock('$env/dynamic/private', () => ({ env: state.env }));
 vi.mock('./lock', () => ({ extensionsLockHeld: () => state.lockHeld }));
-// The real runtime, with its export checks counted. While `migrateAs` is set,
-// a migrate call runs the probe's `action` with that input instead, on the
-// migrate call's own module and budget, so a test can have a migration call
-// any host function.
+// The real runtime, with its export checks and calls counted as they're
+// queued. While `migrateAs` is set, a migrate call runs the probe's `action`
+// with that input instead, on the migrate call's own module, budget, and turn,
+// so a test can have a migration call any host function. The guest's output is
+// kept even when the migration then fails.
 vi.mock('./runtime', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./runtime')>();
   return {
@@ -53,10 +56,14 @@ vi.mock('./runtime', async (importOriginal) => {
         return has(installId, name);
       };
       const call = runtime.call;
-      runtime.call = async (installId, name, input, options) => {
+      runtime.call = (installId, name, input, options = {}) => {
+        state.runtimeCall(installId, name);
         if (name !== 'migrate' || !state.migrateAs) return call(installId, name, input, options);
-        state.migrateOutput = await call(installId, 'action', JSON.stringify(state.migrateAs), options);
-        return state.migrateOutput;
+        const around = options.around ?? ((invoke) => invoke());
+        return call(installId, 'action', JSON.stringify(state.migrateAs), {
+          ...options,
+          around: (invoke) => around(async () => (state.migrateOutput = await invoke())),
+        });
       };
       return runtime;
     },
@@ -74,6 +81,7 @@ vi.mock('../forum-repo', () => ({
   FORUM_RECONNECT_MESSAGE: 'Reconnect the forum account',
   isForumScopeError: () => false,
   createForumRecordAsGiven: async (...args: unknown[]) => {
+    state.onForumWrite?.();
     if (state.writeDelayMs) await new Promise((resolve) => setTimeout(resolve, state.writeDelayMs));
     state.forumWrites.push(args);
     return { uri: `at://${FORUM}/${args[0]}/tid${state.forumWrites.length}`, cid: `bafy${state.forumWrites.length}` };
@@ -180,7 +188,9 @@ beforeEach(async () => {
   state.banned = new Set();
   state.forumWrites = [];
   state.writeDelayMs = 0;
+  state.onForumWrite = null;
   state.runtimeHas.mockReset();
+  state.runtimeCall.mockReset();
   state.migrateAs = null;
   state.migrateOutput = null;
   state.send.mockReset();
@@ -637,5 +647,73 @@ describe('optional handlers', () => {
     const [shared] = await migrateCalling(context, 'record_create', { collection: GAME, record: { turn: 1 } });
     expect(shared).toMatchObject({ ok: true });
     expect(state.forumWrites).toEqual([[GAME, { turn: 1, $type: GAME }, undefined]]);
+  });
+
+  /** Queue an action that holds the install's queue for half a second while it writes a record. */
+  async function holdQueue(id: string) {
+    state.writeDelayMs = 500;
+    const held = hostCall(id, 'record_create', { collection: GAME, record: { turn: 1 } });
+    await vi.waitFor(() => expect(state.runtimeCall).toHaveBeenCalledTimes(1));
+    return { held };
+  }
+
+  const guestReplies = () => (JSON.parse(state.migrateOutput!) as { value: { ok: boolean; error?: { code: string } }[] }).value;
+
+  it('keeps k/v writes from a call queued ahead of a failed migration, and puts back only the migration’s', async () => {
+    state.env.ATMOBB_EXTENSIONS_MIGRATE_HOST_CALLS = '2';
+    const { id, context } = await migrationContext(manifest({ dataVersion: 2 }));
+    const { held } = await holdQueue(id);
+    const orders = hostCall(id, 'kv_set', { key: 'orders', value: ['A Par-Bur'] });
+    await vi.waitFor(() => expect(state.runtimeCall).toHaveBeenCalledTimes(2));
+
+    // The third write goes past the migration's host-call limit, after two have landed.
+    state.migrateAs = { action: 'host', input: { fn: 'kv_set', payload: { key: 'converted', value: true }, times: 3 } };
+    const migration = callError(migrate(context));
+    await held;
+    expect(await orders).toEqual([{ ok: true, value: null }]);
+    expect((await migration).code).toBe('call_limit');
+    expect(guestReplies().map((reply) => reply.ok)).toEqual([true, true, false]);
+    expect(await kvGet(id, { key: 'orders' })).toEqual({ value: ['A Par-Bur'] });
+    expect(await kvGet(id, { key: 'converted' })).toEqual({ value: null });
+  });
+
+  it('never runs a migration the update gave up on while it waited its turn, and leaves k/v alone', async () => {
+    const { id, context } = await migrationContext(manifest({ dataVersion: 2 }));
+    await kvSet(id, { key: 'game', value: { turn: 3 } });
+    const storePath = join(directory, 'extensions', id, 'kv.json');
+    const before = await readFile(storePath, 'utf8');
+    const { held } = await holdQueue(id);
+
+    const abandon = new AbortController();
+    state.migrateAs = { action: 'host', input: { fn: 'kv_set', payload: { key: 'game', value: 'converted' } } };
+    const migration = callError(migrate({ ...context, signal: abandon.signal }));
+    await vi.waitFor(() => expect(state.runtimeCall).toHaveBeenCalledTimes(2));
+    abandon.abort();
+    await held;
+    expect((await migration).code).toBe('failed');
+    expect(state.migrateOutput).toBeNull();
+    expect(await readFile(storePath, 'utf8')).toBe(before);
+  });
+
+  it("refuses a migration's record and timer writes once the update gives up on it", async () => {
+    const { id, context } = await migrationContext(manifest({ dataVersion: 2 }));
+    const at = new Date(Date.now() + 120_000).toISOString();
+
+    const recordsAbandon = new AbortController();
+    state.onForumWrite = () => recordsAbandon.abort();
+    state.migrateAs = { action: 'host', input: { fn: 'record_create', payload: { collection: GAME, record: { turn: 1 } }, times: 2 } };
+    await callError(migrate({ ...context, signal: recordsAbandon.signal }));
+    expect(guestReplies()).toEqual([{ ok: true, value: expect.anything() }, { ok: false, error: expect.objectContaining({ code: 'host_error' }) }]);
+    expect(state.forumWrites).toHaveLength(1);
+
+    // Sets a key, writes a record (the update gives up during it), then sets a timer.
+    const timersAbandon = new AbortController();
+    state.onForumWrite = () => timersAbandon.abort();
+    state.migrateAs = { action: 'effects', input: { value: { turn: 2 }, collection: GAME, record: { turn: 2 }, at } };
+    await callError(migrate({ ...context, signal: timersAbandon.signal }));
+    expect(JSON.parse(state.migrateOutput!).value).toMatchObject({ kv: { ok: true }, record: { ok: true }, timer: { ok: false, error: { code: 'host_error' } } });
+    const timers = await readFile(join(directory, 'extensions', 'timers.json'), 'utf8').then((text) => JSON.parse(text).timers, () => []);
+    expect(timers).toEqual([]);
+    expect(await kvGet(id, { key: 'last' })).toEqual({ value: null });
   });
 });

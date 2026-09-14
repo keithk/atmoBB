@@ -8,7 +8,7 @@ import { ReleaseError, listRemoteTags, readRelease, type Release, type ReleaseSo
 import { extensionsLockHeld } from './lock';
 import { admitExtension, checkPublishedLexicons, type LexiconResolver, type PublishedLexiconCheck } from './manifest';
 import { beforeDeadline } from './deadline';
-import { KV_UNINSTALL_GRACE_MS, kvRestore, kvSnapshot } from './kv';
+import { KV_UNINSTALL_GRACE_MS } from './kv';
 
 // Every installed extension, the release it runs, and the releases it ran
 // before. An install stays on its release until an admin moves it: installing
@@ -70,7 +70,7 @@ export interface InstallReview extends StagedRelease {
   /** Null when the extension declares no collections. */
   published: PublishedLexiconCheck | null;
   files: { path: string; bytes: number }[];
-  /** A new install that picks up the private data an earlier install of this repository left, inside the uninstall grace period. */
+  /** A new install that picks up the private data an earlier install of this repository left, inside the uninstall grace period and at the same data version. */
   restoresData: boolean;
 }
 
@@ -98,15 +98,22 @@ export interface MigrationContext {
   install: ExtensionInstall;
   from: { tag: string | null; sha: string; manifest: ExtensionManifest; dir: string };
   to: { tag: string | null; sha: string; manifest: ExtensionManifest; dir: string };
-  /** Aborts when the update gives up on the migration, which may still be running. */
+  /**
+   * Aborts when the update gives up on the migration: `migrate` threw or ran
+   * past its deadline. The migration may not have started yet, or may still be
+   * running. From then on it must not write, and whatever it already wrote to
+   * the install's k/v store is its own to put back.
+   */
   signal: AbortSignal;
 }
 
 export interface UpdateOptions {
   /**
    * Runs with the new bundle in place and the registry locked, before the
-   * install switches over. Throwing keeps the previous release active and puts
-   * the install's k/v store back as it was. It must not call registry mutations.
+   * install switches over. Throwing, or running past `migrateTimeoutMs`, keeps
+   * the previous release active and aborts the context's signal; the update
+   * doesn't touch the install's k/v store itself. It must not call registry
+   * mutations.
    */
   migrate?: (context: MigrationContext) => void | Promise<void>;
   /** How long `migrate` may run before the update is refused; defaults to MIGRATE_TIMEOUT_MS. */
@@ -151,6 +158,8 @@ export interface Uninstalled {
   uninstalledAt: string;
   /** The repository it was installed from, so a reinstall inside the grace period picks its data back up. Entries without one never match. */
   normalizedUrl?: string;
+  /** The data version its release stored data at. A reinstall picks the data back up only at this version; entries without one never match. */
+  dataVersion?: number;
 }
 
 interface RegistryStore {
@@ -233,9 +242,15 @@ export const forgetUninstalled = (installIds: string[]) =>
     store.uninstalled = (store.uninstalled ?? []).filter((entry) => !installIds.includes(entry.installId));
   });
 
-/** The latest uninstall of this repository whose private data is still inside the grace period, for a reinstall to pick back up. */
-function reusableUninstall(uninstalled: Uninstalled[], normalizedUrl: string, now = Date.now()): Uninstalled | null {
-  return uninstalled.findLast((entry) => entry.normalizedUrl === normalizedUrl && now - Date.parse(entry.uninstalledAt) < KV_UNINSTALL_GRACE_MS) ?? null;
+/**
+ * The latest uninstall of this repository whose private data is still inside
+ * the grace period, for a reinstall to pick back up, or null when that data is
+ * at a data version other than `dataVersion`. A reinstall never runs migrate,
+ * so it can only take data already at the version its release reads.
+ */
+function reusableUninstall(uninstalled: Uninstalled[], normalizedUrl: string, dataVersion: number, now = Date.now()): Uninstalled | null {
+  const latest = uninstalled.findLast((entry) => entry.normalizedUrl === normalizedUrl && now - Date.parse(entry.uninstalledAt) < KV_UNINSTALL_GRACE_MS);
+  return latest?.dataVersion === dataVersion ? latest : null;
 }
 
 export const getInstall = (id: string) => loadStore().then((store) => store.installs.find((install) => install.id === id) ?? null);
@@ -346,7 +361,8 @@ async function stage(
       lexicons: admission.lexicons,
       published,
       files: [...release.files].map(([path, bytes]) => ({ path, bytes: bytes.byteLength })),
-      restoresData: target.installId === null && reusableUninstall(await listUninstalled(), target.normalizedUrl) !== null,
+      restoresData:
+        target.installId === null && reusableUninstall(await listUninstalled(), target.normalizedUrl, admission.manifest.dataVersion) !== null,
     },
   };
 }
@@ -396,8 +412,9 @@ export async function stageInstall(gitUrl: string, tag: string | null, options: 
  * Claim the staged release's collections, move its bundle into place, and
  * record the install. A repository uninstalled inside the grace period gets
  * its earlier install id back, and with it that install's k/v store and
- * pending timers. Its migrate doesn't run, so the data comes back as the
- * earlier release left it.
+ * pending timers, when the release is at the data version the earlier one
+ * left. Otherwise it gets a new id, and the earlier install's data waits out
+ * the grace period.
  */
 export async function confirmInstall(stagingId: string): Promise<InstallResult> {
   const staged = await readStaged(stagingId);
@@ -416,7 +433,7 @@ export async function confirmInstall(stagingId: string): Promise<InstallResult> 
         errors: claim.conflicts.map(({ collection, heldBy }) => ({ field: 'collections', message: `${collection} belongs to ${heldBy}, which declared it first` })),
       };
     }
-    const earlier = reusableUninstall(store.uninstalled ?? [], staged.normalizedUrl);
+    const earlier = reusableUninstall(store.uninstalled ?? [], staged.normalizedUrl, staged.manifest.dataVersion);
     const id = earlier?.installId ?? newInstallId();
     await moveIntoPlace(stagingId, id, staged.sha);
     // No longer uninstalled, so the grace-period purge leaves its data alone.
@@ -555,11 +572,11 @@ export async function applyUpdate(installId: string, stagingId: string, options:
     const hadBundle = await exists(join(extensionsRoot(), installId, staged.sha));
     const dir = await moveIntoPlace(stagingId, installId, staged.sha);
     const timeoutMs = options.migrateTimeoutMs ?? MIGRATE_TIMEOUT_MS;
-    const snapshot = await kvSnapshot(installId);
     const abandoned = new AbortController();
     try {
       // Every later mutation waits on this one, so a migration that never
-      // settles is refused at the deadline. It may still be running then.
+      // settles is refused at the deadline. It may still be queued or running
+      // then; the aborted signal tells it to stop.
       await beforeDeadline(
         options.migrate?.({
           install: structuredClone(install),
@@ -571,10 +588,7 @@ export async function applyUpdate(installId: string, stagingId: string, options:
         () => new Error(`The migration took longer than ${timeoutMs / 1000} seconds`),
       );
     } catch (error) {
-      // Abort before restoring: the migration's k/v writes check the signal in
-      // turn with the restore, so none of them lands after it.
       abandoned.abort();
-      await kvRestore(installId, snapshot);
       if (!hadBundle) await rm(dir, { recursive: true, force: true });
       const current = install.tag ?? shortSha(install.sha);
       return refused('migrate', `The update's migration failed, so ${current} stays active: ${messageOf(error)}`);
@@ -667,7 +681,10 @@ export function uninstall(installId: string, options: StopOptions = {}): Promise
     const [removed] = store.installs.splice(index, 1);
     const shas = new Set([removed.sha, ...removed.history.map((release) => release.sha)]);
     for (const sha of shas) await rm(join(extensionsRoot(), installId, sha), { recursive: true, force: true });
-    store.uninstalled = [...(store.uninstalled ?? []), { installId, uninstalledAt: new Date().toISOString(), normalizedUrl: removed.normalizedUrl }];
+    store.uninstalled = [
+      ...(store.uninstalled ?? []),
+      { installId, uninstalledAt: new Date().toISOString(), normalizedUrl: removed.normalizedUrl, dataVersion: removed.manifest.dataVersion },
+    ];
     return { ok: true };
   });
 }

@@ -197,6 +197,24 @@ describe('extensionRuntime', () => {
     expect(load).toHaveBeenCalledTimes(2);
   });
 
+  it('runs around in the call’s turn with the call’s failure, and holds the calls behind it until it settles', async () => {
+    const rt = start({ timeoutMs: 500 });
+    const events: string[] = [];
+    const around = async (invoke: () => Promise<string | null>) => {
+      try {
+        return await invoke();
+      } catch (error) {
+        await sleep(200);
+        events.push(`around saw ${(error as ExtensionLimitError).limit}`);
+        throw error;
+      }
+    };
+    const spun = rt.call('wrapped', 'spin', '', { around }).catch((error) => error);
+    await rt.call('wrapped', 'echo', 'queued').then((output) => events.push(output!));
+    expect(events).toEqual(['around saw timeout', 'queued']);
+    expect(await spun).toBeInstanceOf(ExtensionLimitError);
+  });
+
   it('closes an idle instance and cold-starts it on the next call', async () => {
     const load = vi.fn(async (_install: string) => probeModule());
     const rt = start({ idleMs: 100 }, load);

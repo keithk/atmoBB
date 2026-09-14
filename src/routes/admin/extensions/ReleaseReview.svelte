@@ -62,8 +62,8 @@
 
     {#if review.restoresData}
       <p class="review__plain">
-        This repository was uninstalled here within the last 30 days, so the data it saved on this server comes back, just as
-        the earlier install left it.
+        This repository was uninstalled here within the last 30 days, and this release stores its data at the same version the
+        earlier install did, so the data it saved on this server comes back, just as the earlier install left it.
       </p>
     {/if}
 

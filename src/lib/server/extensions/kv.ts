@@ -165,6 +165,7 @@ export async function kvSet(installId: string, payload: KvSet, options: KvWriteO
 export async function kvDelete(installId: string, payload: KvDelete, options: KvWriteOptions = {}): Promise<void> {
   await withInstall(installId, async () => {
     checkMigration(options);
+    if (!options.migration) checkWriteRate(installId);
     const map = await loadMap(installId);
     if (!map.has(payload.key)) return;
     map.delete(payload.key);

@@ -284,7 +284,7 @@ describe('updates', () => {
     expect(await disableInstall(installed.id)).toMatchObject({ ok: true, install: { state: 'disabled' } });
   });
 
-  it('puts k/v back exactly as it was when the migration writes some keys and then throws', async () => {
+  it('aborts the migration’s signal when it throws, and leaves putting k/v back to the migration', async () => {
     const repo = newRepo();
     repo.tag('v0.1.0', withVersion('0.1.0'));
     const installed = await install(repo);
@@ -292,18 +292,18 @@ describe('updates', () => {
     const update = await stageUpdate(installed.id, 'v0.2.0', options);
     if (!update.ok) throw new Error(update.errors[0].message);
     await kvSet(installed.id, { key: 'game', value: { turn: 3 } });
-    const storePath = join(extensionsDir(), installed.id, 'kv.json');
-    const before = await readFile(storePath, 'utf8');
 
+    let migrationSignal: AbortSignal | undefined;
     const result = await applyUpdate(installed.id, update.review.stagingId, {
       migrate: async ({ install: migrating, signal }) => {
+        migrationSignal = signal;
         await kvSet(migrating.id, { key: 'game', value: { turn: 3, version: 2 } }, { migration: signal });
-        await kvSet(migrating.id, { key: 'players', value: [] }, { migration: signal });
         throw new Error('players cannot be converted');
       },
     });
     expect(result).toMatchObject({ ok: false, errors: [{ field: 'migrate' }] });
-    expect(await readFile(storePath, 'utf8')).toBe(before);
+    expect(migrationSignal?.aborted).toBe(true);
+    expect(await kvGet(installed.id, { key: 'game' })).toEqual({ value: { turn: 3, version: 2 } });
   });
 
   it("refuses a migration's k/v writes after the update gives up on it", async () => {
@@ -393,7 +393,9 @@ describe('disable, enable, uninstall', () => {
     expect(await exists(join(extensionsDir(), installed.id, installed.sha))).toBe(false);
     // Private data outlives the bundles until the uninstall grace period ends.
     expect(await exists(join(extensionsDir(), installed.id, 'kv.json'))).toBe(true);
-    expect(await listUninstalled()).toEqual([{ installId: installed.id, uninstalledAt: expect.any(String), normalizedUrl: `https://git.test/${repo.name}` }]);
+    expect(await listUninstalled()).toEqual([
+      { installId: installed.id, uninstalledAt: expect.any(String), normalizedUrl: `https://git.test/${repo.name}`, dataVersion: 1 },
+    ]);
     expect(await listClaims()).toMatchObject({ [GAME]: { gitUrl: `https://git.test/${repo.name}` } });
     expect(JSON.parse(await readFile(join(extensionsDir(), 'registry.json'), 'utf8'))).toMatchObject({ installs: [] });
   });
@@ -419,6 +421,23 @@ describe('disable, enable, uninstall', () => {
     const fresh = await confirmInstall(otherReview.stagingId);
     if (!fresh.ok) throw new Error(fresh.errors[0].message);
     expect(fresh.install.id).not.toBe(installed.id);
+  });
+
+  it('gives a reinstall at another data version a new install id, leaving the earlier data for the purge', async () => {
+    const repo = newRepo();
+    repo.tag('v0.1.0', validBundle());
+    const installed = await install(repo);
+    await kvSet(installed.id, { key: 'game', value: { turn: 3 } });
+    expect(await uninstall(installed.id)).toMatchObject({ ok: true });
+    repo.tag('v0.2.0', withVersion('0.2.0', { dataVersion: 2 }));
+
+    const review = await staged(repo.url, 'v0.2.0');
+    expect(review.restoresData).toBe(false);
+    const result = await confirmInstall(review.stagingId);
+    if (!result.ok) throw new Error(result.errors[0].message);
+    expect(result.install.id).not.toBe(installed.id);
+    expect(await kvGet(result.install.id, { key: 'game' })).toEqual({ value: null });
+    expect(await listUninstalled()).toEqual([expect.objectContaining({ installId: installed.id, dataVersion: 1 })]);
   });
 
   it('gives a reinstall a new install id once the grace period has passed', async () => {

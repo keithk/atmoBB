@@ -32,6 +32,13 @@ export interface CallOptions {
    * is closed first, so the next ordinary call cold-starts from `load`.
    */
   module?: ExtensionModule;
+  /**
+   * Wraps the call inside its turn on the install's queue. `around` runs the
+   * export by calling `invoke`, which settles as the call would, limit errors
+   * included, and the call settles as `around` does. No other call to the
+   * install starts until `around` settles, so it mustn't wait on one.
+   */
+  around?: (invoke: () => Promise<string | null>) => Promise<string | null>;
 }
 
 export interface RuntimeLimits {
@@ -278,7 +285,8 @@ export function extensionRuntime(
     /** Call an export. Resolves to null when the module doesn't export `name`. */
     call(installId: string, name: string, input: string, options: CallOptions = {}): Promise<string | null> {
       const install = installFor(installId);
-      return enqueue(install, () => run(installId, install, name, input, options));
+      const invoke = () => run(installId, install, name, input, options);
+      return enqueue(install, options.around ? () => options.around!(invoke) : invoke);
     },
 
     /** Whether the install's module exports `name`, in turn with the install's calls. */
