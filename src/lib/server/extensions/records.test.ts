@@ -260,6 +260,16 @@ describe('the dev index write mode', () => {
     expect(state.fetch).not.toHaveBeenCalled();
   });
 
+  it('reads the forum repo from the index when no repo is named', async () => {
+    const ref = await putRecord(install(), { collection: GAME, rkey: 'g1', record: { phase: 'S1901M' } });
+    const listed = await listRecords(install(), { collection: GAME });
+    expect(listed.records).toEqual([{ uri: ref.uri, cid: ref.cid, value: { $type: GAME, phase: 'S1901M' } }]);
+    expect(await getRecord(install(), { collection: GAME, rkey: 'g1' })).toEqual(listed.records[0]);
+    expect(state.agentCalls).toEqual([]);
+    expect(state.fetch).not.toHaveBeenCalled();
+    expect(state.resolveDid).not.toHaveBeenCalled();
+  });
+
   it('refuses a create at a record key that already exists', async () => {
     await createRecord(install(), { collection: GAME, rkey: 'g1', record: { phase: 'S1901M' } });
     await refusal(createRecord(install(), { collection: GAME, rkey: 'g1', record: { phase: 'F1901M' } }));
@@ -278,6 +288,19 @@ describe('reading', () => {
     expect(await getRecord(install(), { repo: FORUM, collection: GAME, rkey: 'g1' })).toMatchObject({ value: { phase: 'S1901M' } });
     expect(await getRecord(install(), { repo: FORUM, collection: GAME, rkey: 'missing' })).toBeNull();
     expect(state.fetch).not.toHaveBeenCalled();
+  });
+
+  it("reads the forum's own repo when no repo is named", async () => {
+    await putRecord(install(), { collection: GAME, rkey: 'g1', record: { phase: 'S1901M' } });
+    state.agentCalls.length = 0;
+    expect((await listRecords(install(), { collection: GAME })).records).toEqual([
+      { uri: `at://${FORUM}/${GAME}/g1`, cid: expect.any(String), value: { $type: GAME, phase: 'S1901M' } },
+    ]);
+    expect(await getRecord(install(), { collection: GAME, rkey: 'g1' })).toMatchObject({ uri: `at://${FORUM}/${GAME}/g1` });
+    expect(await getRecord(install(), { collection: GAME, rkey: 'missing' })).toBeNull();
+    expect(state.agentCalls).toEqual(['listRecords', 'getRecord', 'getRecord']);
+    expect(state.fetch).not.toHaveBeenCalled();
+    expect(state.resolveDid).not.toHaveBeenCalled();
   });
 
   it("resolves another repo's PDS through the hardened fetcher and follows cursors", async () => {

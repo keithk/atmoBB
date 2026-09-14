@@ -11,7 +11,7 @@ The kit isn't on npm yet, so build it from `extension-kit/` in this repository o
 ```sh
 cd extension-kit
 bun install                     # also builds the CLI into lib/
-node lib/cli/index.mjs new ~/code/my-extension
+node bin/atmobb-extension.mjs new ~/code/my-extension
 cd ~/code/my-extension
 npm install
 npm run dev
@@ -73,11 +73,11 @@ Caps: `ATMOBB_KV_MAX_KEYS` (500) keys, `ATMOBB_KV_MAX_KEY_LENGTH` (200 character
 records.create({ collection, rkey?, record })
 records.put({ collection, rkey, record })
 records.delete({ collection, rkey })
-records.get({ repo, collection, rkey })
-records.list({ repo, collection })
+records.get({ repo?, collection, rkey })
+records.list({ repo?, collection })
 ```
 
-Writes are capped at `ATMOBB_EXTENSIONS_RECORD_WRITES_PER_HOUR` (100) an hour per install, and the record has to validate against your shipped lexicon. Reads may name any repo, but only a collection you've declared, and page through up to 10 pages of 100 before coming back `truncated: true`. Records you've published stay in the forum's repo even after you're uninstalled.
+Writes are capped at `ATMOBB_EXTENSIONS_RECORD_WRITES_PER_HOUR` (100) an hour per install, and the record has to validate against your shipped lexicon. Reads without a `repo` read the forum's own repo, where your writes went. Reads may name any other repo, but only a collection you've declared, and page through up to 10 pages of 100 before coming back `truncated: true`. Records you've published stay in the forum's repo even after you're uninstalled.
 
 **`timers`**: scheduled calls to your `timer` handler.
 
@@ -100,11 +100,25 @@ notify({ to, title, message, link? })  // up to 50 DIDs; the host prefixes your 
 
 `src/index.ts` exports `defineExtension({ ... })` from the kit's runtime. Handlers run synchronously: no `async`, no returned Promises.
 
-- **`action(input)`**, required. `input` is `{ viewer, thread, action, input }`; `thread` is the bound thread the call came from, or `null` on a standalone page. Whatever you return (any JSON) goes back to the panel.
-- **`attach(input)`**, optional. Staff attached you to a thread; `input` is `{ viewer, thread, input }`, with `input.input` whatever your attach form collected. Throwing refuses the attach, and atmoBB removes the binding it already wrote. Without this handler you can never be attached to a thread.
-- **`timer({ name, at, payload })`**, optional. A `timers.set` call came due.
+- **`action(input)`**, required. `input` is `{ viewer, thread, forum, action, input }`; `thread` is the bound thread the call came from, or `null` on a standalone page. Whatever you return (any JSON) goes back to the panel.
+- **`attach(input)`**, optional. Staff attached you to a thread; `input` is `{ viewer, thread, forum, input }`, with `input.input` whatever your attach form collected. Refusing or throwing undoes the attach, and atmoBB removes the binding it already wrote. Without this handler you can never be attached to a thread.
+- **`timer({ name, at, payload, forum })`**, optional. A `timers.set` call came due.
 - **`openWork()`**, optional, returns a boolean. Whether there's work in progress an admin should know about before disabling or uninstalling you.
 - **`migrate({ from, to })`**, optional. Runs once, before an update takes effect, when the new release's `dataVersion` is higher than the version your stored data is at. Throwing keeps the previous release active.
+
+`forum.did` is the forum account's DID, the repo every record you write lands in, so you can build at-uris to your own records without writing one first.
+
+To turn down an action or an attach with something the person should read, call `refuse(message, code?)`:
+
+```ts
+if (!army) refuse('You have no army in Paris.', 'no_army');
+```
+
+A refused action answers the panel with `{ ok: false, error: { code, message } }` (the action endpoint answers 422 with `{ code, message }`), and a refused attach shows staff the message on the attach page. The message is shown as written, so keep anything private out of it; it's cut at 300 characters. `code` defaults to `refused` and must be lowercase letters, digits, and underscores, up to 40. Any other throw is a bug as far as atmoBB is concerned: the person gets a generic "failed" error, and your thrown message goes only to [the extension log](#the-extension-log), never to the page or the server's own logs.
+
+Under the hood, `action` and `attach` output an envelope, `{ value }` or `{ refused: { code, message } }`; the kit writes it for you.
+
+`Math.random` is safe to use inside handlers. The compiler snapshots your module once it has loaded, random state and all, so the kit swaps `Math.random` for one backed by `crypto.getRandomValues` on each instance's first handler call. A `Math.random` call at the top level of your module runs before that snapshot and repeats on every cold start.
 
 ### Panels
 
@@ -128,11 +142,11 @@ On a thread, only signed-in members can run actions. On your standalone page, si
 
 ### What an extension can see
 
-`action` and `attach` are told the viewer's DID (or `null` signed out), their standing on this forum, whether they're staff, and whether they're banned. Never a session, a cookie, or credentials of any kind. On a bound thread, `thread.uri` is the at-uri of the thread it's running in. Extensions only ever attach to threads on public boards, because everything they publish is public too.
+`action` and `attach` are told the viewer's DID (or `null` signed out), their standing on this forum, whether they're staff, and whether they're banned, plus the forum account's DID. Never a session, a cookie, or credentials of any kind. On a bound thread, `thread.uri` is the at-uri of the thread it's running in. Extensions only ever attach to threads on public boards, because everything they publish is public too.
 
 ### The extension log
 
-`console.log`, `warn`, and the rest, plus your handlers' thrown errors, go to a small per-install log: the last 200 lines, each cut to 500 characters, readable by this forum's admins on the install's page. Nothing you don't log reaches it, and nothing in it reaches anywhere else. Don't log anything private; the log isn't access-controlled beyond "admins of this forum."
+`console.log`, `warn`, and the rest, plus your handlers' thrown errors (but not refusals), go to a small per-install log: the last 200 lines, each cut to 500 characters, readable by this forum's admins on the install's page. Nothing you don't log reaches it, and nothing in it reaches anywhere else. Don't log anything private; the log isn't access-controlled beyond "admins of this forum."
 
 ## Installing and running extensions
 
@@ -169,7 +183,7 @@ The first repository to declare a collection owns it permanently, across reinsta
 
 ### Attaching to a thread
 
-Staff who moderate the whole forum can attach an extension to a thread from the thread page, if the extension exports `attach` and the thread sits on a public board. Members-only boards are out, since everything an extension publishes is public. atmoBB writes the binding record itself, an `app.atmobb.extension.binding` in the forum's own repo, a collection extensions can never write to themselves, then calls the extension's `attach` handler with the setup its form collected. A refusal there removes the binding again. One extension per thread; a thread already bound refuses another attach.
+Staff who moderate the whole forum can attach an extension to a thread from the thread page, if the extension exports `attach` and the thread sits on a public board. Members-only boards are out, since everything an extension publishes is public. atmoBB writes the binding record itself, an `app.atmobb.extension.binding` in the forum's own repo, a collection extensions can never write to themselves, then calls the extension's `attach` handler with the setup its form collected. A refusal or failure there removes the binding again, and the attach page shows staff the extension's refusal message. One extension per thread; a thread already bound refuses another attach.
 
 ### The kill switch
 

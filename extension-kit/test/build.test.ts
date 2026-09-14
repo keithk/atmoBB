@@ -67,22 +67,26 @@ describe('new + build', () => {
       timer_set: () => ({ ok: true, value: null }),
     });
     const runtime = extensionRuntime(async () => ({ wasm: release.files.get('extension.wasm')!, functions: host.functions }));
-    const act = async (thread: string | null, action: string, input: unknown = {}) =>
-      JSON.parse((await runtime.call('counter', 'action', JSON.stringify({ viewer, thread: thread && { uri: thread }, action, input })))!);
+    const forum = { did: 'did:plc:forum' };
+    // Outputs are envelopes: { value } or { refused: { code, message } }.
+    const output = async (thread: string | null, action: string, input: unknown = {}) =>
+      JSON.parse((await runtime.call('counter', 'action', JSON.stringify({ viewer, thread: thread && { uri: thread }, forum, action, input })))!);
+    const act = async (thread: string | null, action: string, input: unknown = {}) => (await output(thread, action, input)).value;
     const attach = async (thread: string, input: unknown) =>
-      runtime.call('counter', 'attach', JSON.stringify({ viewer: { ...viewer, staff: true }, thread: { uri: thread }, input }));
+      JSON.parse((await runtime.call('counter', 'attach', JSON.stringify({ viewer: { ...viewer, staff: true }, thread: { uri: thread }, forum, input })))!);
     try {
-      expect(JSON.parse((await attach(THREAD, { start: 5 }))!)).toEqual({ count: 5 });
-      expect(JSON.parse((await attach(OTHER_THREAD, {}))!)).toEqual({ count: 0 });
-      await expect(attach(`${THREAD}x`, { start: -1 })).rejects.toThrow();
+      expect(await attach(THREAD, { start: 5 })).toEqual({ value: { count: 5 } });
+      expect(await attach(OTHER_THREAD, {})).toEqual({ value: { count: 0 } });
+      expect(await attach(`${THREAD}x`, { start: -1 })).toEqual({ refused: { code: 'bad_start', message: 'Start must be a whole number, 0 or more.' } });
 
       expect(await act(THREAD, 'increment')).toEqual({ count: 6 });
       expect(await act(THREAD, 'increment')).toEqual({ count: 7 });
       expect(await act(OTHER_THREAD, 'increment')).toEqual({ count: 1 });
       expect(await act(THREAD, 'show')).toEqual({ count: 7 });
       expect(await act(OTHER_THREAD, 'show')).toEqual({ count: 1 });
-      await expect(runtime.call('counter', 'action', JSON.stringify({ viewer, thread: null, action: 'show', input: {} }))).rejects.toThrow();
-      await expect(act(`${THREAD}x`, 'show')).rejects.toThrow();
+      expect(await output(null, 'show')).toEqual({ refused: { code: 'not_in_thread', message: 'The counter only runs in a thread.' } });
+      expect(await output(`${THREAD}x`, 'show')).toEqual({ refused: { code: 'not_set_up', message: "The counter isn't set up for this thread." } });
+      await expect(output(THREAD, 'nonsense')).rejects.toThrow();
 
       expect(tallies.get('tally1')).toMatchObject({ thread: THREAD, count: 7 });
       expect(tallies.get('tally2')).toMatchObject({ thread: OTHER_THREAD, count: 1 });

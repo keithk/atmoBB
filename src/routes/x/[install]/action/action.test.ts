@@ -43,9 +43,17 @@ vi.mock('$lib/server/extensions/host', async () => {
       super(message);
     }
   }
-  return { ExtensionCallError, dispatchAction: state.dispatchAction };
+  class ExtensionRefusal extends Error {
+    constructor(
+      readonly code: string,
+      message: string,
+    ) {
+      super(message);
+    }
+  }
+  return { ExtensionCallError, ExtensionRefusal, dispatchAction: state.dispatchAction };
 });
-import { ExtensionCallError } from '$lib/server/extensions/host';
+import { ExtensionCallError, ExtensionRefusal } from '$lib/server/extensions/host';
 import { POST } from './+server';
 
 let directory: string;
@@ -200,6 +208,14 @@ describe('POST /x/[install]/action', () => {
     const failed = await act({ body: { thread: null, action: 'move' } });
     expect(failed.status).toBe(500);
     expect(JSON.stringify(failed.body)).not.toContain('SENTINEL');
+  });
+
+  it("answers the extension's own refusal with 422 and its code and message, logging neither", async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    state.dispatchAction.mockRejectedValueOnce(new ExtensionRefusal('no_army', 'You have no army in Paris.'));
+    expect(await act()).toEqual({ status: 422, body: { code: 'no_army', message: 'You have no army in Paris.' }, getClientAddress: expect.anything() });
+    expect(errors).not.toHaveBeenCalled();
+    errors.mockRestore();
   });
 
   it('refuses cleanly while extensions are off or this server lacks the lock', async () => {

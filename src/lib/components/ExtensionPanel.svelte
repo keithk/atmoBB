@@ -6,7 +6,7 @@
   // endorsement label are drawn here, outside the frame, so an extension can't
   // dress itself up as the forum.
   import { onMount } from 'svelte';
-  import { createPanelBridge, type ActionOutcome, type PanelMode } from '$lib/extensions/bridge';
+  import { actionOutcome, createPanelBridge, type ActionOutcome, type PanelMode } from '$lib/extensions/bridge';
 
   interface Props {
     installId: string;
@@ -37,15 +37,7 @@
       // Only a bound thread's panel acts for its thread; the attach form acts before there is a binding.
       body: JSON.stringify({ thread: mode === 'thread' ? thread : null, action, input }),
     });
-    const body = await response.json().catch(() => null);
-    if (response.ok) return { ok: true, value: body?.value ?? null };
-    return {
-      ok: false,
-      error: {
-        code: typeof body?.code === 'string' ? body.code : 'failed',
-        message: typeof body?.message === 'string' ? body.message : 'The action failed.',
-      },
-    };
+    return actionOutcome(response.status, await response.json().catch(() => null));
   }
 
   onMount(() => {

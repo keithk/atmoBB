@@ -33,7 +33,12 @@ vi.mock('$lib/server/appview', () => ({
 vi.mock('$lib/server/forum-repo', () => ({ listForumRecords: async () => [] }));
 vi.mock('$lib/server/admin', () => ({ canModerateForum: async (did: string | null) => !!did && state.staff.has(did) }));
 vi.mock('$lib/server/extensions/lock', () => ({ extensionsLockHeld: () => state.lockHeld }));
-vi.mock('$lib/server/extensions/host', () => ({ ExtensionCallError: class extends Error {}, hasHandler: state.hasHandler, dispatchAttach: vi.fn() }));
+vi.mock('$lib/server/extensions/host', () => ({
+  ExtensionCallError: class extends Error {},
+  ExtensionRefusal: class extends Error {},
+  hasHandler: state.hasHandler,
+  dispatchAttach: vi.fn(),
+}));
 
 import { load } from './+page.server';
 

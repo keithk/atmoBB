@@ -29,8 +29,9 @@ import { OutboundFetchError, outboundFetch, resolveDidDocument } from './outboun
 // consent prompt. The forum session already holds every sysop scope, which
 // makes the install's approved collections (re-checked against the deny list
 // on every call) the only thing standing between an extension and a staff
-// grant. Reads may name any repo, but a returned record only counts when its
-// at-uri sits in the repo and collection that were asked for.
+// grant. Reads may name any repo, and read the forum's own when they name
+// none, but a returned record only counts when its at-uri sits in the repo and
+// collection that were asked for.
 //
 // Errors carry lexicon validation paths and status codes, never a PDS's
 // response text.
@@ -207,8 +208,8 @@ const pdsFailure = (repo: string, status: number) =>
 /** Records in one approved collection of any repo; the forum's own repo is read the way admin lists read it. */
 export async function listRecords(install: RecordInstall, query: RecordList): Promise<RecordListResult> {
   checkCollection(install, query.collection);
-  checkRepo(query.repo);
-  const { repo, collection } = query;
+  const { repo = FORUM_DID(), collection } = query;
+  checkRepo(repo);
 
   if (repo === FORUM_DID()) {
     let records: unknown[];
@@ -238,9 +239,9 @@ export async function listRecords(install: RecordInstall, query: RecordList): Pr
 /** One record from an approved collection of any repo, or null when it isn't there or doesn't count. */
 export async function getRecord(install: RecordInstall, query: RecordGet): Promise<StoredRecord | null> {
   checkCollection(install, query.collection);
-  checkRepo(query.repo);
-  checkRecordKey(query.rkey);
-  const { repo, collection, rkey } = query;
+  const { repo = FORUM_DID(), collection, rkey } = query;
+  checkRepo(repo);
+  checkRecordKey(rkey);
 
   if (repo === FORUM_DID()) {
     let record;

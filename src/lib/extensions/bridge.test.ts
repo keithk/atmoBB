@@ -4,6 +4,7 @@ import {
   MAX_PENDING_ACTIONS,
   PANEL_MAX_HEIGHT,
   PANEL_MIN_HEIGHT,
+  actionOutcome,
   clampHeight,
   createPanelBridge,
   parseFrameMessage,
@@ -88,6 +89,22 @@ function harness(overrides: Partial<PanelBridgeOptions> = {}) {
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe('actionOutcome', () => {
+  it("delivers an extension's refusal as an error with its code and message", () => {
+    expect(actionOutcome(422, { code: 'no_army', message: 'You have no army in Paris.' })).toEqual({
+      ok: false,
+      error: { code: 'no_army', message: 'You have no army in Paris.' },
+    });
+  });
+
+  it('delivers the value of a successful action, and a generic error for an answer without one', () => {
+    expect(actionOutcome(200, { value: { moved: true } })).toEqual({ ok: true, value: { moved: true } });
+    expect(actionOutcome(200, {})).toEqual({ ok: true, value: null });
+    expect(actionOutcome(502, null)).toEqual({ ok: false, error: { code: 'failed', message: 'The action failed.' } });
+    expect(actionOutcome(429, { code: 7, message: ['x'] })).toEqual({ ok: false, error: { code: 'failed', message: 'The action failed.' } });
+  });
+});
 
 describe('createPanelBridge', () => {
   it('sends the frame its init on the first load, to any origin since a sandboxed frame has none', () => {

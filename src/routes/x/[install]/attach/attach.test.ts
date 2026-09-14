@@ -55,9 +55,17 @@ vi.mock('$lib/server/extensions/host', async () => {
       super(message);
     }
   }
-  return { ExtensionCallError, hasHandler: state.hasHandler, dispatchAttach: state.dispatchAttach };
+  class ExtensionRefusal extends Error {
+    constructor(
+      readonly code: string,
+      message: string,
+    ) {
+      super(message);
+    }
+  }
+  return { ExtensionCallError, ExtensionRefusal, hasHandler: state.hasHandler, dispatchAttach: state.dispatchAttach };
 });
-import { ExtensionCallError } from '$lib/server/extensions/host';
+import { ExtensionCallError, ExtensionRefusal } from '$lib/server/extensions/host';
 import { bindingFor, bindingRkey } from '$lib/server/extensions/bindings';
 import { POST } from './+server';
 
@@ -198,6 +206,25 @@ describe('POST /x/[install]/attach', () => {
     expect(state.repo.size).toBe(0);
     expect(await bindingFor(THREAD)).toBeNull();
     expect(await cacheFile()).not.toContain(THREAD);
+  });
+
+  it('shows the extension’s refusal message and removes the binding record and cache entry', async () => {
+    state.dispatchAttach.mockRejectedValue(new ExtensionRefusal('players', 'Pick between 2 and 7 players.'));
+    const response = await attach();
+
+    expect(response).toEqual({ status: 422, body: { message: "Diplomacy couldn't be attached: Pick between 2 and 7 players." } });
+    expect(state.deleteRecord).toHaveBeenCalledExactlyOnceWith(bindingKey);
+    expect(state.repo.size).toBe(0);
+    expect(await bindingFor(THREAD)).toBeNull();
+    expect(await cacheFile()).not.toContain(THREAD);
+  });
+
+  it('keeps other attach failures generic', async () => {
+    state.dispatchAttach.mockRejectedValue(new Error('SENTINEL internal detail'));
+    const response = await attach();
+    expect(response.status).toBe(422);
+    expect(response.body.message).not.toContain('SENTINEL');
+    expect(state.repo.size).toBe(0);
   });
 
   it('leaves no cache entry and never calls the extension when the binding record write fails', async () => {

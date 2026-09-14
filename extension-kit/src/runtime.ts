@@ -1,6 +1,8 @@
+import { REFUSAL_CODE, REFUSAL_MESSAGE_MAX } from '../../src/lib/extensions/contract';
 import type {
   ActionInput,
   AttachInput,
+  HandlerOutput,
   HostError,
   HostFunctionName,
   HostFunctionTypes,
@@ -17,6 +19,7 @@ import type {
   RecordPut,
   RecordRef,
   StoredRecord,
+  TimerInput,
   TimerSet,
 } from '../../src/lib/extensions/contract';
 
@@ -30,6 +33,7 @@ export type {
   AttachInput,
   Capability,
   ExtensionManifest,
+  ForumRef,
   KvListResult,
   MigrateInput,
   NotifyPayload,
@@ -43,6 +47,7 @@ export type {
   RecordRef,
   StoredRecord,
   ThreadRef,
+  TimerInput,
   TimerSet,
   ViewerContext,
 } from '../../src/lib/extensions/contract';
@@ -121,10 +126,11 @@ export const records = {
   delete(payload: RecordDelete): void {
     callHost('record_delete', payload);
   },
+  /** Omit `repo` to read the forum's own repo, where `create` and `put` write. */
   list(payload: RecordList): RecordListResult {
     return callHost('record_list', payload);
   },
-  /** Null when the record doesn't exist. */
+  /** Null when the record doesn't exist. Omit `repo` to read the forum's own repo. */
   get(payload: RecordGet): StoredRecord | null {
     return callHost('record_get', payload);
   },
@@ -146,18 +152,43 @@ export function notify(payload: NotifyPayload): NotifyResult {
   return callHost('notify', payload);
 }
 
+/** Thrown by `refuse`, and caught by the export wrapping `action` or `attach`. */
+class Refusal extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'Refusal';
+  }
+}
+
+/**
+ * Turn down an action or attach with a message for the person who asked, like
+ * "You have no army in Paris." It's shown to them as is, so keep anything
+ * private out of it. Messages over 300 characters are cut; `code` is
+ * lowercase letters, digits, and underscores, up to 40. Any other throw fails
+ * the call with a generic error and its text goes only to the extension log.
+ */
+export function refuse(message: string, code = 'refused'): never {
+  if (typeof message !== 'string' || !message) throw new Error('refuse needs a message');
+  if (typeof code !== 'string' || !REFUSAL_CODE.test(code)) throw new Error(`refuse code ${JSON.stringify(code)} must be lowercase letters, digits, and underscores, up to 40`);
+  throw new Refusal(code, message.length > REFUSAL_MESSAGE_MAX ? `${message.slice(0, REFUSAL_MESSAGE_MAX - 1)}…` : message);
+}
+
 /** What an extension does when atmoBB calls it. Handlers run synchronously. */
 export interface ExtensionHandlers {
-  /** A viewer's action. The return value (any JSON) goes back to the caller. */
+  /** A viewer's action. The return value (any JSON) goes back to the caller; `refuse` turns the action down. */
   action(input: ActionInput): unknown;
   /**
    * Staff attached the extension to a thread, with the setup its attach form
-   * collected. Throwing refuses the attach, and atmoBB removes the binding.
+   * collected. `refuse` turns the setup down with a message staff see; that or
+   * any other throw undoes the attach, and atmoBB removes the binding.
    * Without this handler the extension can't be attached to threads.
    */
   attach?(input: AttachInput): unknown;
   /** A timer set with `timers.set` came due. */
-  timer?(timer: TimerSet): void;
+  timer?(timer: TimerInput): void;
   /** Whether there's work in progress an admin should know about before disabling or uninstalling. */
   openWork?(): boolean;
   /** The stored data is at version `from`; bring it to `to`, this release's `dataVersion`. */
@@ -178,6 +209,36 @@ function settled(handler: string, value: unknown): unknown {
 
 const readInput = () => JSON.parse(Host.inputString());
 
+// extism-js snapshots the script once it has loaded, Math.random's state
+// included, so every cold start would replay the same sequence. The first call
+// into an instance runs after that snapshot, so that's where Math.random is
+// replaced with one drawn from crypto.getRandomValues.
+let randomReplaced = false;
+const randomWords = new Uint32Array(2);
+
+function replaceMathRandom() {
+  if (randomReplaced) return;
+  randomReplaced = true;
+  Math.random = () => {
+    crypto.getRandomValues(randomWords);
+    // 53 random bits, as a number in [0, 1).
+    return (randomWords[0] * 2 ** 21 + (randomWords[1] >>> 11)) / 2 ** 53;
+  };
+}
+
+/** Run a handler whose output goes back to a person: its value, or its refusal. */
+function answer(handler: string, run: () => unknown) {
+  let output: HandlerOutput;
+  try {
+    const value = settled(handler, run());
+    output = { value: value === undefined ? null : value };
+  } catch (error) {
+    if (!(error instanceof Refusal)) throw error;
+    output = { refused: { code: error.code, message: error.message } };
+  }
+  Host.outputString(JSON.stringify(output));
+}
+
 /**
  * The module exports the compiler wires to the sandbox: one per handler the
  * extension defines, so atmoBB sees exactly which handlers exist. The kit's
@@ -195,19 +256,19 @@ export function guestExports(definition: unknown): Record<string, () => void> {
   }
 
   const exports: Record<string, () => void> = {
-    action() {
-      const output = settled('action', action.call(handlers, readInput()));
-      Host.outputString(JSON.stringify(output === undefined ? null : output));
-    },
+    action: () => answer('action', () => action.call(handlers, readInput())),
   };
-  if (attach) {
-    exports.attach = () => {
-      const output = settled('attach', attach.call(handlers, readInput()));
-      Host.outputString(JSON.stringify(output === undefined ? null : output));
-    };
-  }
+  if (attach) exports.attach = () => answer('attach', () => attach.call(handlers, readInput()));
   if (timer) exports.timer = () => void settled('timer', timer.call(handlers, readInput()));
   if (openWork) exports.openWork = () => Host.outputString(JSON.stringify(settled('openWork', openWork.call(handlers)) === true));
   if (migrate) exports.migrate = () => void settled('migrate', migrate.call(handlers, readInput()));
-  return exports;
+  return Object.fromEntries(
+    Object.entries(exports).map(([name, run]) => [
+      name,
+      () => {
+        replaceMathRandom();
+        run();
+      },
+    ]),
+  );
 }

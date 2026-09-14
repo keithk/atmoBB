@@ -1,7 +1,7 @@
 import { canModerateForum } from '../admin';
 import { createForumRecordAsGiven, deleteForumRecord, forumWriteErrorMessage, getForumRecord } from '../forum-repo';
 import { bindingAccess, bindingRkey, cacheBinding, cachedBinding, uncacheBinding, type BindingAccess, type ThreadBinding } from './bindings';
-import { ExtensionCallError, dispatchAttach, hasHandler } from './host';
+import { ExtensionCallError, ExtensionRefusal, dispatchAttach, hasHandler } from './host';
 import { extensionsLockHeld } from './lock';
 import { extensionsEnabled } from './manifest';
 import { getInstall, type ExtensionInstall } from './registry';
@@ -9,7 +9,8 @@ import { BINDING_COLLECTION } from './scopes';
 
 // Staff attach an extension to a thread. atmoBB writes the binding record
 // itself, caches it, and only then hands the extension its setup. An extension
-// that refuses the setup leaves nothing behind: the record and cache entry go.
+// that refuses the setup, or fails on it, leaves nothing behind: the record and
+// cache entry go, and staff see the extension's refusal message.
 
 export interface AttachRequest {
   installId: string;
@@ -111,5 +112,9 @@ async function undoBinding(binding: ThreadBinding): Promise<boolean> {
   return removed;
 }
 
-/** Host errors carry no guest text, so their messages are safe to show; anything else stays generic. */
-const callMessage = (error: unknown) => (error instanceof ExtensionCallError ? error.message : 'something went wrong on the server.');
+/**
+ * Host errors carry no guest text, so their messages are safe to show, and a
+ * refusal's message is the extension's own, meant for staff. Anything else stays generic.
+ */
+const callMessage = (error: unknown) =>
+  error instanceof ExtensionCallError || error instanceof ExtensionRefusal ? error.message : 'something went wrong on the server.';

@@ -31,8 +31,21 @@ function start(host: ReturnType<typeof stubHost>) {
   return runtime;
 }
 
-const call = async (runtime: ReturnType<typeof extensionRuntime>, action: string, input: unknown) =>
-  JSON.parse((await runtime.call('install', 'action', JSON.stringify({ viewer: { did: null, standing: 'nonmember', staff: false, banned: false }, thread: null, action, input })))!);
+const output = async (runtime: ReturnType<typeof extensionRuntime>, action: string, input: unknown) =>
+  JSON.parse(
+    (await runtime.call(
+      'install',
+      'action',
+      JSON.stringify({ viewer: { did: null, standing: 'nonmember', staff: false, banned: false }, thread: null, forum: { did: 'did:plc:forum' }, action, input }),
+    ))!,
+  );
+
+/** The action's return value, out of the { value } envelope. */
+async function call(runtime: ReturnType<typeof extensionRuntime>, action: string, input: unknown) {
+  const envelope = await output(runtime, action, input);
+  expect(Object.keys(envelope)).toEqual(['value']);
+  return envelope.value;
+}
 
 describe('author runtime', () => {
   it('round-trips Unicode and nested objects through k/v without loss', async () => {
@@ -62,6 +75,34 @@ describe('author runtime', () => {
       fn: 'notify',
       message: "notify isn't granted",
     });
+  });
+
+  it('outputs a refusal as { refused: { code, message } }, capping the message and defaulting the code', async () => {
+    const runtime = start(stubHost());
+
+    expect(await output(runtime, 'refuse', { message: 'You have no army in Paris.', code: 'no_army' })).toEqual({
+      refused: { code: 'no_army', message: 'You have no army in Paris.' },
+    });
+    expect(await output(runtime, 'refuse', { message: 'Not now.' })).toEqual({ refused: { code: 'refused', message: 'Not now.' } });
+    const long = await output(runtime, 'refuse', { message: 'x'.repeat(1000) });
+    expect(long.refused.message).toHaveLength(300);
+  });
+
+  it('fails the call, rather than refusing, for a malformed refusal or any other throw', async () => {
+    const runtime = start(stubHost());
+
+    await expect(output(runtime, 'refuse', { message: 'Bad code', code: 'Not A Code' })).rejects.toThrow();
+    await expect(output(runtime, 'refuse', { message: '' })).rejects.toThrow();
+    await expect(output(runtime, 'nonsense', null)).rejects.toThrow();
+  });
+
+  it('gives Math.random a different sequence on each cold start', async () => {
+    const first = await call(start(stubHost()), 'random', null);
+    const second = await call(start(stubHost()), 'random', null);
+
+    expect(first).toHaveLength(3);
+    for (const n of [...first, ...second]) expect(n >= 0 && n < 1).toBe(true);
+    expect(second).not.toEqual(first);
   });
 
   it('exports only the handlers the extension defines', async () => {

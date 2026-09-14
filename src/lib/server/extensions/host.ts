@@ -6,6 +6,8 @@ import { isValidDid } from '@atproto/syntax';
 import { env } from '$env/dynamic/private';
 import {
   HOST_FUNCTIONS,
+  REFUSAL_CODE,
+  REFUSAL_MESSAGE_MAX,
   type ActionInput,
   type AttachInput,
   type ExtensionManifest,
@@ -18,6 +20,7 @@ import {
   type NotifyPayload,
   type NotifyResult,
   type ThreadRef,
+  type TimerInput,
   type TimerSet,
   type ViewerContext,
 } from '$lib/extensions/contract';
@@ -68,6 +71,21 @@ export class ExtensionCallError extends Error {
   ) {
     super(message);
     this.name = 'ExtensionCallError';
+  }
+}
+
+/**
+ * The extension turned down the call with a code and message meant for the
+ * person who made it. That text is the guest's own, so it goes back to them
+ * and nowhere else: never into server logs.
+ */
+export class ExtensionRefusal extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ExtensionRefusal';
   }
 }
 
@@ -494,6 +512,21 @@ function parseOutput(output: string): unknown {
   }
 }
 
+const hasOnlyKey = (value: Record<string, unknown>, key: string) => Object.keys(value).length === 1 && key in value;
+
+/** The value in an `action` or `attach` output, or an ExtensionRefusal thrown for a well-formed refusal. */
+function handlerValue(output: string): unknown {
+  const envelope = parseOutput(output);
+  if (isObject(envelope) && hasOnlyKey(envelope, 'value')) return envelope.value;
+  if (isObject(envelope) && hasOnlyKey(envelope, 'refused') && isObject(envelope.refused)) {
+    const { code, message } = envelope.refused;
+    if (typeof code === 'string' && REFUSAL_CODE.test(code) && typeof message === 'string' && message) {
+      throw new ExtensionRefusal(code, cut(message, REFUSAL_MESSAGE_MAX));
+    }
+  }
+  throw new ExtensionCallError('bad_output', "The extension's output isn't a value or a refusal");
+}
+
 // --- entry points ------------------------------------------------------------------
 
 /** Who the viewer is, from the session's DID only. */
@@ -539,7 +572,7 @@ export interface ActionOptions {
  * status as the forum sees them. `thread` is the bound thread the action comes
  * from, which the caller has checked against the thread's binding, or null.
  * Actions from a thread need a signed-in viewer. Resolves to the handler's
- * JSON output.
+ * value, or throws an ExtensionRefusal when the handler refused.
  */
 export async function dispatchAction(
   installId: string,
@@ -559,9 +592,9 @@ export async function dispatchAction(
   if (!viewerDid) anonymousInFlight.add(installId);
   try {
     const viewer = await viewerContext(viewerDid);
-    const output = await runCall(install, 'action', { viewer, thread, action, input } satisfies ActionInput);
+    const output = await runCall(install, 'action', { viewer, thread, forum: { did: FORUM_DID() }, action, input } satisfies ActionInput);
     if (output === null) throw new ExtensionCallError('no_handler', `${install.manifest.name} has no action handler`);
-    return parseOutput(output);
+    return handlerValue(output);
   } finally {
     if (!viewerDid) anonymousInFlight.delete(installId);
   }
@@ -569,17 +602,17 @@ export async function dispatchAction(
 
 /**
  * Run an install's `attach` after staff bound it to `thread`, with the setup
- * its attach form collected. A throwing handler refuses the attach. Resolves
- * to the handler's JSON output.
+ * its attach form collected. Resolves to the handler's value; a refusal throws
+ * an ExtensionRefusal, and any other failure an ExtensionCallError.
  */
 export async function dispatchAttach(installId: string, viewerDid: string, thread: ThreadRef, input: unknown): Promise<unknown> {
   refuseUnlessRunning();
   const install = await installFor(installId, true);
   takeActionSlot(installId, viewerDid);
   const viewer = await viewerContext(viewerDid);
-  const output = await runCall(install, 'attach', { viewer, thread, input } satisfies AttachInput);
+  const output = await runCall(install, 'attach', { viewer, thread, forum: { did: FORUM_DID() }, input } satisfies AttachInput);
   if (output === null) throw new ExtensionCallError('no_handler', `${install.manifest.name} can't be attached to threads`);
-  return parseOutput(output);
+  return handlerValue(output);
 }
 
 /** Whether an active install's release exports the handler `name`. */
@@ -594,7 +627,7 @@ export async function hasHandler(installId: string, name: HandlerExport): Promis
 export async function dispatchTimer(installId: string, timer: TimerSet): Promise<void> {
   refuseUnlessRunning();
   const install = await installFor(installId, true);
-  await runCall(install, 'timer', timer);
+  await runCall(install, 'timer', { ...timer, forum: { did: FORUM_DID() } } satisfies TimerInput);
 }
 
 /** Whether the install reports work in progress, for disable and uninstall. False when it exports no `openWork`. */

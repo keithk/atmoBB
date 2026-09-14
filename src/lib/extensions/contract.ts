@@ -55,11 +55,18 @@ export interface ThreadRef {
   uri: string;
 }
 
+/** The forum the extension runs on. */
+export interface ForumRef {
+  /** The forum account's DID: the repo extension records are written to. */
+  did: string;
+}
+
 /** What `action` receives. */
 export interface ActionInput {
   viewer: ViewerContext;
   /** The thread the action comes from, or null when it doesn't come from a thread. */
   thread: ThreadRef | null;
+  forum: ForumRef;
   action: string;
   input: unknown;
 }
@@ -68,6 +75,7 @@ export interface ActionInput {
 export interface AttachInput {
   viewer: ViewerContext;
   thread: ThreadRef;
+  forum: ForumRef;
   /** The setup the extension's own attach form collected. */
   input: unknown;
 }
@@ -122,11 +130,13 @@ export interface RecordRef {
 }
 /** Reads may name any repo, but only a declared collection. */
 export interface RecordList {
-  repo: string;
+  /** The repo's DID. Omitted, the forum's own repo. */
+  repo?: string;
   collection: string;
 }
 export interface RecordGet {
-  repo: string;
+  /** The repo's DID. Omitted, the forum's own repo. */
+  repo?: string;
   collection: string;
   rkey: string;
 }
@@ -147,6 +157,10 @@ export interface TimerSet {
   /** ISO 8601 datetime. */
   at: string;
   payload?: unknown;
+}
+/** What `timer` receives: the timer as it was set, and the forum. */
+export interface TimerInput extends TimerSet {
+  forum: ForumRef;
 }
 export interface TimerCancel {
   name: string;
@@ -174,11 +188,13 @@ export interface NotifyResult {
 // granted answers with the `capability_not_granted` error and does nothing.
 //
 // Handler exports read their input with Host.inputString() and write their
-// output with Host.outputString(): `action` gets an ActionInput and outputs any
-// JSON value, `attach` gets an AttachInput and outputs any JSON value (throwing
-// refuses the attach), `timer` gets a TimerSet, `openWork` gets nothing and outputs a
-// JSON boolean, and `migrate` gets a MigrateInput. Console output goes to a
-// log the forum's admins can read.
+// output with Host.outputString(): `action` gets an ActionInput and `attach`
+// gets an AttachInput, and both output a HandlerOutput; `timer` gets a
+// TimerInput, `openWork` gets nothing and outputs a JSON boolean, and
+// `migrate` gets a MigrateInput. A refusal's code and message reach the person
+// who asked; a throw from any export fails the call with a generic error, and
+// its text goes only to a log the forum's admins can read, along with console
+// output.
 
 /** Each host function and the capability that grants it. */
 export const HOST_FUNCTIONS = {
@@ -219,6 +235,20 @@ export interface HostError {
   message: string;
 }
 export type HostResult<T> = { ok: true; value: T } | { ok: false; error: HostError };
+
+/** Longest refusal message, in characters. The host cuts longer ones. */
+export const REFUSAL_MESSAGE_MAX = 300;
+/** A refusal code: lowercase letters, digits, and underscores. */
+export const REFUSAL_CODE = /^[a-z0-9_]{1,40}$/;
+
+/** An extension turning down what it was asked, with a message for the person who asked. */
+export interface Refused {
+  code: string;
+  message: string;
+}
+
+/** What `action` and `attach` output: the handler's value, or its refusal. */
+export type HandlerOutput = { value: unknown } | { refused: Refused };
 
 /** What `migrate` receives: the stored data's version and the version this release reads. */
 export interface MigrateInput {

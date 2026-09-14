@@ -8,7 +8,7 @@
     "node": ">=22.19.0"
   },
   "bin": {
-    "atmobb-extension": "lib/cli/index.mjs"
+    "atmobb-extension": "bin/atmobb-extension.mjs"
   },
   "exports": {
     ".": {

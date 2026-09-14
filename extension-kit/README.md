@@ -14,7 +14,7 @@ The kit isn't on npm yet, so use it from this repository:
 ```sh
 cd extension-kit
 bun install                     # or npm install; also builds the CLI into lib/
-node lib/cli/index.mjs new ~/code/my-counter
+node bin/atmobb-extension.mjs new ~/code/my-counter
 cd ~/code/my-counter
 npm install
 npm run build
@@ -36,17 +36,18 @@ own, reversed) in the manifest, the lexicon, and `src/index.ts`.
 ## The author API
 
 ```ts
-import { defineExtension, kv, records, timers, notify, HostCallError } from 'atmobb-extension-kit';
+import { defineExtension, kv, records, timers, notify, refuse, HostCallError } from 'atmobb-extension-kit';
 
 export default defineExtension({
-  action({ viewer, thread, action, input }) {
-    const key = `count:${thread?.uri}`;
+  action({ viewer, thread, forum, action, input }) {
+    if (!thread) refuse('The counter only runs in a thread.', 'not_in_thread');
+    const key = `count:${thread.uri}`;
     const count = (kv.get<number>(key) ?? 0) + 1;
     kv.set(key, count);
     return { count }; // any JSON goes back to the panel
   },
-  attach({ viewer, thread, input }) {}, // optional: staff attached the extension to a thread
-  timer({ name, payload }) {},  // optional: a timer from timers.set came due
+  attach({ viewer, thread, forum, input }) {}, // optional: staff attached the extension to a thread
+  timer({ name, payload, forum }) {},  // optional: a timer from timers.set came due
   openWork() { return false; }, // optional: work in progress an admin should see before disabling
   migrate({ from, to }) {},     // optional: runs when a new release raises dataVersion
 });
@@ -54,11 +55,22 @@ export default defineExtension({
 
 - Staff attach an extension to a thread on a public board. atmoBB records the
   binding itself, then calls `attach` with the setup the extension's attach
-  form collected; throwing refuses the attach and atmoBB removes the binding.
-  An extension without `attach` can't be attached to threads. `action` gets
-  the thread it runs in as `thread`, or null outside a thread.
+  form collected; refusing or throwing undoes the attach and atmoBB removes the
+  binding. An extension without `attach` can't be attached to threads.
+  `action` gets the thread it runs in as `thread`, or null outside a thread.
+- `action`, `attach`, and `timer` get `forum.did`, the forum account's DID:
+  the repo your records are written to, for building at-uris to them.
+- `refuse(message, code?)` turns an action or attach down with a message for
+  the person who asked, like `refuse('You have no army in Paris.', 'no_army')`.
+  The panel gets it as `{ ok: false, error: { code, message } }`, and the
+  attach page shows it to staff. The message is cut at 300 characters; `code`
+  (default `refused`) is lowercase letters, digits, and underscores, up to 40.
+  Any other throw is treated as a bug: the person sees a generic error, and
+  the thrown message goes only to the extension log.
 - `kv.get/set/delete/list` read and write the install's private store.
-- `records.create/put/delete/list/get` work with records in your declared collections.
+- `records.create/put/delete/list/get` work with records in your declared
+  collections. Writes always go to the forum's repo; `list` and `get` read it
+  too unless you name another `repo`.
 - `timers.set/cancel` schedule calls to your `timer` handler.
 - `notify` sends notifications to members who turned them on.
 
@@ -67,6 +79,12 @@ Each function needs its capability in the manifest (`kv`, `records`,
 `HostCallError` with a stable `code`, like `capability_not_granted` or
 `rate_limited`. Handlers run synchronously. `console.log` output goes to the
 extension log on the install's admin page.
+
+`Math.random` works as usual. The compiler snapshots your module after it
+loads, so the kit replaces `Math.random` with one backed by
+`crypto.getRandomValues` on each instance's first handler call; without that,
+every cold start would repeat the same sequence. Don't call `Math.random` at
+the top level of your module, where it still runs before the snapshot.
 
 ## The panel
 
@@ -143,4 +161,12 @@ bun install
 bun run test     # builds test extensions with the real compiler and runs them in atmoBB's runtime
 bun run check
 ```
+
+The `atmobb-extension` command (`bin/atmobb-extension.mjs`) runs the CLI
+bundled into `lib/cli/`. In a checkout it first compares the bundle against
+every file it was built from, the kit's `src/cli` and the atmoBB code it
+shares, and rebuilds it when any has changed, so you never run a stale CLI.
+A `dev` loop that's already running keeps the CLI it started with; restart it
+after changing the kit. The extension runtime (`src/runtime.ts`) isn't part of
+the CLI bundle: every build reads it fresh.
 

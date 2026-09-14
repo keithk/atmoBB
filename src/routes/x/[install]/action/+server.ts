@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 import { MAX_ACTION_NAME_LENGTH } from '$lib/extensions/bridge';
 import { bindingAccess, bindingFor, type BindingAccess } from '$lib/server/extensions/bindings';
-import { ExtensionCallError, dispatchAction, type ExtensionCallErrorCode } from '$lib/server/extensions/host';
+import { ExtensionCallError, ExtensionRefusal, dispatchAction, type ExtensionCallErrorCode } from '$lib/server/extensions/host';
 import { extensionsLockHeld } from '$lib/server/extensions/lock';
 import { extensionsEnabled } from '$lib/server/extensions/manifest';
 import { banMessage, bannedFrom } from '$lib/server/standing';
@@ -95,6 +95,8 @@ export const POST: RequestHandler = async ({ request, params, locals, getClientA
     const value = await dispatchAction(params.install, viewerDid, thread === null ? null : { uri: thread }, action, input, client ? { client } : {});
     return json({ value }, { headers: NO_STORE });
   } catch (error) {
+    // A refusal is the extension's message for this viewer; it is shown to them and never logged.
+    if (error instanceof ExtensionRefusal) return refuse(422, error.code, error.message);
     // Host errors carry no guest text, so their messages are safe to show.
     if (error instanceof ExtensionCallError) return refuse(CALL_STATUS[error.code] ?? 502, error.code, error.message);
     console.error(`[extensions] action for ${params.install} failed:`, error instanceof Error ? error.message : error);

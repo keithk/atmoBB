@@ -2,12 +2,12 @@
 // atmoBB's own admission rules, so it pulls src/lib/server/extensions/manifest.ts
 // from the repo; the aliases stand in for the SvelteKit modules that file uses.
 import { build } from 'esbuild';
-import { chmod } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 const kit = fileURLToPath(new URL('..', import.meta.url));
 
-await build({
+const { metafile } = await build({
   absWorkingDir: kit,
   entryPoints: ['src/cli/index.ts'],
   outfile: 'lib/cli/index.mjs',
@@ -24,9 +24,10 @@ await build({
   // The repo root's packages when they're installed, the kit's otherwise.
   nodePaths: [`${kit}node_modules`],
   // Bundled CommonJS dependencies call require() for Node built-ins.
-  banner: { js: "#!/usr/bin/env node\nimport { createRequire } from 'node:module';\nconst require = createRequire(import.meta.url);" },
+  banner: { js: "import { createRequire } from 'node:module';\nconst require = createRequire(import.meta.url);" },
   logLevel: 'warning',
+  // bin/atmobb-extension.mjs compares these inputs against the bundle to tell when it's out of date.
+  metafile: true,
 });
 
-// It's the package's bin.
-await chmod(new URL('../lib/cli/index.mjs', import.meta.url), 0o755);
+await writeFile(new URL('../lib/cli/meta.json', import.meta.url), JSON.stringify({ inputs: Object.fromEntries(Object.keys(metafile.inputs).map((input) => [input, {}])) }));

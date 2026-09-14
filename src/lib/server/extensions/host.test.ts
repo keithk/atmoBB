@@ -73,6 +73,7 @@ import { forumStanding } from '../membership';
 import { kvGet, kvSet } from './kv';
 import {
   ExtensionCallError,
+  ExtensionRefusal,
   closeExtensionHost,
   dispatchAction,
   dispatchAttach,
@@ -185,6 +186,14 @@ describe('dispatchAction', () => {
 
     await dispatchTimer(id, { name: 'deadline', at, payload: { turn: 1 } });
     expect(await kvGet(id, { key: 'timer:deadline' })).toEqual({ value: { turn: 1 } });
+    expect(await kvGet(id, { key: 'timer-forum:deadline' })).toEqual({ value: { did: FORUM } });
+  });
+
+  it("tells the handler the forum's DID, signed in or out", async () => {
+    const id = nextId();
+    await addInstall(id);
+    expect(await dispatchAction(id, ALICE, { uri: THREAD }, 'forum', {})).toEqual({ forum: { did: FORUM } });
+    expect(await dispatchAction(id, null, null, 'forum', {}, { client: '203.0.113.1' })).toEqual({ forum: { did: FORUM } });
   });
 
   it('tells the handler the session viewer, ignoring a viewer inside the payload', async () => {
@@ -234,8 +243,9 @@ describe('dispatchAction', () => {
     expect((await callError(hostCall(id, 'kv_set', { key: 'big', value: 'x'.repeat(1000) }))).code).toBe('call_limit');
     expect(await kvGet(id, { key: 'big' })).toEqual({ value: null });
 
-    expect(await dispatchAction(id, ALICE, null, 'big', 998)).toBe('x'.repeat(998));
-    expect((await callError(dispatchAction(id, ALICE, null, 'big', 999))).code).toBe('call_limit');
+    // The output limit counts the {"value":...} envelope around the string.
+    expect(await dispatchAction(id, ALICE, null, 'big', 988)).toBe('x'.repeat(988));
+    expect((await callError(dispatchAction(id, ALICE, null, 'big', 989))).code).toBe('call_limit');
 
     await kvSet(id, { key: 'wide', value: 'x'.repeat(1000) });
     expect((await callError(hostCall(id, 'kv_get', { key: 'wide' }))).code).toBe('call_limit');
@@ -370,6 +380,68 @@ describe('dispatchAction', () => {
   });
 });
 
+describe('refusals', () => {
+  const refusal = (promise: Promise<unknown>) =>
+    promise.then(
+      () => {
+        throw new Error('expected the call to be refused');
+      },
+      (error: unknown) => {
+        expect(error).toBeInstanceOf(ExtensionRefusal);
+        return error as ExtensionRefusal;
+      },
+    );
+
+  it("passes an action's refusal on with its code and message, keeping both out of server output", async () => {
+    const id = nextId();
+    await addInstall(id);
+    const written: string[] = [];
+    for (const method of ['log', 'info', 'warn', 'error', 'debug'] as const) {
+      vi.spyOn(console, method).mockImplementation((...args: unknown[]) => void written.push(args.map(String).join(' ')));
+    }
+
+    const refused = await refusal(dispatchAction(id, ALICE, null, 'refuse', { code: 'no_army', message: `No army in Paris ${SENTINEL}` }));
+    expect({ code: refused.code, message: refused.message }).toEqual({ code: 'no_army', message: `No army in Paris ${SENTINEL}` });
+    vi.restoreAllMocks();
+    expect(written.join('\n')).not.toContain(SENTINEL);
+    expect(written.join('\n')).not.toContain('no_army');
+  });
+
+  it('cuts a long refusal message and fails a refusal whose code or message is malformed', async () => {
+    const id = nextId();
+    await addInstall(id);
+    const long = await refusal(dispatchAction(id, ALICE, null, 'refuse', { code: 'too_long', message: 'x'.repeat(1000) }));
+    expect(long.message).toHaveLength(300);
+
+    for (const refused of [
+      { code: 'Not A Code', message: 'nope' },
+      { code: 'x'.repeat(41), message: 'nope' },
+      { message: 'no code' },
+      { code: 'no_message' },
+      { code: 'empty', message: '' },
+      'refused',
+    ]) {
+      expect((await callError(dispatchAction(id, ALICE, null, 'refuse', refused))).code, JSON.stringify(refused)).toBe('bad_output');
+    }
+  });
+
+  it('fails output that is not a value or a refusal', async () => {
+    const id = nextId();
+    await addInstall(id);
+    expect(await dispatchAction(id, ALICE, null, 'raw', { value: { refused: { code: 'x', message: 'y' } } })).toEqual({ refused: { code: 'x', message: 'y' } });
+    for (const raw of [{ moved: true }, { value: 1, extra: true }, [1], 7, null]) {
+      expect((await callError(dispatchAction(id, ALICE, null, 'raw', raw))).code, JSON.stringify(raw)).toBe('bad_output');
+    }
+  });
+
+  it("passes an attach handler's refusal on", async () => {
+    const id = nextId();
+    await addInstall(id);
+    const refused = await refusal(dispatchAttach(id, ALICE, { uri: THREAD }, { refuse: { code: 'players', message: 'Pick 2 to 7 players' } }));
+    expect({ code: refused.code, message: refused.message }).toEqual({ code: 'players', message: 'Pick 2 to 7 players' });
+  });
+});
+
 describe('notify', () => {
   const notify = (id: string, payload: Record<string, unknown>) => hostCall(id, 'notify', payload).then(([reply]) => reply);
 
@@ -416,7 +488,7 @@ describe('notify', () => {
 });
 
 describe('optional handlers', () => {
-  it('runs attach with the viewer, the thread, and the setup input, and reports whether the module exports it', async () => {
+  it('runs attach with the viewer, the thread, the forum, and the setup input, and reports whether the module exports it', async () => {
     const id = nextId();
     await addInstall(id);
     state.staff.add(ALICE);
@@ -424,6 +496,7 @@ describe('optional handlers', () => {
     expect(await dispatchAttach(id, ALICE, { uri: THREAD }, { players: 7 })).toEqual({
       viewer: { did: ALICE, standing: 'member', staff: true, banned: false },
       thread: { uri: THREAD },
+      forum: { did: FORUM },
       input: { players: 7 },
     });
     expect(await kvGet(id, { key: `attached:${THREAD}` })).toEqual({ value: { players: 7 } });

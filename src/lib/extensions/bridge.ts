@@ -114,6 +114,23 @@ export function parseFrameMessage(data: unknown, mode: PanelMode): FrameMessage 
   }
 }
 
+/**
+ * The outcome to answer a panel with, from the action endpoint's status and
+ * JSON body: the handler's value, or the error code and message the endpoint
+ * refused with, which is the extension's own when it refused the action.
+ */
+export function actionOutcome(status: number, body: unknown): ActionOutcome {
+  const answer = isObject(body) ? body : {};
+  if (status >= 200 && status < 300) return { ok: true, value: answer.value ?? null };
+  return {
+    ok: false,
+    error: {
+      code: typeof answer.code === 'string' ? answer.code : 'failed',
+      message: typeof answer.message === 'string' ? answer.message : 'The action failed.',
+    },
+  };
+}
+
 export const clampHeight = (height: number) => Math.min(PANEL_MAX_HEIGHT, Math.max(PANEL_MIN_HEIGHT, Math.round(height)));
 
 export interface PanelBridgeOptions {
