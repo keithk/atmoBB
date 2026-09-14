@@ -3,11 +3,11 @@
 # directory (the one holding compose.yml). Rerunnable: install keeps existing
 # secrets and the Happyview operator key.
 set -eu
+# ATMOBB_INSTANCE_CONFIG_VERSION=1
 
 BUNDLE_DIR=${ATMOBB_BUNDLE_DIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}
 cd "$BUNDLE_DIR"
 ENV_FILE=$BUNDLE_DIR/.env
-PROJECT=${ATMOBB_COMPOSE_PROJECT:-atmobb}
 
 usage() {
   cat <<'EOF'
@@ -70,6 +70,27 @@ env_value() {
   [ -f "$ENV_FILE" ] || return 0
   sed -n "s/^$1=//p" "$ENV_FILE" | tail -n 1
 }
+
+INSTANCE_ID=$(env_value ATMOBB_INSTANCE_ID)
+INSTANCE_ID=${INSTANCE_ID:-atmobb}
+case "$INSTANCE_ID" in *[!a-z0-9-]*|-*|*-|'') die "invalid ATMOBB_INSTANCE_ID: use lowercase letters, digits, and hyphens" ;; esac
+APP_PORT=$(env_value ATMOBB_APP_PORT); APP_PORT=${APP_PORT:-3001}
+HAPPYVIEW_PORT=$(env_value ATMOBB_HAPPYVIEW_PORT); HAPPYVIEW_PORT=${HAPPYVIEW_PORT:-3000}
+for port in "$APP_PORT" "$HAPPYVIEW_PORT"; do
+  case "$port" in *[!0-9]*|'') die "instance ports must be decimal numbers" ;; esac
+  [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || die "instance ports must be between 1 and 65535"
+done
+[ "$APP_PORT" != "$HAPPYVIEW_PORT" ] || die "ATMOBB_APP_PORT and ATMOBB_HAPPYVIEW_PORT must differ"
+if [ "$INSTANCE_ID" = atmobb ]; then
+  PROJECT=atmobb; DEFAULT_DATA_DIR=/var/lib/atmobb/oauth; UPDATER_SOCKET_DIR=/run/atmobb-updater
+  UPDATER_STATE_DIR=/var/lib/atmobb-updater; UPDATER_LIB_DIR=/usr/local/lib/atmobb
+  UPDATER_ENV_FILE=/etc/atmobb/updater.env; UPDATER_UNIT=atmobb-updater.service
+else
+  PROJECT=atmobb-$INSTANCE_ID; DEFAULT_DATA_DIR=/var/lib/atmobb/$INSTANCE_ID/oauth; UPDATER_SOCKET_DIR=/run/atmobb-updater-$INSTANCE_ID
+  UPDATER_STATE_DIR=/var/lib/atmobb-updater-$INSTANCE_ID; UPDATER_LIB_DIR=/usr/local/lib/atmobb-$INSTANCE_ID
+  UPDATER_ENV_FILE=/etc/atmobb/updater-$INSTANCE_ID.env; UPDATER_UNIT=atmobb-updater-$INSTANCE_ID.service
+fi
+PROJECT=${ATMOBB_COMPOSE_PROJECT:-$PROJECT}
 
 # Replace KEY=... in .env, or append it. Keeps the file at mode 600.
 set_env() {
@@ -216,7 +237,7 @@ cmd_install() {
     die "the forum must use a dedicated account, not the personal admin account"
 
   DATA_DIR=$(env_value ATMOBB_DATA_DIR)
-  DATA_DIR=${DATA_DIR:-/var/lib/atmobb/oauth}
+  DATA_DIR=${DATA_DIR:-$DEFAULT_DATA_DIR}
 
   cat <<EOF
 
@@ -226,7 +247,7 @@ Happyview:       https://$HAPPYVIEW_HOST
 Forum identity:  ${FORUM_HANDLE:-$FORUM_DID} ($FORUM_DID)
 First admin:     ${ADMIN_HANDLE:-already bootstrapped}${ADMIN_DID:+ ($ADMIN_DID)}
 OAuth state:     $DATA_DIR
-TLS:             $([ "$USE_CADDY" -eq 1 ] && echo "bundled Caddy (ports 80/443)" || echo "your own reverse proxy -> 127.0.0.1:3001 and :3000")
+TLS:             $([ "$USE_CADDY" -eq 1 ] && echo "bundled Caddy (ports 80/443)" || echo "your own reverse proxy -> 127.0.0.1:$APP_PORT and :$HAPPYVIEW_PORT")
 
 DNS for both hostnames must point here. Existing secrets are preserved.
 EOF
@@ -236,6 +257,11 @@ EOF
   umask 077
   set_env APP_HOST "$APP_HOST"
   set_env HAPPYVIEW_HOST "$HAPPYVIEW_HOST"
+  set_env ATMOBB_INSTANCE_ID "$INSTANCE_ID"
+  set_env COMPOSE_PROJECT_NAME "$PROJECT"
+  set_env ATMOBB_APP_PORT "$APP_PORT"
+  set_env ATMOBB_HAPPYVIEW_PORT "$HAPPYVIEW_PORT"
+  set_env ATMOBB_UPDATER_SOCKET_DIR "$UPDATER_SOCKET_DIR"
   set_env ATMOBB_FORUM_DID "$FORUM_DID"
   set_env ATMOBB_DATA_DIR "$DATA_DIR"
   [ -n "$(env_value POSTGRES_PASSWORD)" ] || set_env POSTGRES_PASSWORD "$(openssl rand -hex 24)"
@@ -251,9 +277,9 @@ EOF
   sudo install -d -o 10001 -g 10001 -m 700 "$DATA_DIR"
 
   echo "== installing the restricted host updater"
-  sudo install -d -m 755 /usr/local/lib/atmobb /etc/atmobb
-  sudo install -m 755 "$BUNDLE_DIR/updater.py" /usr/local/lib/atmobb/updater.py
-  sudo install -m 755 "$BUNDLE_DIR/atmobb" /usr/local/lib/atmobb/atmobb
+  sudo install -d -m 755 "$UPDATER_LIB_DIR" /etc/atmobb
+  sudo install -m 755 "$BUNDLE_DIR/updater.py" "$UPDATER_LIB_DIR/updater.py"
+  sudo install -m 755 "$BUNDLE_DIR/atmobb" "$UPDATER_LIB_DIR/atmobb"
   updater_env=$(mktemp)
   updater_unit=$(mktemp)
   python_bin=$(command -v python3)
@@ -263,8 +289,13 @@ EOF
 ATMOBB_BUNDLE_DIR=$BUNDLE_DIR
 ATMOBB_UPDATER_TOKEN=$(env_value ATMOBB_UPDATER_TOKEN)
 ATMOBB_UPDATER_SOCKET_GID=10001
+ATMOBB_UPDATER_SOCKET=$UPDATER_SOCKET_DIR/updater.sock
+ATMOBB_UPDATER_STATE_DIR=$UPDATER_STATE_DIR
+ATMOBB_UPDATER_WORKER=$UPDATER_LIB_DIR/atmobb
+ATMOBB_UPDATER_LIB_DIR=$UPDATER_LIB_DIR
+ATMOBB_HOST_UPDATE_LOCK=/var/lock/atmobb-hosting.lock
 EOF
-  sudo install -m 600 "$updater_env" /etc/atmobb/updater.env
+  sudo install -m 600 "$updater_env" "$UPDATER_ENV_FILE"
   cat > "$updater_unit" <<EOF
 [Unit]
 Description=atmobb restricted host updater
@@ -273,8 +304,8 @@ After=network-online.target docker.service
 
 [Service]
 Type=simple
-EnvironmentFile=/etc/atmobb/updater.env
-ExecStart=$python_bin /usr/local/lib/atmobb/updater.py
+EnvironmentFile=$UPDATER_ENV_FILE
+ExecStart=$python_bin $UPDATER_LIB_DIR/updater.py
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true
@@ -283,16 +314,16 @@ PrivateTmp=true
 [Install]
 WantedBy=multi-user.target
 EOF
-  sudo install -m 644 "$updater_unit" /etc/systemd/system/atmobb-updater.service
+  sudo install -m 644 "$updater_unit" "/etc/systemd/system/$UPDATER_UNIT"
   rm -f "$updater_env" "$updater_unit"
   trap - EXIT HUP INT TERM
   sudo systemctl daemon-reload
-  sudo systemctl enable --now atmobb-updater
-  sudo systemctl restart atmobb-updater
+  sudo systemctl enable --now "$UPDATER_UNIT"
+  sudo systemctl restart "$UPDATER_UNIT"
   attempt=0
-  while ! sudo test -S /run/atmobb-updater/updater.sock; do
+  while ! sudo test -S "$UPDATER_SOCKET_DIR/updater.sock"; do
     attempt=$((attempt + 1))
-    [ "$attempt" -lt 20 ] || die "the updater did not create its socket; inspect: sudo journalctl -u atmobb-updater"
+    [ "$attempt" -lt 20 ] || die "the updater did not create its socket; inspect: sudo journalctl -u $UPDATER_UNIT"
     sleep 1
   done
 
@@ -329,7 +360,7 @@ EOF
   if [ "$USE_CADDY" -eq 1 ]; then
     echo "Caddy may take a moment to obtain certificates after DNS reaches this host."
   else
-    echo "Point your reverse proxy at 127.0.0.1:3001 (forum) and 127.0.0.1:3000 (Happyview),"
+    echo "Point your reverse proxy at 127.0.0.1:$APP_PORT (forum) and 127.0.0.1:$HAPPYVIEW_PORT (Happyview),"
     echo "and block /admin on the Happyview hostname. docs/self-hosting.md has a Caddy example."
   fi
 }
@@ -401,7 +432,7 @@ cmd_backup() {
   [ -f "$ENV_FILE" ] || die "no .env here; run ./atmobb install first"
   dir=${1:-$BUNDLE_DIR/backups/$(date -u +%Y%m%dT%H%M%SZ)}
   data_dir=$(env_value ATMOBB_DATA_DIR)
-  data_dir=${data_dir:-/var/lib/atmobb/oauth}
+  data_dir=${data_dir:-$DEFAULT_DATA_DIR}
   umask 077
   mkdir -p "$dir"
   echo "== backing up to $dir" >&2
@@ -409,7 +440,7 @@ cmd_backup() {
   sudo tar -C "$(dirname "$data_dir")" -czf - "$(basename "$data_dir")" > "$dir/oauth.tar.gz"
   cp "$ENV_FILE" "$dir/env"
   cp "$BUNDLE_DIR/compose.yml" "$dir/compose.yml"
-  for file in compose.caddy.yml Caddyfile; do
+  for file in compose.caddy.yml compose.hosting.yml Caddyfile; do
     [ ! -f "$BUNDLE_DIR/$file" ] || cp "$BUNDLE_DIR/$file" "$dir/$file"
   done
   ls -lh "$dir" >&2
@@ -419,10 +450,10 @@ cmd_backup() {
 
 cmd_status() {
   compose ps
-  version=$(curl --silent --fail http://127.0.0.1:3001/api/version 2>/dev/null) &&
+  version=$(curl --silent --fail "http://127.0.0.1:$APP_PORT/api/version" 2>/dev/null) &&
     printf 'atmobb %s (expects Happyview %s)\n' \
       "$(printf '%s' "$version" | jq -r .version)" "$(printf '%s' "$version" | jq -r .happyview)" ||
-    echo "atmobb is not answering on 127.0.0.1:3001 yet"
+    echo "atmobb is not answering on 127.0.0.1:$APP_PORT yet"
 }
 
 # Called only by the root-owned updater daemon. Preparation (downloads, pulls,
@@ -433,14 +464,19 @@ cmd_internal_update() {
   [ -n "$token" ] && [ "${ATMOBB_UPDATER_INTERNAL:-}" = "$token" ] || die "_update is reserved for atmobb-updater"
   [ "$target" = stable ] || [ "$target" = main ] || die "update target must be stable or main"
   need curl jq openssl tar
-  state_dir=${ATMOBB_UPDATER_STATE_DIR:-/var/lib/atmobb-updater}
-  updater_lib=${ATMOBB_UPDATER_LIB_DIR:-/usr/local/lib/atmobb}
+  state_dir=${ATMOBB_UPDATER_STATE_DIR:-$UPDATER_STATE_DIR}
+  updater_lib=${ATMOBB_UPDATER_LIB_DIR:-$UPDATER_LIB_DIR}
   release_api=${ATMOBB_UPDATE_RELEASE_API:-https://api.github.com/repos/keithk/atmoBB/releases/latest}
   main_api=${ATMOBB_UPDATE_MAIN_API:-https://api.github.com/repos/keithk/atmoBB/commits/main}
   archive_base=${ATMOBB_UPDATE_ARCHIVE_BASE:-https://github.com/keithk/atmoBB/archive}
-  health_url=${ATMOBB_UPDATE_HEALTH_URL:-http://127.0.0.1:3001/api/version}
+  health_url=${ATMOBB_UPDATE_HEALTH_URL:-http://127.0.0.1:$APP_PORT/api/version}
   work=$state_dir/work.$$
   result=$state_dir/result.json
+  compose_files=$(env_value COMPOSE_FILE)
+  case "$compose_files" in
+    ''|compose.yml|compose.yml:compose.caddy.yml|compose.yml:compose.hosting.yml) ;;
+    *) die "unsupported COMPOSE_FILE for automatic updates; use a documented release overlay" ;;
+  esac
   rm -rf "$work"
   mkdir -p "$work/bundle"
   trap 'rm -rf "$work"' EXIT HUP INT TERM
@@ -465,9 +501,15 @@ cmd_internal_update() {
     actual=$(openssl dgst -sha256 "$work/$asset" | awk '{print tolower($NF)}')
     [ "$actual" = "$expected" ] || die "release checksum verification failed"
     tar -xzf "$work/$asset" --strip-components=1 -C "$work/bundle"
+    grep -q '^# ATMOBB_INSTANCE_CONFIG_VERSION=1$' "$work/bundle/compose.yml" &&
+      grep -q '^# ATMOBB_INSTANCE_CONFIG_VERSION=1$' "$work/bundle/atmobb" ||
+      die "candidate release does not support isolated instance configuration"
     echo "== pulling pinned release images before changing the stack"
     stage_compose="$DOCKER compose --project-name $PROJECT --env-file $ENV_FILE -f $work/bundle/compose.yml"
-    [ -z "$(env_value COMPOSE_FILE)" ] || stage_compose="$stage_compose -f $work/bundle/compose.caddy.yml"
+    case "$compose_files" in
+      *:compose.caddy.yml) stage_compose="$stage_compose -f $work/bundle/compose.caddy.yml" ;;
+      *:compose.hosting.yml) stage_compose="$stage_compose -f $work/bundle/compose.hosting.yml" ;;
+    esac
     $stage_compose pull
     commit=
   else
@@ -481,13 +523,16 @@ cmd_internal_update() {
       "$archive_base/$commit.tar.gz" -o "$work/main.tar.gz"
     mkdir "$work/source"
     tar -xzf "$work/main.tar.gz" --strip-components=1 -C "$work/source"
+    grep -q '^# ATMOBB_INSTANCE_CONFIG_VERSION=1$' "$work/source/infra/release/compose.yml" &&
+      grep -q '^# ATMOBB_INSTANCE_CONFIG_VERSION=1$' "$work/source/infra/release/atmobb" ||
+      die "candidate main bundle does not support isolated instance configuration"
     version=$(jq -er .version "$work/source/package.json")
     happyview=$(sed -n 's/^ARG HAPPYVIEW_VERSION=//p' "$work/source/Dockerfile")
     [ -n "$happyview" ] || die "main has no Happyview version pin"
     image="atmobb-main:$commit"
     echo "== building $image before changing the running stack"
     $DOCKER build --build-arg "HAPPYVIEW_VERSION=$happyview" -t "$image" "$work/source"
-    for file in compose.yml compose.caddy.yml Caddyfile atmobb updater.py env.example; do
+    for file in compose.yml compose.caddy.yml compose.hosting.yml Caddyfile atmobb updater.py env.example; do
       cp "$work/source/infra/release/$file" "$work/bundle/$file"
     done
     cp "$work/source/docs/self-hosting.md" "$work/bundle/SELF-HOSTING.md"
@@ -496,9 +541,12 @@ cmd_internal_update() {
     mv "$work/bundle/compose.yml.tmp" "$work/bundle/compose.yml"
     echo "== pulling main's pinned infrastructure images"
     stage_compose="$DOCKER compose --project-name $PROJECT --env-file $ENV_FILE -f $work/bundle/compose.yml"
-    [ -z "$(env_value COMPOSE_FILE)" ] || stage_compose="$stage_compose -f $work/bundle/compose.caddy.yml"
+    case "$compose_files" in
+      *:compose.caddy.yml) stage_compose="$stage_compose -f $work/bundle/compose.caddy.yml" ;;
+      *:compose.hosting.yml) stage_compose="$stage_compose -f $work/bundle/compose.hosting.yml" ;;
+    esac
     $stage_compose pull postgres happyview
-    [ -z "$(env_value COMPOSE_FILE)" ] || $stage_compose pull caddy
+    [ "$compose_files" != compose.yml:compose.caddy.yml ] || $stage_compose pull caddy
   fi
   echo "ATMOBB_TARGET_VERSION=$version"
   echo "ATMOBB_TARGET_COMMIT=$commit"
@@ -509,7 +557,7 @@ cmd_internal_update() {
   echo "== backup complete: $backup"
   echo "== activating prepared bundle"
   owner=$(stat -c '%u:%g' "$ENV_FILE")
-  for file in compose.yml compose.caddy.yml Caddyfile atmobb updater.py env.example SELF-HOSTING.md LICENSE; do
+  for file in compose.yml compose.caddy.yml compose.hosting.yml Caddyfile atmobb updater.py env.example SELF-HOSTING.md LICENSE; do
     [ -f "$work/bundle/$file" ] || continue
     case "$file" in atmobb|updater.py) mode=755 ;; *) mode=644 ;; esac
     install -m "$mode" "$work/bundle/$file" "$BUNDLE_DIR/$file"

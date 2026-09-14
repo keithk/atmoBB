@@ -2,6 +2,7 @@
 """Authenticated, fixed-action host updater for an atmobb Compose stack."""
 
 import hmac
+import fcntl
 import json
 import os
 import re
@@ -20,6 +21,7 @@ SOCKET = Path(os.environ.get("ATMOBB_UPDATER_SOCKET", "/run/atmobb-updater/updat
 TOKEN = os.environ["ATMOBB_UPDATER_TOKEN"]
 SOCKET_GID = int(os.environ.get("ATMOBB_UPDATER_SOCKET_GID", "10001"))
 WORKER = os.environ.get("ATMOBB_UPDATER_WORKER", "/usr/local/lib/atmobb/atmobb")
+HOST_LOCK = Path(os.environ.get("ATMOBB_HOST_UPDATE_LOCK", "/var/lock/atmobb-hosting.lock"))
 state_lock = threading.Lock()
 worker: threading.Thread | None = None
 
@@ -58,31 +60,36 @@ def run_update(target: str) -> None:
     env = os.environ.copy()
     env["ATMOBB_UPDATER_INTERNAL"] = TOKEN
     try:
-        process = subprocess.Popen(
-            [WORKER, "_update", target],
-            cwd=BUNDLE,
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
-        assert process.stdout is not None
-        for raw in process.stdout:
-            line = raw.rstrip()
-            if line.startswith("ATMOBB_TARGET_VERSION="):
-                state["candidateVersion"] = line.partition("=")[2]
-            elif line.startswith("ATMOBB_TARGET_COMMIT="):
-                state["candidateCommit"] = line.partition("=")[2] or None
-            elif line.startswith("ATMOBB_BACKUP="):
-                state["backup"] = line.partition("=")[2]
-            log.append(line)
-            log = log[-120:]
+        HOST_LOCK.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+        with HOST_LOCK.open("a+") as host_lock:
             with state_lock:
-                state.update({"status": "running", "log": log})
+                state.update({"status": "waiting", "message": "Waiting for another hosted instance update to finish."})
                 write_state(state)
-        code = process.wait()
-        if code:
-            raise RuntimeError(f"Update command exited with status {code}.")
+            fcntl.flock(host_lock, fcntl.LOCK_EX)
+            with state_lock:
+                state.update({"status": "running", "message": "Update is running."})
+                write_state(state)
+            process = subprocess.Popen(
+                [WORKER, "_update", target], cwd=BUNDLE, env=env,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            )
+            assert process.stdout is not None
+            for raw in process.stdout:
+                line = raw.rstrip()
+                if line.startswith("ATMOBB_TARGET_VERSION="):
+                    state["candidateVersion"] = line.partition("=")[2]
+                elif line.startswith("ATMOBB_TARGET_COMMIT="):
+                    state["candidateCommit"] = line.partition("=")[2] or None
+                elif line.startswith("ATMOBB_BACKUP="):
+                    state["backup"] = line.partition("=")[2]
+                log.append(line)
+                log = log[-120:]
+                with state_lock:
+                    state.update({"status": "running", "log": log})
+                    write_state(state)
+            code = process.wait()
+            if code:
+                raise RuntimeError(f"Update command exited with status {code}.")
         result = json.loads(RESULT_FILE.read_text())
         with state_lock:
             state.update(result)
@@ -139,7 +146,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             previous = read_state()
             state = {
-                "status": "running",
+                "status": "waiting",
                 "target": target,
                 "startedAt": now(),
                 "installedVersion": previous.get("installedVersion") or initial_version(),
@@ -167,7 +174,7 @@ def main() -> None:
     global worker
     STATE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     state = read_state()
-    if state.get("status") == "running":
+    if state.get("status") in ("waiting", "running"):
         state.update({"status": "failed", "finishedAt": now(), "message": "The updater stopped before the operation finished."})
         write_state(state)
     SOCKET.parent.mkdir(mode=0o750, parents=True, exist_ok=True)

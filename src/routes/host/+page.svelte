@@ -24,14 +24,17 @@
       <strong>A fair warning:</strong> if you've ended up on this page, you most likely want to
       <a href="https://github.com/keithk/atmoBB">host atmobb yourself</a>. Self-hosting gives you
       control over the software and your forum's infrastructure. This hosted option is for people
-      who knowingly want to try the constrained, experimental version anyway. It's running as a
-      separate installation on my own personal infrastructure, so I won't be taking on a ton of
-      forums 😥. The idea is to make it easy to pop out and build your own when you're ready.
+      who knowingly want to try the constrained, experimental version anyway. Capacity is set by
+      whichever independent operator runs this service, so availability may be limited. The idea
+      is to make it easy to pop out and build your own when you're ready.
     </p>
     <p>
-      If you do continue, we'll run an atmobb forum for you on its own subdomain. It will appear
-      in the shared forum index, and members can sign in with the atproto accounts they already
-      use. Hosted forums don't support members-only boards.
+      If you continue, the operator will run an isolated atmobb app, Happyview, and database for
+      your forum on its own subdomain. This generic operator-owned hosting is experimental, and
+      capacity and availability may change. Members-only boards are possible on isolated hosting,
+      but the host operator still controls the infrastructure and can access it: do not treat it as
+      private from the operator. Older hosted forums may use shared infrastructure and do not gain
+      these isolation or members-only capabilities.
     </p>
     <p>
       You'll need an invite code and a separate atproto account for the forum. Create a new

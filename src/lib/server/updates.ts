@@ -3,7 +3,7 @@ import http from 'node:http';
 const SOCKET = process.env.ATMOBB_UPDATER_SOCKET ?? '/run/atmobb-updater/updater.sock';
 
 export interface UpdateStatus {
-  status: 'idle' | 'running' | 'succeeded' | 'failed';
+  status: 'idle' | 'waiting' | 'running' | 'succeeded' | 'failed';
   target?: 'stable' | 'main';
   startedAt?: string;
   finishedAt?: string;

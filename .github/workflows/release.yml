@@ -34,8 +34,8 @@ jobs:
         with:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
-      - run: sh -n install.sh
-      - run: python3 -m unittest infra/release/updater_test.py
+      - run: sh -n install.sh infra/install-hosting.sh infra/release/atmobb
+      - run: python3 -m unittest infra/release/updater_test.py infra/hosting_test.py
       - run: sh infra/release/check-pins.sh
       - run: bun run check
       - run: bun run test
@@ -100,7 +100,7 @@ jobs:
           dir="atmobb-$VERSION"
           mkdir "$dir"
           cp infra/release/compose.yml infra/release/compose.caddy.yml infra/release/Caddyfile \
-             infra/release/env.example infra/release/atmobb infra/release/updater.py "$dir/"
+             infra/release/compose.hosting.yml infra/release/env.example infra/release/atmobb infra/release/updater.py "$dir/"
           cp docs/self-hosting.md "$dir/SELF-HOSTING.md"
           cp LICENSE "$dir/"
           # The pin in the repo is checked against package.json by check-pins.sh;

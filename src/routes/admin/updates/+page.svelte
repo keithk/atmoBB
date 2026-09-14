@@ -4,7 +4,7 @@
 
   let { data, form } = $props();
   onMount(() => {
-    if (data.status?.status !== 'running') return;
+    if (data.status?.status !== 'waiting' && data.status?.status !== 'running') return;
     const timer = setInterval(() => void invalidateAll(), 3000);
     return () => clearInterval(timer);
   });
@@ -24,7 +24,9 @@
       </p>
     </div>
 
-    {#if data.status?.status === 'running'}
+    {#if data.status?.status === 'waiting'}
+      <p class="atm-ok update__status">Update queued for the host-wide updater…</p>
+    {:else if data.status?.status === 'running'}
       <p class="atm-ok update__status">Updating from {data.status.target}… The forum stays on its current containers until preparation and backup finish.</p>
     {:else if data.status?.status === 'failed'}
       <div class="failure">
@@ -43,7 +45,7 @@
 
     {#if data.enabled && data.status}
       <form method="POST" action="?/stable">
-        <button class="atm-btn atm-btn--primary" disabled={data.status.status === 'running'}>update to latest stable release</button>
+        <button class="atm-btn atm-btn--primary" disabled={data.status.status === 'waiting' || data.status.status === 'running'}>update to latest stable release</button>
       </form>
       <p class="atm-hint">Downloads the verified release bundle, pulls its pinned images, backs up the forum, applies Happyview migrations and setup, then checks health.</p>
     {:else if !data.enabled}
@@ -63,7 +65,7 @@
           <span class="atm-label">Type <code>main</code> to confirm</span>
           <input class="atm-input" name="confirmation" required autocomplete="off" />
         </label>
-        <button class="atm-btn atm-btn--ghost" disabled={data.status.status === 'running'}>resolve and build main</button>
+        <button class="atm-btn atm-btn--ghost" disabled={data.status.status === 'waiting' || data.status.status === 'running'}>resolve and build main</button>
       </form>
     </div>
   </details>
