@@ -5,7 +5,7 @@ import { rebuildBindingsInBackground } from '$lib/server/extensions/bindings';
 import { listClaims } from '$lib/server/extensions/claims';
 import { ReleaseError } from '$lib/server/extensions/fetch';
 import { confirmInstall, discardStaged, latestReleaseTag, listInstalls, stageInstall } from '$lib/server/extensions/registry';
-import { reconnectStatus, refreshScopes, refuseAction, releaseClaimFromForm, reviewView, unavailableReason } from './extensions.server';
+import { endorsementStatus, reconnectStatus, refreshScopes, refuseAction, releaseClaimFromForm, reviewView, unavailableReason } from './extensions.server';
 
 export const load: PageServerLoad = async ({ locals }) => {
   if (!(await adminActor(locals))) error(403, 'Only admins can manage extensions.');
@@ -55,7 +55,8 @@ export const actions: Actions = {
 
     const result = await stageInstall(gitUrl, tag);
     if (!result.ok) return fail(400, { fields, errors: result.errors });
-    return { fields, review: reviewView(result.review) };
+    const endorsement = await endorsementStatus(result.review.gitUrl, result.review.sha);
+    return { fields, review: reviewView(result.review, null, endorsement) };
   },
 
   confirm: async ({ request, locals }) => {

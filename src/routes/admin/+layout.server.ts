@@ -4,6 +4,7 @@ import { forumConnected, forumStaff, isAdmin } from '$lib/server/admin';
 import { forumWriteMode } from '$lib/server/forum-repo';
 import { resolveHandle } from '$lib/server/appview';
 import { hostingEnabled } from '$lib/server/hosting';
+import { directoryEnabled } from '$lib/server/extensions/scopes';
 
 export const load: LayoutServerLoad = async ({ locals, url }) => {
   if (!locals.user) redirect(303, '/login');
@@ -27,5 +28,6 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
     connected,
     writeMode: forumWriteMode(),
     hostingEnabled: hostingEnabled(),
+    directoryEnabled: directoryEnabled(),
   };
 };

@@ -13,11 +13,13 @@ const state = vi.hoisted(() => ({
   scopeStatus: vi.fn(),
   deleteRecord: vi.fn(),
   rebuildBindings: vi.fn(),
+  endorsementFor: vi.fn(),
 }));
 vi.mock('$env/dynamic/private', () => ({ env: state.env }));
 vi.mock('$lib/server/admin', () => ({ adminActor: state.admin }));
 vi.mock('$lib/server/appview', () => ({ FORUM_DID: () => 'did:plc:forum' }));
 vi.mock('$lib/server/forum-repo', () => ({ forumWriteMode: () => 'pds', deleteForumRecord: state.deleteRecord }));
+vi.mock('$lib/server/extensions/endorsement', () => ({ endorsementFor: state.endorsementFor }));
 vi.mock('$lib/server/atproto-oauth', () => ({ forumScopeStatus: state.scopeStatus }));
 vi.mock('$lib/server/extensions/lock', () => ({ extensionsLockHeld: state.lockHeld }));
 vi.mock('$lib/server/extensions/scopes', () => ({ refreshExtensionScopes: state.refreshScopes, extensionScope: state.extensionScope }));
@@ -62,6 +64,7 @@ beforeEach(async () => {
   state.refreshScopes.mockResolvedValue(undefined);
   state.extensionScope.mockReturnValue('');
   state.scopeStatus.mockResolvedValue({ ok: true });
+  state.endorsementFor.mockResolvedValue({ status: 'unverified' });
 });
 afterEach(async () => {
   vi.unstubAllEnvs();
@@ -147,6 +150,21 @@ it('warns that an extension without the trusted mark is unverified, and still in
   expect(state.rebuildBindings).toHaveBeenCalledTimes(1);
   expect(await listInstalls()).toEqual([expect.objectContaining({ id: confirmed.installed.id, sha, state: 'active' })]);
   expect(await loadIndex()).toMatchObject({ unavailable: null, installs: [{ id: confirmed.installed.id, name: 'Diplomacy', version: '0.1.0' }] });
+});
+
+it('shows a release from an endorsed repository as reviewed or not, by the SHA the directory endorsed', async () => {
+  const repo = newRepo();
+  const sha = repo.tag('v0.1.0', validBundle());
+
+  state.endorsementFor.mockResolvedValue({ status: 'endorsed', reviewed: true });
+  const reviewedStaged = await run(index.actions.stage, post(INDEX, { gitUrl: repo.url, tag: 'v0.1.0' }));
+  expect(state.endorsementFor).toHaveBeenCalledWith(repo.url, sha);
+  expect(reviewedStaged.review).toMatchObject({ endorsement: { repositoryEndorsed: true, shaReviewed: true }, unverified: false });
+  await run(index.actions.discard, post(INDEX, { stagingId: reviewedStaged.review.stagingId }));
+
+  state.endorsementFor.mockResolvedValue({ status: 'endorsed', reviewed: false });
+  const unreviewedStaged = await run(index.actions.stage, post(INDEX, { gitUrl: repo.url, tag: 'v0.1.0' }));
+  expect(unreviewedStaged.review).toMatchObject({ endorsement: { repositoryEndorsed: true, shaReviewed: false }, unverified: false });
 });
 
 it("names the rejected field when admission refuses a manifest, and there's nothing to confirm", async () => {

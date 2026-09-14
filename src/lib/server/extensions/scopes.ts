@@ -12,8 +12,13 @@ import { listInstalls } from './registry';
 // is read from disk, so the installs' part is kept as a snapshot. Anything
 // that changes which collections are approved or active refreshes it.
 
+/** Where atmobb.app staff endorse a repository and the release SHAs they reviewed, in the directory forum's repo. */
+export const ENDORSEMENT_COLLECTION = 'app.atmobb.extension.endorsement';
 /** Lets the forum account publish endorsements when the forum runs the extension directory. */
-export const ENDORSEMENT_SCOPE = 'repo:app.atmobb.extension.endorsement';
+export const ENDORSEMENT_SCOPE = `repo:${ENDORSEMENT_COLLECTION}`;
+
+/** Whether this forum runs the atmobb.app extension directory: it can host a listing forum and endorse repositories. */
+export const directoryEnabled = () => env.ATMOBB_EXTENSION_DIRECTORY === '1';
 
 /** Where atmoBB records which extension staff attached to a thread, in the forum's repo. */
 export const BINDING_COLLECTION = 'app.atmobb.extension.binding';
@@ -49,7 +54,7 @@ export function extensionScope(): string {
     });
   }
   if (!extensionsEnabled()) return '';
-  const directory = env.ATMOBB_EXTENSION_DIRECTORY === '1' ? ENDORSEMENT_SCOPE : '';
+  const directory = directoryEnabled() ? ENDORSEMENT_SCOPE : '';
   return [installScope, directory].filter(Boolean).join(' ');
 }
 

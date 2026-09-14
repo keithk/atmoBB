@@ -4,6 +4,7 @@ import { adminActor } from '$lib/server/admin';
 import { FORUM_DID } from '$lib/server/appview';
 import { forumScopeStatus } from '$lib/server/atproto-oauth';
 import { releaseClaim } from '$lib/server/extensions/claims';
+import { endorsementFor } from '$lib/server/extensions/endorsement';
 import { openWork } from '$lib/server/extensions/host';
 import { extensionsLockHeld } from '$lib/server/extensions/lock';
 import { extensionsEnabled } from '$lib/server/extensions/manifest';
@@ -69,6 +70,12 @@ export interface EndorsementStatus {
   repositoryEndorsed: boolean;
   /** The directory reviewed this exact commit. */
   shaReviewed: boolean;
+}
+
+/** What the atmobb.app directory says about a release, for reviewView's endorsement slot. Never null on a lookup failure — that reads as unendorsed. */
+export async function endorsementStatus(gitUrl: string, sha: string): Promise<EndorsementStatus | null> {
+  const lookup = await endorsementFor(gitUrl, sha);
+  return lookup.status === 'endorsed' ? { repositoryEndorsed: true, shaReviewed: lookup.reviewed } : null;
 }
 
 export interface ManifestChanges {

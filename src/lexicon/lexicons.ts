@@ -888,6 +888,59 @@ export const schemaDict = {
       },
     },
   },
+  AppAtmobbExtensionEndorsement: {
+    lexicon: 1,
+    id: 'app.atmobb.extension.endorsement',
+    defs: {
+      main: {
+        type: 'record',
+        description:
+          "atmobb.app staff endorsing an extension's repository and the release SHAs they reviewed. Lives in the atmobb.app directory forum's repo, written only by that forum's staff, so no one else can forge a trusted mark. The record key is derived from the repository's normalized git URL, so a repository has at most one endorsement.",
+        key: 'any',
+        record: {
+          type: 'object',
+          required: ['gitUrl', 'key', 'reviewed', 'createdAt', 'updatedAt'],
+          properties: {
+            gitUrl: {
+              type: 'string',
+              format: 'uri',
+              maxLength: 2048,
+              description: "The repository's git URL, as staff entered it.",
+            },
+            key: {
+              type: 'string',
+              maxLength: 2048,
+              description:
+                "The repository's normalized git URL, matching the key an install's claims and bindings use for the same repository.",
+            },
+            reviewed: {
+              type: 'array',
+              maxLength: 256,
+              items: {
+                type: 'string',
+                maxLength: 64,
+              },
+              description: 'The release SHAs staff reviewed, deduped.',
+            },
+            listing: {
+              type: 'string',
+              format: 'at-uri',
+              description:
+                "The directory forum's listing thread for this extension, when there is one.",
+            },
+            createdAt: {
+              type: 'string',
+              format: 'datetime',
+            },
+            updatedAt: {
+              type: 'string',
+              format: 'datetime',
+            },
+          },
+        },
+      },
+    },
+  },
   AppAtmobbForumAccessRequest: {
     lexicon: 1,
     id: 'app.atmobb.forum.accessRequest',
@@ -3128,6 +3181,7 @@ export const ids = {
   AppAtmobbDiscussionReply: 'app.atmobb.discussion.reply',
   AppAtmobbDiscussionThread: 'app.atmobb.discussion.thread',
   AppAtmobbExtensionBinding: 'app.atmobb.extension.binding',
+  AppAtmobbExtensionEndorsement: 'app.atmobb.extension.endorsement',
   AppAtmobbForumAccessRequest: 'app.atmobb.forum.accessRequest',
   AppAtmobbForumBoard: 'app.atmobb.forum.board',
   AppAtmobbForumCategory: 'app.atmobb.forum.category',

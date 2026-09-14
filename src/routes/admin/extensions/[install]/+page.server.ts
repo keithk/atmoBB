@@ -15,6 +15,7 @@ import {
   uninstall,
 } from '$lib/server/extensions/registry';
 import {
+  endorsementStatus,
   reconnectStatus,
   refreshScopes,
   refuseAction,
@@ -94,7 +95,8 @@ export const actions: Actions = {
     if (!tag && install.source !== 'dev') return fail(400, { errors: [{ field: 'tag', message: 'Pick a release to update to.' }] });
     const result = await stageUpdate(install.id, tag);
     if (!result.ok) return fail(400, { errors: result.errors });
-    return { review: reviewView(result.review, install.manifest) };
+    const endorsement = await endorsementStatus(result.review.gitUrl, result.review.sha);
+    return { review: reviewView(result.review, install.manifest, endorsement) };
   },
 
   applyUpdate: async ({ request, locals, params }) => {
