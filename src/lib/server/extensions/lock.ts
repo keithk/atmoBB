@@ -6,7 +6,7 @@ import { join } from 'node:path';
 // Extension installs, bundles, and stores live under DATA_DIR/extensions, and
 // only one process may run them at a time: during a rolling deploy the old and
 // new containers share the volume. At boot the host takes this lock; a process
-// that can't get it runs with extensions disabled.
+// that can't get it runs with extensions disabled until it frees up.
 //
 // The lock is a file holding an owner token and a heartbeat the holder
 // refreshes. It is only ever created with link(), which fails when the file
@@ -28,6 +28,8 @@ export interface ExtensionsLock {
   heartbeat(): Promise<void>;
   /** Give the lock up. Synchronous, so it can run from a process exit handler. */
   release(): void;
+  /** Resolves when a heartbeat finds another process has taken the lock over. Never resolves because of release(). */
+  lost: Promise<void>;
 }
 
 let heldToken: string | null = null;
@@ -101,22 +103,29 @@ async function clearStale(path: string, seen: string, token: string): Promise<bo
 function hold(path: string, token: string): ExtensionsLock {
   heldToken = token;
   let beating: Promise<void> = Promise.resolve();
+  let markLost!: () => void;
+  const lost = new Promise<void>((resolve) => (markLost = resolve));
   const lose = () => {
     if (heldToken === token) heldToken = null;
     clearInterval(timer);
+  };
+  // A beat that was already running when release() was called isn't a takeover.
+  const takenOver = () => {
+    if (heldToken === token) markLost();
+    lose();
   };
 
   const beat = async () => {
     if (heldToken !== token) return;
     try {
       const current = JSON.parse(await readFile(path, 'utf8')) as LockContents;
-      if (current.token !== token) return lose();
+      if (current.token !== token) return takenOver();
       const draft = `${path}.${token}.beat`;
       await writeFile(draft, contents(token));
       await rename(draft, path);
     } catch (error) {
       // A missing or rewritten file means someone else has it; anything else is retried next beat.
-      if (code(error) === 'ENOENT' || error instanceof SyntaxError) lose();
+      if (code(error) === 'ENOENT' || error instanceof SyntaxError) takenOver();
     }
   };
 
@@ -129,6 +138,7 @@ function hold(path: string, token: string): ExtensionsLock {
 
   return {
     heartbeat,
+    lost,
     release() {
       const mine = heldToken === token;
       lose();
@@ -156,4 +166,43 @@ export async function acquireExtensionsLock(): Promise<ExtensionsLock | null> {
     if (!(await clearStale(path, existing.raw, token))) return null;
   }
   return null;
+}
+
+export interface ExtensionsLockWait {
+  /** Settles once the first try has finished, whether or not it took the lock. */
+  firstAttempt: Promise<void>;
+  /** Stop trying. A try already under way that takes the lock releases it again. */
+  stop(): void;
+}
+
+/**
+ * Try to take the extensions lock now and, while another process holds it,
+ * again every `intervalMs` until it's taken; then hand it to `onAcquired`.
+ * A holder that releases during a rolling deploy, or one that crashed and
+ * went stale, is picked up this way instead of leaving extensions off for
+ * this process's whole life. Retries are unref'd so they never keep the
+ * process alive.
+ */
+export function waitForExtensionsLock(onAcquired: (lock: ExtensionsLock) => void, intervalMs = EXTENSIONS_LOCK_HEARTBEAT_MS): ExtensionsLockWait {
+  let stopped = false;
+  let retry: ReturnType<typeof setTimeout> | undefined;
+
+  const attempt = async () => {
+    const lock = await acquireExtensionsLock().catch((error) => {
+      console.error('[extensions] could not take the extensions lock:', error instanceof Error ? error.message : error);
+      return null;
+    });
+    if (stopped) return lock?.release();
+    if (lock) return onAcquired(lock);
+    retry = setTimeout(() => void attempt(), intervalMs);
+    retry.unref();
+  };
+
+  return {
+    firstAttempt: attempt(),
+    stop() {
+      stopped = true;
+      clearTimeout(retry);
+    },
+  };
 }

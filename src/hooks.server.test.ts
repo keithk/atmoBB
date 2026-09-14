@@ -5,9 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // unit's concern, so it's stubbed out to isolate the `init` hook.
 const state = vi.hoisted(() => ({
   building: false,
-  acquireExtensionsLock: vi.fn(),
+  events: [] as string[],
+  waitForExtensionsLock: vi.fn(),
   startScheduler: vi.fn(),
   startMaintenance: vi.fn(),
+  rebuildBindingsInBackground: vi.fn(),
+  closeExtensionHost: vi.fn(),
   dispatchTimer: vi.fn(),
 }));
 vi.mock('$app/environment', () => ({
@@ -16,61 +19,92 @@ vi.mock('$app/environment', () => ({
   },
 }));
 vi.mock('$env/dynamic/private', () => ({ env: {} }));
-vi.mock('$lib/server/extensions/lock', () => ({ acquireExtensionsLock: state.acquireExtensionsLock }));
+vi.mock('$lib/server/extensions/lock', () => ({ waitForExtensionsLock: state.waitForExtensionsLock }));
 vi.mock('$lib/server/extensions/scheduler', () => ({ startScheduler: state.startScheduler }));
 vi.mock('$lib/server/extensions/maintenance', () => ({ startMaintenance: state.startMaintenance }));
-vi.mock('$lib/server/extensions/host', () => ({ dispatchTimer: state.dispatchTimer }));
+vi.mock('$lib/server/extensions/bindings', () => ({ rebuildBindingsInBackground: state.rebuildBindingsInBackground }));
+vi.mock('$lib/server/extensions/host', () => ({ dispatchTimer: state.dispatchTimer, closeExtensionHost: state.closeExtensionHost }));
 vi.mock('$lib/server/secrets', () => ({ assertProductionSecrets: vi.fn() }));
 vi.mock('$lib/server/notify/sender', () => ({ senderDid: () => null, senderKeypair: vi.fn() }));
 vi.mock('$lib/server/session', () => ({ sessionDid: vi.fn() }));
 vi.mock('$lib/server/appview', () => ({ resolveHandle: vi.fn() }));
 vi.mock('$lib/server/presence', () => ({ touchGuest: vi.fn(), touchMember: vi.fn() }));
 
-import { init } from './hooks.server';
+// The hook keeps its extension state at module level, so each test loads a fresh copy.
+let init: typeof import('./hooks.server').init;
 
-beforeEach(() => {
+// init registers process listeners; capture them instead of attaching them to the test runner.
+let listeners: Map<string, () => void>;
+
+function fakeLock() {
+  let loseIt!: () => void;
+  const lost = new Promise<void>((resolve) => (loseIt = resolve));
+  return { heartbeat: vi.fn(), release: vi.fn(() => state.events.push('release')), lost, loseIt };
+}
+
+beforeEach(async () => {
+  vi.resetModules();
+  ({ init } = await import('./hooks.server'));
   state.building = false;
-  state.acquireExtensionsLock.mockReset();
-  state.startScheduler.mockReset();
-  state.startMaintenance.mockReset();
+  state.events = [];
+  listeners = new Map();
+  vi.spyOn(process, 'once').mockImplementation(((event: string, listener: () => void) => {
+    listeners.set(event, listener);
+    return process;
+  }) as typeof process.once);
+  state.waitForExtensionsLock.mockReset().mockReturnValue({ firstAttempt: Promise.resolve(), stop: vi.fn() });
+  state.startScheduler.mockReset().mockReturnValue({ stop: () => state.events.push('stop scheduler') });
+  state.startMaintenance.mockReset().mockReturnValue({ stop: () => state.events.push('stop maintenance') });
+  state.rebuildBindingsInBackground.mockReset();
+  state.closeExtensionHost.mockReset().mockImplementation(async () => {
+    await Promise.resolve();
+    state.events.push('close host');
+  });
 });
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const acquire = (lock: ReturnType<typeof fakeLock>) => (state.waitForExtensionsLock.mock.lastCall![0] as (lock: unknown) => void)(lock);
+
 describe('init', () => {
   it('does nothing while building: no lock attempt, no poller', async () => {
     state.building = true;
     await init();
-    expect(state.acquireExtensionsLock).not.toHaveBeenCalled();
+    expect(state.waitForExtensionsLock).not.toHaveBeenCalled();
     expect(state.startScheduler).not.toHaveBeenCalled();
     expect(state.startMaintenance).not.toHaveBeenCalled();
   });
 
-  it('does not start the poller when the extensions lock cannot be acquired', async () => {
-    state.acquireExtensionsLock.mockResolvedValue(null);
+  it('does not start the poller until the extensions lock is handed over, then starts it once', async () => {
     await init();
-    expect(state.acquireExtensionsLock).toHaveBeenCalledTimes(1);
+    expect(state.waitForExtensionsLock).toHaveBeenCalledTimes(1);
     expect(state.startScheduler).not.toHaveBeenCalled();
-    expect(state.startMaintenance).not.toHaveBeenCalled();
-  });
 
-  it('starts the poller with the host dispatcher and the maintenance pass once the lock is held, and releases the lock on a shutdown signal', async () => {
-    const release = vi.fn();
-    state.acquireExtensionsLock.mockResolvedValue({ heartbeat: vi.fn(), release });
-    const once = vi.spyOn(process, 'once');
-
-    await init();
-
+    acquire(fakeLock());
     expect(state.startScheduler).toHaveBeenCalledExactlyOnceWith({ dispatch: state.dispatchTimer });
     expect(state.startMaintenance).toHaveBeenCalledTimes(1);
-    expect(release).not.toHaveBeenCalled();
+    expect(state.rebuildBindingsInBackground).toHaveBeenCalledTimes(1);
+  });
 
-    const signals = once.mock.calls.map(([signal]) => signal);
-    expect(signals).toEqual(expect.arrayContaining(['SIGTERM', 'SIGINT']));
-    for (const [, handler] of once.mock.calls) (handler as () => void)();
-    expect(release).toHaveBeenCalledTimes(signals.length);
+  it('releases the lock only after adapter-node has drained, once timers are stopped and instances closed', async () => {
+    await init();
+    const lock = fakeLock();
+    acquire(lock);
+    expect([...listeners.keys()]).not.toContain('SIGTERM');
+    expect(lock.release).not.toHaveBeenCalled();
 
-    once.mockRestore();
+    listeners.get('sveltekit:shutdown')!();
+    await vi.waitFor(() => expect(lock.release).toHaveBeenCalledTimes(1));
+    expect(state.events).toEqual(['stop scheduler', 'stop maintenance', 'close host', 'release']);
+  });
+
+  it('stops extensions and tries for the lock again when another process takes it over', async () => {
+    await init();
+    const lock = fakeLock();
+    acquire(lock);
+    lock.loseIt();
+    await vi.waitFor(() => expect(state.waitForExtensionsLock).toHaveBeenCalledTimes(2));
+    expect(state.events).toEqual(['stop scheduler', 'stop maintenance', 'close host']);
   });
 });
