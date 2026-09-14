@@ -6,6 +6,21 @@ means. Every entry names the Happyview release it was tested against.
 
 ## Unreleased
 
+## 0.3.0
+
+Tested against Happyview 2.14.0. No backfill is required.
+
+- Release-bundle installations now have **Admin → Updates**. The installer adds a root-owned, authenticated updater with a narrow Unix-socket API; the web app can request only the latest stable release or, after explicit confirmation, an exact commit from `main`, and never receives Docker or shell access. Updates download and verify the release bundle, prepare images or finish the source build before replacing containers, back up Postgres, OAuth data, secrets, and Compose/Caddy configuration before migration, force-run Happyview setup, verify image pins and service health, and report durable progress, bounded logs, the installed commit, failures, and the backup path. Existing bundle installations can rerun `./atmobb install` with their original options to add the updater without rotating secrets or replacing data.
+- The release stack now supports stable per-instance identities, Compose projects, loopback ports, data directories, updater services, and sockets. Managed provisioning and updates share a host-wide lock so expensive operations run one at a time; waiting work remains visible. The release bundle also includes the operator-only hosting overlay.
+- Experimental isolated hosting replaces new shared-Happyview tenant provisioning: each approved forum gets its own atmobb app, Happyview, PostgreSQL database and volume, secrets, OAuth data, updater, and Caddy routes. An opt-in, root-owned hosting controller backs **Admin → Hosting**, with durable capacity and port reservations, collision checks, fail-closed state, retryable failed provisions that retain their slot, forum identity checks, blocked public Happyview admin routes, and stable or `main` fleet update controls. Capacity starts at zero. Existing shared installations remain visible as legacy sites and are not migrated automatically. Operators should read [Hosted tenants](docs/hosted-tenants.md) before enabling this experimental service and independently test host capacity, backup restoration, and Happyview migration behavior.
+- Members can keep account-wide profile defaults while overriding display name, bio, pronouns, website, title, avatar, and signature for one forum. Avatar upload, Bluesky restoration, and the userpic maker respect the selected scope; an explicitly empty forum value can hide an inherited field.
+- Notification preferences can be enabled or disabled account-wide or for one forum. Existing forum overrides are preserved when the account default changes, delivery still requires that forum's atmo.pub authorization, and unreadable preferences fail closed by withholding new alerts.
+- Personal color-theme preferences can apply across atmobb or only on one forum. A user can select any built-in theme or preserve a forum's own colors; personal theme tokens load after owner custom CSS while retaining non-color customizations. Settings now use full-width Profile and Styles tabs.
+- Boards can have an optional single emoji as well as an identity color. The same emoji, color marker, and board label now appear consistently in the board index, sidebar, topic lists, and topic headers.
+- Fixed reply and quote controls in both local and federated topic routes so the editor opens reliably, receives the intended mention or quoted post, and scrolls into view.
+- Fixed forum-account stamp creation by adding `app.atmobb.forum.stamp` to the sysop permission set and requesting the write scope explicitly for PDSes with a cached permission set. Reconnect the forum account from **Admin → Connection** if stamp writes were previously denied.
+- Schemas, additive: `app.atmobb.actor.profile` gains account notification and theme defaults plus per-forum profile and theme overrides; `app.atmobb.forum.board` gains optional `emoji`; and `app.atmobb.authSysop` gains stamp writes. Namespace maintainers should publish the two updated record schemas with `goat lex publish --update` and publish the updated sysop permission set before deploying. No appview setup or backfill changes are needed for these fields.
+
 ## 0.2.1
 
 Tested against Happyview 2.14.0.
