@@ -4,15 +4,16 @@ import { dirname, join } from 'node:path';
 import type { TimerSet } from '$lib/extensions/contract';
 import { envInt } from './env';
 import { getInstall } from './registry';
+import { beforeDeadline } from './deadline';
 
 // Extensions have no job runner, so timed callbacks live in one JSON file at
 // DATA_DIR/extensions/timers.json, keyed by (installId, name), and a single
 // poller checks it every POLL_INTERVAL_MS. Delivery is at least once: a timer
 // is removed only once its dispatch resolves, so a crash between firing and
 // removal fires it again on the next boot, and handlers must tolerate that. A
-// dispatch that throws leaves the timer in place with a backed-off retry time
-// instead of losing it. A due timer whose install is gone or disabled is
-// dropped rather than fired or retried.
+// dispatch that throws or runs past its deadline leaves the timer in place with
+// a backed-off retry time instead of losing it. A due timer whose install is
+// gone or disabled is dropped rather than fired or retried.
 
 export type TimerDispatcher = (installId: string, timer: TimerSet) => Promise<void>;
 
@@ -46,6 +47,14 @@ const MAX_BACKOFF_MS = 60 * 60_000;
 const minDelayMs = () => envInt('ATMOBB_EXTENSIONS_TIMER_MIN_DELAY_MS', DEFAULT_MIN_DELAY_MS);
 /** ATMOBB_EXTENSIONS_TIMER_CAP: pending timers allowed per install. */
 const timerCap = () => envInt('ATMOBB_EXTENSIONS_TIMER_CAP', DEFAULT_TIMER_CAP);
+/**
+ * How long the poller waits on one dispatch before counting it failed and
+ * moving on. The runtime gives up on a stuck call after twice the host's
+ * ATMOBB_EXTENSIONS_CALL_TIMEOUT_MS plus a second; this waits a few seconds
+ * past that, since loading an instance and waiting behind the install's other
+ * calls fall outside the runtime's watch.
+ */
+const dispatchTimeoutMs = () => 2 * envInt('ATMOBB_EXTENSIONS_CALL_TIMEOUT_MS', 5_000) + 5_000;
 
 const extensionsRoot = () => join(process.env.DATA_DIR ?? '.data', 'extensions');
 const storePath = () => join(extensionsRoot(), 'timers.json');
@@ -84,16 +93,23 @@ async function saveStore(store: TimersFile) {
 
 // One mutation at a time; the store is a single JSON file shared by every install.
 let chain: Promise<unknown> = Promise.resolve();
+function inTurn<T>(fn: () => Promise<T>): Promise<T> {
+  const run = chain.then(fn);
+  chain = run.catch(() => {});
+  return run;
+}
+
 function withStore<T>(fn: (store: TimersFile) => Promise<T> | T): Promise<T> {
-  const run = chain.then(async () => {
+  return inTurn(async () => {
     const store = await loadStore();
     const out = await fn(store);
     await saveStore(store);
     return out;
   });
-  chain = run.catch(() => {});
-  return run;
 }
+
+/** The store as it stands once every queued mutation has landed, without writing it back. */
+const readStore = () => inTurn(loadStore);
 
 /** Schedule a timed callback, replacing any pending timer with the same name for this install. */
 export async function scheduleTimer(installId: string, timer: TimerSet): Promise<void> {
@@ -142,6 +158,8 @@ const noDispatcher: TimerDispatcher = async () => {
 export interface PollOptions {
   dispatch?: TimerDispatcher;
   now?: () => Date;
+  /** How long one dispatch may run before it counts as failed. Defaults to a few seconds past the runtime's own watchdog. */
+  dispatchTimeoutMs?: number;
 }
 
 const sameTimer = (a: StoredTimer, b: StoredTimer) =>
@@ -153,8 +171,11 @@ let polling: Promise<void> | null = null;
  * Fire every due timer once through `dispatch`, dropping timers for installs
  * that are gone or disabled. Handlers run outside the store's lock, because
  * a handler may set or cancel timers itself; a timer it replaced or cancelled
- * while running is left as the handler left it. A poll that starts while
- * another is still running waits for that one instead of firing again.
+ * while running is left as the handler left it, and one an earlier handler in
+ * the same poll replaced or cancelled doesn't fire. A dispatch that runs past
+ * its deadline counts as failed, so one stuck install can't hold up the rest.
+ * A poll that starts while another is still running waits for that one
+ * instead of firing again.
  */
 export function pollTimers(options: PollOptions = {}): Promise<void> {
   polling ??= fireDue(options).finally(() => {
@@ -166,6 +187,7 @@ export function pollTimers(options: PollOptions = {}): Promise<void> {
 async function fireDue(options: PollOptions): Promise<void> {
   const dispatch = options.dispatch ?? noDispatcher;
   const now = options.now ?? (() => new Date());
+  const deadlineMs = options.dispatchTimeoutMs ?? dispatchTimeoutMs();
   const current = now().getTime();
   const due = await withStore(async (store) => {
     const fire: StoredTimer[] = [];
@@ -177,9 +199,11 @@ async function fireDue(options: PollOptions): Promise<void> {
     return fire;
   });
   for (const timer of due) {
+    if (!(await readStore()).timers.some((t) => sameTimer(t, timer))) continue;
     let failed = false;
     try {
-      await dispatch(timer.installId, { name: timer.name, at: timer.at, payload: timer.payload });
+      // A dispatch that loses the race may still finish later; the timer is retried as any failed dispatch is.
+      await beforeDeadline(dispatch(timer.installId, { name: timer.name, at: timer.at, payload: timer.payload }), deadlineMs, () => new Error(`Timer dispatch ran past ${deadlineMs}ms`));
     } catch {
       failed = true;
     }

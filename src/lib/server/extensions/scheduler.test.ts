@@ -133,6 +133,44 @@ describe('pollTimers', () => {
     expect(dispatch).toHaveBeenLastCalledWith(INSTALL, expect.objectContaining({ name: 'turn', payload: 2 }));
   });
 
+  it('counts a dispatch that never settles as failed, without holding up the next timer or the next poll', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    await scheduleTimer(INSTALL, { name: 'stuck', at: new Date(Date.now() + 60_000).toISOString() });
+    await scheduleTimer(OTHER, { name: 'next', at: new Date(Date.now() + 60_000).toISOString() });
+    vi.setSystemTime(Date.now() + 61_000);
+
+    const dispatch = vi.fn((installId: string) => (installId === INSTALL ? new Promise<void>(() => {}) : Promise.resolve()));
+    await pollTimers({ dispatch, dispatchTimeoutMs: 50 });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(dispatch).toHaveBeenLastCalledWith(OTHER, expect.objectContaining({ name: 'next' }));
+
+    // The stuck timer backed off like any failure, then fires again once that elapses.
+    await pollTimers({ dispatch, dispatchTimeoutMs: 50 });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    vi.setSystemTime(Date.now() + 60_000);
+    await pollTimers({ dispatch, dispatchTimeoutMs: 50 });
+    expect(dispatch).toHaveBeenCalledTimes(3);
+    expect(dispatch).toHaveBeenLastCalledWith(INSTALL, expect.objectContaining({ name: 'stuck' }));
+  });
+
+  it('skips a timer that an earlier handler in the same poll cancelled or replaced', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    await scheduleTimer(INSTALL, { name: 'first', at: new Date(Date.now() + 60_000).toISOString() });
+    await scheduleTimer(INSTALL, { name: 'cancelled', at: new Date(Date.now() + 60_000).toISOString() });
+    await scheduleTimer(INSTALL, { name: 'replaced', at: new Date(Date.now() + 60_000).toISOString(), payload: 'old' });
+    vi.setSystemTime(Date.now() + 61_000);
+
+    const dispatch = vi.fn(async (installId: string, timer: { name: string }) => {
+      if (timer.name !== 'first') return;
+      await cancelTimer(installId, 'cancelled');
+      await scheduleTimer(installId, { name: 'replaced', at: new Date(Date.now() + 120_000).toISOString(), payload: 'new' });
+    });
+    await pollTimers({ dispatch });
+    expect(dispatch).toHaveBeenCalledExactlyOnceWith(INSTALL, expect.objectContaining({ name: 'first' }));
+  });
+
   it('fires overdue timers after a simulated restart on the same store', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));

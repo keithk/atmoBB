@@ -1,5 +1,6 @@
 import createPlugin, { type CallContext, type Plugin } from '@extism/extism';
 import { readFile } from 'node:fs/promises';
+import { beforeDeadline } from './deadline';
 
 // Extensions run as Extism plug-ins: QuickJS compiled to WebAssembly, each
 // install in its own worker thread. The guest reaches the host only through
@@ -204,13 +205,7 @@ export function extensionRuntime(
   }
 
   /** Settles as `work` does, or rejects with StuckPluginError once watchdogMs pass first. */
-  function watched<T>(work: Promise<T>): Promise<T> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const expired = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new StuckPluginError()), watchdogMs);
-    });
-    return Promise.race([work, expired]).finally(() => clearTimeout(timer));
-  }
+  const watched = <T>(work: Promise<T>): Promise<T> => beforeDeadline(work, watchdogMs, () => new StuckPluginError());
 
   function enqueue<T>(install: Install, task: () => Promise<T>): Promise<T> {
     const run = install.tail.then(task);
