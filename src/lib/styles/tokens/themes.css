@@ -43,6 +43,10 @@
   --forum-pin-bg: #fbf1d8;
   --forum-pin-edge: #d9b24b;
 
+  /* locked (cool, closed-off) */
+  --forum-lock-bg: #eef0f3;
+  --forum-lock-edge: #97a1b0;
+
   /* stamp default look — plum secondary */
   --forum-rank: var(--plum-1);
   --forum-rank-bg: var(--plum-bg);

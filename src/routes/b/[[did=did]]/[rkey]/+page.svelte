@@ -121,8 +121,7 @@
 <div class="atm-panel">
   <div class="atm-board-section">{filtered ? 'Matching topics' : 'Threads'}</div>
   {#each data.threads as t}
-    <article class="atm-threadrow" class:atm-threadrow--pinned={t.pinned}>
-      <span class="atm-threadrow__flag" aria-hidden="true">{t.pinned ? '📌' : t.locked ? '🔒' : '›'}</span>
+    <article class="atm-threadrow" class:atm-threadrow--pinned={t.pinned} class:atm-threadrow--locked={t.locked}>
       <div>
         <div class="atm-threadrow__title"><a href={threadPath(t.uri)}>{t.title}</a></div>
         {#if t.tags?.length}
@@ -180,6 +179,12 @@
   {:else}
     <p class="atm-empty">{filtered ? 'No topics match these filters.' : 'No threads yet. Start the first one.'}</p>
   {/each}
+  {#if data.threads.some((t) => t.pinned || t.locked)}
+    <p class="atm-threadlist-legend">
+      {#if data.threads.some((t) => t.pinned)}<span class="atm-threadlist-legend__item atm-threadlist-legend__item--pinned">pinned</span>{/if}
+      {#if data.threads.some((t) => t.locked)}<span class="atm-threadlist-legend__item atm-threadlist-legend__item--locked">locked</span>{/if}
+    </p>
+  {/if}
 </div>
 
 {#if totalPages > 1}
