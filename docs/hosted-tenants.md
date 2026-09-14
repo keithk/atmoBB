@@ -35,6 +35,8 @@ Use a trusted release bundle built from code containing `ATMOBB_INSTANCE_CONFIG_
 
    Recreate the operator app with its normal Compose project. This overlay enables hosting and mounts the controller socket only in the operator app. Never copy the overlay, hosting token, controller state, or controller socket into a tenant. The operator forum must already have its admin staff configured. The admin actions and page load explicitly check forum-admin authorization.
 
+   Put `RESEND_API_KEY` in that same `.env` too, if you want the operator forum to email hosting requesters when their request goes live or gets rejected.
+
 5. In `/admin/hosting`, set the maximum number of **additional isolated forums**, create an invite, and approve a request. Setting zero pauses new approvals; lowering a limit never stops or deletes an existing forum. Pending requests do not reserve a slot; approval does, atomically, before creating anything.
 
 The hosting controller is separate from tenant updates. Update its root-owned code/template deliberately by rerunning the installer during a maintenance window with no provisioning/update running. This does not upgrade existing tenants. Do not run multiple hosting controllers against the same state.
