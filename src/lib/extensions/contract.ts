@@ -106,6 +106,26 @@ export interface RecordRef {
   uri: string;
   cid: string;
 }
+/** Reads may name any repo, but only a declared collection. */
+export interface RecordList {
+  repo: string;
+  collection: string;
+}
+export interface RecordGet {
+  repo: string;
+  collection: string;
+  rkey: string;
+}
+export interface StoredRecord {
+  uri: string;
+  cid: string;
+  value: Record<string, unknown>;
+}
+export interface RecordListResult {
+  records: StoredRecord[];
+  /** True when the listing stopped at the page cap with more records left. */
+  truncated: boolean;
+}
 
 export interface TimerSet {
   /** Setting a name that is already pending replaces it. */
@@ -119,9 +139,74 @@ export interface TimerCancel {
 }
 
 export interface NotifyPayload {
-  /** Member DIDs. */
+  /** Member DIDs. Members who haven't turned on notifications are skipped. */
   to: string[];
+  /** The host puts the extension's name in front of it. */
+  title: string;
   message: string;
   /** Path on the forum the notification links to. */
   link?: string;
+}
+export interface NotifyResult {
+  /** How many notifications went to the relay. */
+  sent: number;
+}
+
+// --- host ABI ------------------------------------------------------------------
+//
+// Host functions are imported from `extism:host/user`. Each takes a pointer to
+// one JSON payload and returns a pointer to one JSON HostResult. Every
+// function is always importable; one whose capability the install wasn't
+// granted answers with the `capability_not_granted` error and does nothing.
+//
+// Handler exports read their input with Host.inputString() and write their
+// output with Host.outputString(): `action` gets an ActionInput and outputs any
+// JSON value, `timer` gets a TimerSet, `openWork` gets nothing and outputs a
+// JSON boolean, and `migrate` gets a MigrateInput. Console output goes to a
+// log the forum's admins can read.
+
+/** Each host function and the capability that grants it. */
+export const HOST_FUNCTIONS = {
+  kv_get: 'kv',
+  kv_set: 'kv',
+  kv_delete: 'kv',
+  kv_list: 'kv',
+  record_create: 'records',
+  record_put: 'records',
+  record_delete: 'records',
+  record_list: 'records',
+  record_get: 'records',
+  timer_set: 'timers',
+  timer_cancel: 'timers',
+  notify: 'notify',
+} as const satisfies Record<string, Capability>;
+export type HostFunctionName = keyof typeof HOST_FUNCTIONS;
+
+/** Each host function's payload and the value it answers with. */
+export interface HostFunctionTypes {
+  kv_get: [KvGet, KvGetResult];
+  kv_set: [KvSet, null];
+  kv_delete: [KvDelete, null];
+  kv_list: [KvList, KvListResult];
+  record_create: [RecordCreate, RecordRef];
+  record_put: [RecordPut, RecordRef];
+  record_delete: [RecordDelete, null];
+  record_list: [RecordList, RecordListResult];
+  record_get: [RecordGet, StoredRecord | null];
+  timer_set: [TimerSet, null];
+  timer_cancel: [TimerCancel, null];
+  notify: [NotifyPayload, NotifyResult];
+}
+
+export interface HostError {
+  /** Stable and machine-readable, e.g. `capability_not_granted` or `CollectionNotApproved`. */
+  code: string;
+  message: string;
+}
+export type HostResult<T> = { ok: true; value: T } | { ok: false; error: HostError };
+
+/** What `migrate` receives: the stored data's version and the version this release reads. */
+export interface MigrateInput {
+  from: number;
+  to: number;
 }

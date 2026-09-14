@@ -120,6 +120,47 @@ describe('extensionRuntime', () => {
     expect(await rt.call('net', 'echo', 'back')).toBe('back');
   });
 
+  it('resolves to null for an export the module lacks, and keeps the instance working', async () => {
+    const rt = start();
+    expect(await rt.call('partial', 'timer', '')).toBeNull();
+    expect(await rt.call('partial', 'echo', 'still here')).toBe('still here');
+  });
+
+  it('hands each call its own host context', async () => {
+    const module = probeModule();
+    module.functions.wait = (context: CallContext) => context.store(`context ${context.hostContext<string>()}`);
+    const rt = start({}, async () => module);
+    expect(await rt.call('ctx', 'waitForHost', '0', { hostContext: 'first' })).toBe('context first');
+    expect(await rt.call('ctx', 'waitForHost', '0', { hostContext: 'second' })).toBe('context second');
+  });
+
+  it('fails a call whose output is longer than maxOutputBytes', async () => {
+    const rt = start();
+    const error = await rt.call('wordy', 'echo', 'x'.repeat(100), { maxOutputBytes: 99 }).catch((err) => err);
+    expect(error).toBeInstanceOf(ExtensionLimitError);
+    expect(error.limit).toBe('output');
+    expect(await rt.call('wordy', 'echo', 'x'.repeat(99), { maxOutputBytes: 99 })).toBe('x'.repeat(99));
+  });
+
+  it('evicts an instance so the next call loads the install again', async () => {
+    const load = vi.fn(async (_install: string) => probeModule());
+    const rt = start({}, load);
+    await rt.call('swap', 'echo', 'first');
+    await rt.evict('swap');
+    await rt.call('swap', 'echo', 'second');
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it('runs a call on a one-off module in turn with the install, then loads the install fresh', async () => {
+    const load = vi.fn(async (_install: string) => probeModule({ counter: 0 }));
+    const rt = start({}, load);
+    await rt.call('migrating', 'tally', '');
+    expect(await rt.call('migrating', 'tally', '', { module: probeModule({ counter: 41 }) })).toBe('42');
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(await rt.call('migrating', 'tally', '')).toBe('1');
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
   it('closes an idle instance and cold-starts it on the next call', async () => {
     const load = vi.fn(async (_install: string) => probeModule());
     const rt = start({ idleMs: 100 }, load);

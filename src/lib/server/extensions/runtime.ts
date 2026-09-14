@@ -10,10 +10,27 @@ import { readFile } from 'node:fs/promises';
 /** A capability granted to the guest, imported by it from `extism:host/user`. */
 export type HostFunction = (context: CallContext, ...args: bigint[]) => unknown;
 
+export type GuestLogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
+
 export interface ExtensionModule {
   /** The compiled plug-in, as bytes or a path to the .wasm file. */
   wasm: Uint8Array | string;
   functions: Record<string, HostFunction>;
+  /** Receives the guest's console output. Without it, console output is dropped. */
+  log?: (level: GuestLogLevel, text: string) => void;
+}
+
+export interface CallOptions {
+  /** Handed to host functions for this call through `context.hostContext()`. */
+  hostContext?: unknown;
+  /** Output longer than this fails the call. */
+  maxOutputBytes?: number;
+  /**
+   * Run this call on a one-off instance of `module` instead of the install's
+   * own, still in turn with the install's other calls. The install's instance
+   * is closed first, so the next ordinary call cold-starts from `load`.
+   */
+  module?: ExtensionModule;
 }
 
 export interface RuntimeLimits {
@@ -27,10 +44,10 @@ export interface RuntimeLimits {
 
 const DEFAULT_LIMITS: RuntimeLimits = { timeoutMs: 5_000, memoryPages: 1_024, idleMs: 5 * 60_000 };
 
-/** A call stopped because it ran out of time or memory. */
+/** A call stopped because it ran out of time or memory, or its output was too long. */
 export class ExtensionLimitError extends Error {
   constructor(
-    readonly limit: 'timeout' | 'memory',
+    readonly limit: 'timeout' | 'memory' | 'output',
     message: string,
   ) {
     super(message);
@@ -114,6 +131,12 @@ function asLimitError(err: unknown): unknown {
   return err;
 }
 
+/** Routes the SDK's log calls, the guest's console output among them, to `log`. */
+function guestLogger(log: (level: GuestLogLevel, text: string) => void): Console {
+  const levels: GuestLogLevel[] = ['trace', 'debug', 'info', 'warn', 'error'];
+  return Object.fromEntries(levels.map((level) => [level, (text: unknown) => log(level, String(text))])) as unknown as Console;
+}
+
 interface Install {
   /** Settles when the install's latest queued call does; calls chain onto it. */
   tail: Promise<unknown>;
@@ -133,8 +156,7 @@ export function extensionRuntime(
   const { timeoutMs, memoryPages, idleMs } = { ...DEFAULT_LIMITS, ...limits };
   const installs = new Map<string, Install>();
 
-  async function start(installId: string): Promise<Plugin> {
-    const module = await load(installId);
+  async function start(module: ExtensionModule): Promise<Plugin> {
     const bytes = typeof module.wasm === 'string' ? await readFile(module.wasm) : module.wasm;
     return createPlugin(
       { wasm: [{ data: capMemory(bytes, memoryPages) }] },
@@ -146,7 +168,7 @@ export function extensionRuntime(
         allowedHosts: [],
         allowedPaths: {},
         enableWasiOutput: false,
-        logLevel: 'silent',
+        ...(module.log ? { logLevel: 'info' as const, logger: guestLogger(module.log) } : { logLevel: 'silent' as const }),
         functions: { 'extism:host/user': module.functions },
       },
     );
@@ -164,12 +186,34 @@ export function extensionRuntime(
     return run;
   }
 
-  async function run(installId: string, install: Install, name: string, input: string): Promise<string> {
+  async function invoke(plugin: Plugin, name: string, input: string, options: CallOptions): Promise<string | null> {
+    if (!(await plugin.functionExists(name))) return null;
+    const output = await plugin.call(name, input, options.hostContext);
+    if (!output) return '';
+    const bytes = output.arrayBuffer().byteLength;
+    if (options.maxOutputBytes !== undefined && bytes > options.maxOutputBytes) {
+      throw new ExtensionLimitError('output', `Extension output was ${bytes} bytes; the limit is ${options.maxOutputBytes}`);
+    }
+    return output.text();
+  }
+
+  async function run(installId: string, install: Install, name: string, input: string, options: CallOptions): Promise<string | null> {
     if (install.idle) clearTimeout(install.idle);
-    install.plugin ??= start(installId);
+    if (options.module) {
+      await stop(install);
+      let plugin: Plugin | null = null;
+      try {
+        plugin = await start(options.module);
+        return await invoke(plugin, name, input, options);
+      } catch (err) {
+        throw asLimitError(err);
+      } finally {
+        await plugin?.close().catch(() => {});
+      }
+    }
+    install.plugin ??= load(installId).then(start);
     try {
-      const output = await (await install.plugin).call(name, input);
-      return output?.text() ?? '';
+      return await invoke(await install.plugin, name, input, options);
     } catch (err) {
       // After a timeout or a throwing host function the SDK may be restarting
       // or closing its worker, so start clean on the next call.
@@ -181,15 +225,28 @@ export function extensionRuntime(
     }
   }
 
+  function installFor(installId: string): Install {
+    let install = installs.get(installId);
+    if (!install) {
+      install = { tail: Promise.resolve(), plugin: null, idle: null };
+      installs.set(installId, install);
+    }
+    return install;
+  }
+
   return {
-    call(installId: string, name: string, input: string): Promise<string> {
-      let install = installs.get(installId);
-      if (!install) {
-        install = { tail: Promise.resolve(), plugin: null, idle: null };
-        installs.set(installId, install);
-      }
-      const target = install;
-      return enqueue(target, () => run(installId, target, name, input));
+    /** Call an export. Resolves to null when the module doesn't export `name`. */
+    call(installId: string, name: string, input: string, options: CallOptions = {}): Promise<string | null> {
+      const install = installFor(installId);
+      return enqueue(install, () => run(installId, install, name, input, options));
+    },
+
+    /** Close an install's instance once its queued calls finish, so the next call loads it again. */
+    evict(installId: string): Promise<void> {
+      const install = installs.get(installId);
+      if (!install) return Promise.resolve();
+      if (install.idle) clearTimeout(install.idle);
+      return enqueue(install, () => stop(install));
     },
 
     /** Close every instance once its queued calls finish. */

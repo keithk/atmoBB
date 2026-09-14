@@ -1,0 +1,23 @@
+declare module 'main' {
+  export function action(): I32;
+  export function timer(): I32;
+  export function openWork(): I32;
+  export function migrate(): I32;
+}
+
+declare module 'extism:host' {
+  interface user {
+    kv_get(ptr: I64): I64;
+    kv_set(ptr: I64): I64;
+    kv_delete(ptr: I64): I64;
+    kv_list(ptr: I64): I64;
+    record_create(ptr: I64): I64;
+    record_put(ptr: I64): I64;
+    record_delete(ptr: I64): I64;
+    record_list(ptr: I64): I64;
+    record_get(ptr: I64): I64;
+    timer_set(ptr: I64): I64;
+    timer_cancel(ptr: I64): I64;
+    notify(ptr: I64): I64;
+  }
+}

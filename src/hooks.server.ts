@@ -8,6 +8,8 @@ import { assertProductionSecrets } from '$lib/server/secrets';
 import { senderDid, senderKeypair } from '$lib/server/notify/sender';
 import { acquireExtensionsLock } from '$lib/server/extensions/lock';
 import { startScheduler } from '$lib/server/extensions/scheduler';
+import { dispatchTimer } from '$lib/server/extensions/host';
+import { startMaintenance } from '$lib/server/extensions/maintenance';
 
 // Runs once when the server loads this module, so a production deploy with a
 // forgeable session secret dies at startup instead of serving requests.
@@ -21,13 +23,15 @@ if (senderDid()) senderKeypair().catch((err) => console.error('[notify] could no
 // If a deploy ever runs old and new containers against the same DATA_DIR,
 // only the process holding the extensions lock runs the timer poller; one
 // that can't get it serves requests with extensions disabled rather than
-// double-firing timers or racing another writer. Skipped during
+// double-firing timers or racing another writer. The same process purges
+// uninstalled extensions' data once their grace period ends. Skipped during
 // `vite build`/prerender, which imports this module without ever serving.
 export const init: ServerInit = async () => {
   if (building) return;
   const lock = await acquireExtensionsLock();
   if (!lock) return;
-  startScheduler();
+  startScheduler({ dispatch: dispatchTimer });
+  startMaintenance();
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     process.once(signal, () => lock.release());
   }

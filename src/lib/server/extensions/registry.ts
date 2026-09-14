@@ -177,6 +177,12 @@ export const listInstalls = () => loadStore().then((store) => store.installs);
 
 export const listUninstalled = () => loadStore().then((store) => store.uninstalled ?? []);
 
+/** Stop tracking uninstalled installs whose private data has been purged. */
+export const forgetUninstalled = (installIds: string[]) =>
+  withStore((store) => {
+    store.uninstalled = (store.uninstalled ?? []).filter((entry) => !installIds.includes(entry.installId));
+  });
+
 export const getInstall = (id: string) => loadStore().then((store) => store.installs.find((install) => install.id === id) ?? null);
 
 // --- staging ----------------------------------------------------------------------

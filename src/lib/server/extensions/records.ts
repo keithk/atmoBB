@@ -1,6 +1,15 @@
 import { Lexicons, type LexiconDoc } from '@atproto/lexicon';
 import { isValidDid, isValidNsid, isValidRecordKey } from '@atproto/syntax';
-import type { RecordCreate, RecordDelete, RecordPut, RecordRef } from '$lib/extensions/contract';
+import type {
+  RecordCreate,
+  RecordDelete,
+  RecordGet,
+  RecordList,
+  RecordListResult,
+  RecordPut,
+  RecordRef,
+  StoredRecord,
+} from '$lib/extensions/contract';
 import { parseAtUri } from '$lib/appview-paths';
 import { FORUM_DID } from '../appview';
 import {
@@ -40,25 +49,7 @@ export interface RecordInstall {
   lexicons: LexiconDoc[];
 }
 
-export interface RecordList {
-  repo: string;
-  collection: string;
-}
-export interface RecordGet {
-  repo: string;
-  collection: string;
-  rkey: string;
-}
-export interface StoredRecord {
-  uri: string;
-  cid: string;
-  value: Record<string, unknown>;
-}
-export interface RecordListResult {
-  records: StoredRecord[];
-  /** True when the listing stopped at the page cap with more records left. */
-  truncated: boolean;
-}
+export type { RecordGet, RecordList, RecordListResult, StoredRecord };
 
 export type RecordErrorCode =
   | 'CollectionNotApproved'
