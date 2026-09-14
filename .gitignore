@@ -18,3 +18,7 @@ build/
 
 # bun is the package manager here, not npm
 package-lock.json
+
+# Compound Engineering config and scratch stay local
+.compound-engineering/
+.context/compound-engineering/
