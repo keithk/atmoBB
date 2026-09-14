@@ -89,7 +89,7 @@ afterEach(async () => {
 describe('/x/[install]/attach page', () => {
   it('draws the extension’s attach form for staff, for a thread on a public board', async () => {
     expect(await visit()).toEqual({
-      panel: { installId: INSTALL, name: 'Diplomacy', entry: 'index.html' },
+      panel: { installId: INSTALL, name: 'Diplomacy', entry: 'index.html', pageBase: '/ext/git.example/jack/diplomacy' },
       thread: THREAD,
       threadHref: '/t/did:plc:author/3kgame',
       metadata: { title: 'Attach Diplomacy', noindex: true },

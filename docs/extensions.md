@@ -133,10 +133,17 @@ The panel and the page trade `postMessage`s in bridge version 1, every message c
 | panel → page | `{ type: 'atmobb:action', v: 1, id, action, input }` runs your `action` handler as the viewer |
 | panel → page | `{ type: 'atmobb:resize', v: 1, height }` sizes the frame, clamped to 48 to 2400px |
 | panel → page | `{ type: 'atmobb:attach', v: 1, params }` (attach page only) attaches with this setup |
-| page → panel | `{ type: 'atmobb:init', v: 1, mode, thread, signedIn, path }` once, on load; `mode` is `thread`, `page`, or `attach` |
+| panel → page | `{ type: 'atmobb:source', v: 1, did }` (standalone page only) names the repo the records you're showing come from |
+| page → panel | `{ type: 'atmobb:init', v: 1, mode, thread, signedIn, path, pageBase }` once, on load; `mode` is `thread`, `page`, or `attach`, and `pageBase` is your standalone page's address, like `/ext/git.example/jack/diplomacy` |
 | page → panel | `{ type: 'atmobb:result', v: 1, id, ok, value }` or `{ ..., ok: false, error: { code, message } }`, answering an action |
 
 Post to `parent` with target origin `'*'` (the frame's own origin is opaque) and accept only messages whose `event.source` is `parent`; the template's `ui/panel.js` already does this. Action names top out at 128 characters, message ids at 64, and action input or attach params at 64 KB of JSON; a panel can have at most 8 actions waiting on the server at once.
+
+`pageBase` comes in every mode, so a panel on a thread can tell signed-out readers where your standalone page is (append `/-/` and a page path to point inside it), for example a board they can open without signing in. The frame's sandbox doesn't let it navigate the forum page, and a link followed inside the frame closes the panel, so show the address as text rather than as a link.
+
+On your standalone page, send `atmobb:source` when you show records read from another repo, like a replay of a game some forum published. atmoBB draws a line above your frame, where your panel can't reach or imitate it: "Records from" the account's handle when the handle resolves back to that DID (otherwise just the DID), the full DID either way, and a chip saying "atmoBB forum" when the DID's repo holds an `app.atmobb.forum.profile` record, or "not an atmoBB forum" when it doesn't or couldn't be checked. It shows "Checking source…" while it looks. atmoBB reads the DID document and the forum profile straight from the account's own PDS, not from any forum's index, so the line works for a forum that has shut down as long as its account's repo is still served. One source shows at a time; sending a different DID replaces the line, and sending the same DID again does nothing. The message is ignored on threads and on the attach page, where the records are the forum's own.
+
+The page looks the source up at `GET /x/<install>/source?did=<did>`, which answers `{ did, handle, handleVerified, forum, forumName? }`, plus `unavailable: true` when the DID document or the repo couldn't be read (with `forum: false`). It's limited to 30 lookups a minute per client address and caches answers for five minutes (thirty seconds when unavailable).
 
 On a thread, only signed-in members can run actions. On your standalone page, signed-out visitors can too, counted per client address (see [self-hosting](self-hosting.md#extensions) for `ADDRESS_HEADER`/`XFF_DEPTH`, which that count depends on behind a proxy). Signed-in actions are capped at `ATMOBB_EXTENSIONS_ACTIONS_PER_VIEWER_PER_MINUTE` (30) per viewer per install and `ATMOBB_EXTENSIONS_ACTIONS_PER_INSTALL_PER_MINUTE` (300) per install; signed-out actions share `ATMOBB_EXTENSIONS_ANONYMOUS_ACTIONS_PER_INSTALL_PER_MINUTE` (60) across every address, one running at a time per install.
 

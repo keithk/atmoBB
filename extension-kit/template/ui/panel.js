@@ -5,7 +5,8 @@
 //   panel -> page  { type: 'atmobb:action', v: 1, id, action, input }
 //                  { type: 'atmobb:resize', v: 1, height }
 //                  { type: 'atmobb:attach', v: 1, params }   (attach page only)
-//   page -> panel  { type: 'atmobb:init', v: 1, mode, thread, signedIn, path }
+//                  { type: 'atmobb:source', v: 1, did }      (standalone page only)
+//   page -> panel  { type: 'atmobb:init', v: 1, mode, thread, signedIn, path, pageBase }
 //                  { type: 'atmobb:result', v: 1, id, ok, value | error }
 //
 // `mode` is 'thread' on a thread, 'page' on the extension's own page, and

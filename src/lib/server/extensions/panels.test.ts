@@ -92,7 +92,7 @@ describe('threadExtension', () => {
   it('shows the bound extension’s panel after checking the thread is still public', async () => {
     await bindThread(INSTALL);
     expect(await threadExtension({ thread: THREAD, viewerDid: MEMBER, boardPublic: true })).toEqual({
-      panel: { installId: INSTALL, name: 'Diplomacy', entry: 'index.html', endorsement: 'unverified' },
+      panel: { installId: INSTALL, name: 'Diplomacy', entry: 'index.html', pageBase: `/ext/git.example/jack/${INSTALL}`, endorsement: 'unverified' },
       attach: [],
     });
     expect(state.getBoardAccess).toHaveBeenCalledWith(BOARD);

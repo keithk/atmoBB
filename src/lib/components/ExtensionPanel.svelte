@@ -4,9 +4,11 @@
   // session. It reaches the extension only through the bridge, which forwards
   // its actions to the action endpoint as whoever is signed in. The name and
   // endorsement label are drawn here, outside the frame, so an extension can't
-  // dress itself up as the forum.
+  // dress itself up as the forum. So is the source line on a standalone page:
+  // the panel only names a DID, and atmoBB checks who that is.
   import { onMount } from 'svelte';
   import { actionOutcome, createPanelBridge, type ActionOutcome, type PanelMode } from '$lib/extensions/bridge';
+  import { createSourceTracker, sourceFromResponse, sourceLine, type SourceIdentity, type SourceState } from '$lib/extensions/source';
 
   interface Props {
     installId: string;
@@ -19,16 +21,20 @@
     signedIn: boolean;
     /** On the extension's own page, the path after its page address. */
     path?: string;
+    /** The extension's standalone page address. */
+    pageBase: string;
     endorsement?: 'endorsed' | 'unverified';
     /** Attach mode: the setup the extension's attach form collected. */
     onattach?: (params: unknown) => void;
   }
 
-  let { installId, name, entry, mode, thread = null, signedIn, path = '', endorsement = 'unverified', onattach }: Props = $props();
+  let { installId, name, entry, mode, thread = null, signedIn, path = '', pageBase, endorsement = 'unverified', onattach }: Props = $props();
 
   let container = $state<HTMLDivElement>();
   let height = $state(240);
   let closed = $state(false);
+  let source = $state<SourceState | null>(null);
+  const line = $derived(source?.status === 'checked' ? sourceLine(source.identity) : null);
 
   async function runAction(action: string, input: unknown): Promise<ActionOutcome> {
     const response = await fetch(`/x/${installId}/action`, {
@@ -40,6 +46,11 @@
     return actionOutcome(response.status, await response.json().catch(() => null));
   }
 
+  async function lookupSource(did: string): Promise<SourceIdentity> {
+    const response = await fetch(`/x/${encodeURIComponent(installId)}/source?${new URLSearchParams({ did })}`, { headers: { accept: 'application/json' } });
+    return sourceFromResponse(did, response.status, await response.json().catch(() => null));
+  }
+
   onMount(() => {
     // Built by hand rather than in markup so the sandbox is in place before
     // the frame's first navigation and the load listener sees its first load.
@@ -49,14 +60,17 @@
     frame.title = `${name} panel`;
     frame.className = 'atm-extension__frame';
 
+    const sources = createSourceTracker({ lookup: lookupSource, update: (next) => (source = next) });
     const bridge = createPanelBridge({
       mode,
       thread,
       signedIn,
       path,
+      pageBase,
       frame: () => frame.contentWindow,
       runAction,
       attach: onattach,
+      source: (did) => sources.set(did),
       resize: (next) => (height = next),
       teardown: () => {
         frame.remove();
@@ -71,6 +85,7 @@
 
     return () => {
       bridge.close();
+      sources.close();
       window.removeEventListener('message', onMessage);
       frame.remove();
     };
@@ -86,6 +101,28 @@
       <span class="atm-chip atm-chip--warn" title="The atmoBB directory hasn't reviewed this release. It runs sandboxed: it sees who you are when you use it, but never your login.">unverified extension</span>
     {/if}
   </div>
+  {#if mode === 'page'}
+    <div aria-live="polite">
+      {#if source?.status === 'checking'}
+        <p class="atm-extension__source atm-hint"><span class="atm-spinner" aria-hidden="true"></span> Checking source…</p>
+      {:else if line}
+        <p class="atm-extension__source">
+          <span>
+            Records from
+            {#if line.name !== line.did}<strong>{line.name}</strong>{/if}
+            <code class="atm-extension__did" title="The account's DID">{line.did}</code>
+            {#if line.forumName}<span class="atm-hint">({line.forumName})</span>{/if}
+          </span>
+          {#if line.forum}
+            <span class="atm-chip atm-chip--ok">atmoBB forum</span>
+          {:else}
+            <span class="atm-chip atm-chip--warn">not an atmoBB forum</span>
+            {#if !line.checked}<span class="atm-hint">Couldn't reach this account's records to check.</span>{/if}
+          {/if}
+        </p>
+      {/if}
+    </div>
+  {/if}
   {#if closed}
     <p class="atm-card__body atm-hint">This panel tried to leave its frame, so it was closed. Reload the page to open it again.</p>
   {:else}
@@ -99,6 +136,8 @@
   @layer atmobb {
   .atm-extension__name { font: var(--type-section); color: var(--forum-ink); }
   .atm-extension__body { background: var(--forum-surface); }
+  .atm-extension__source { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0; padding: var(--space-2) var(--space-4); border-bottom: var(--border-hair) solid var(--forum-line); font: var(--type-ui); color: var(--forum-ink); overflow-wrap: anywhere; }
+  .atm-extension__did { font: var(--type-handle); user-select: all; }
   .atm-extension__body :global(.atm-extension__frame) { display: block; width: 100%; height: 100%; border: 0; }
   }
 </style>

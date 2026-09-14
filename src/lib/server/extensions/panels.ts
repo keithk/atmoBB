@@ -1,5 +1,5 @@
 import { posix } from 'node:path';
-import { parseExtensionPagePath } from '$lib/extensions/page-path';
+import { extensionPagePath, parseExtensionPagePath } from '$lib/extensions/page-path';
 import { canModerateForum } from '../admin';
 import { bindingAccess, bindingFor } from './bindings';
 import { endorsementFor } from './endorsement';
@@ -17,6 +17,8 @@ export interface PanelView {
   name: string;
   /** The UI entry's path below the install's frame route. */
   entry: string;
+  /** The extension's standalone page address, so a panel anywhere can link to it. */
+  pageBase: string;
   /** Endorsed only when the directory reviewed the release this install runs. */
   endorsement?: 'endorsed' | 'unverified';
 }
@@ -46,7 +48,12 @@ export function panelView(install: ExtensionInstall): PanelView | null {
   const entry = install.manifest.ui?.entry;
   if (!entry) return null;
   const dir = posix.dirname(entry);
-  return { installId: install.id, name: install.manifest.name, entry: dir === '.' ? entry : entry.slice(dir.length + 1) };
+  return {
+    installId: install.id,
+    name: install.manifest.name,
+    entry: dir === '.' ? entry : entry.slice(dir.length + 1),
+    pageBase: extensionPagePath(install.normalizedUrl),
+  };
 }
 
 export interface ThreadExtensionRequest {

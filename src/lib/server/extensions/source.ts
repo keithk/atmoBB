@@ -1,0 +1,209 @@
+import { Resolver } from 'node:dns/promises';
+import { isValidDid, isValidHandle } from '@atproto/syntax';
+import { unresolvedSource, type SourceIdentity } from '$lib/extensions/source';
+import { outboundFetch, resolveDidDocument, type DidDocument, type OutboundFetchOptions, type OutboundFetchResult } from './outbound';
+
+// Who a standalone page's source DID is, for the label atmoBB draws above a
+// panel: the handle its DID document claims, whether that handle resolves
+// back to it, and whether its repo holds an atmoBB forum profile. Every read
+// goes to the DID's own identity and PDS through the hardened fetcher, never
+// through Happyview, so the answer holds for a forum this install has never
+// indexed or one that no longer runs. Visitors reach this signed out, so
+// lookups are counted per client address.
+
+export const FORUM_PROFILE_COLLECTION = 'app.atmobb.forum.profile';
+/** The forum profile's record key; the lexicon fixes it as `literal:self`. */
+export const FORUM_PROFILE_RKEY = 'self';
+
+export const SOURCE_CACHE_MAX = 500;
+const SOURCE_TTL_MS = 5 * 60_000;
+/** An unavailable answer is retried sooner, so a PDS blip doesn't stick for five minutes. */
+const UNAVAILABLE_TTL_MS = 30_000;
+
+export const SOURCE_LOOKUPS_PER_CLIENT_PER_MINUTE = 30;
+const MINUTE_MS = 60_000;
+const CLIENT_WINDOWS_MAX = 5_000;
+
+const HANDLE_TIMEOUT_MS = 3_000;
+const HANDLE_MAX_BYTES = 2_048;
+const PROFILE_TIMEOUT_MS = 5_000;
+/** A forum profile carries up to 100 KB of custom CSS besides everything else. */
+const PROFILE_MAX_BYTES = 512 * 1024;
+const FORUM_NAME_MAX = 100;
+
+export interface SourceResolverDeps {
+  resolveDidDocument(did: string): Promise<DidDocument>;
+  resolveTxt(hostname: string): Promise<string[][]>;
+  fetch(url: string, opts: OutboundFetchOptions): Promise<OutboundFetchResult>;
+}
+
+const dns = new Resolver({ timeout: HANDLE_TIMEOUT_MS, tries: 1 });
+const networkDeps: SourceResolverDeps = { resolveDidDocument, resolveTxt: (hostname) => dns.resolveTxt(hostname), fetch: outboundFetch };
+let deps = networkDeps;
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const decodeJson = (body: Uint8Array): unknown => {
+  try {
+    return JSON.parse(new TextDecoder().decode(body));
+  } catch {
+    return null;
+  }
+};
+
+/** The DID a handle resolves to: its `_atproto` TXT record when it has one, otherwise its HTTPS well-known. */
+async function handleDid(handle: string): Promise<string | null> {
+  let records: string[][] = [];
+  try {
+    records = await deps.resolveTxt(`_atproto.${handle}`);
+  } catch {
+    // No TXT record, or DNS failed: try the well-known.
+  }
+  const dids = [...new Set(records.map((chunks) => chunks.join('')).filter((text) => text.startsWith('did=')).map((text) => text.slice(4)))];
+  // More than one DID in DNS is a misconfigured handle, which resolves to nothing.
+  if (dids.length) return dids.length === 1 && isValidDid(dids[0]) ? dids[0] : null;
+
+  try {
+    const res = await deps.fetch(`https://${handle}/.well-known/atproto-did`, { maxBytes: HANDLE_MAX_BYTES, timeoutMs: HANDLE_TIMEOUT_MS });
+    if (res.status !== 200) return null;
+    const did = new TextDecoder().decode(res.body).trim();
+    return isValidDid(did) ? did : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The handle a DID document claims, lowercased, or null when its first at:// alias isn't a usable handle. */
+function claimedHandle(doc: DidDocument): string | null {
+  const alias = doc.alsoKnownAs?.find((entry) => typeof entry === 'string' && entry.startsWith('at://'));
+  const handle = alias?.slice('at://'.length).toLowerCase();
+  return handle && isValidHandle(handle) && !handle.endsWith('.invalid') ? handle : null;
+}
+
+type ForumCheck = { forum: boolean; forumName?: string; unavailable?: true };
+
+/** Whether the DID's own PDS holds a forum profile record for it. */
+async function forumProfile(did: string, doc: DidDocument): Promise<ForumCheck> {
+  const pds = doc.service?.find(
+    (service) => service.type === 'AtprotoPersonalDataServer' && (service.id === '#atproto_pds' || service.id === `${did}#atproto_pds`),
+  )?.serviceEndpoint;
+  // No PDS means no repo, so no forum profile could be read from it.
+  if (typeof pds !== 'string' || !pds) return { forum: false };
+
+  const query = new URLSearchParams({ repo: did, collection: FORUM_PROFILE_COLLECTION, rkey: FORUM_PROFILE_RKEY });
+  let res: OutboundFetchResult;
+  try {
+    res = await deps.fetch(`${pds.replace(/\/+$/, '')}/xrpc/com.atproto.repo.getRecord?${query}`, {
+      headers: { accept: 'application/json' },
+      maxBytes: PROFILE_MAX_BYTES,
+      timeoutMs: PROFILE_TIMEOUT_MS,
+    });
+  } catch {
+    return { forum: false, unavailable: true };
+  }
+  const body = decodeJson(res.body);
+  if (res.status === 400 && isObject(body) && body.error === 'RecordNotFound') return { forum: false };
+  if (res.status !== 200 || !isObject(body)) return { forum: false, unavailable: true };
+
+  const expectedUri = `at://${did}/${FORUM_PROFILE_COLLECTION}/${FORUM_PROFILE_RKEY}`;
+  if ((body.uri !== undefined && body.uri !== expectedUri) || !isObject(body.value) || typeof body.value.name !== 'string') return { forum: false };
+  const forumName = body.value.name.trim().slice(0, FORUM_NAME_MAX);
+  return forumName ? { forum: true, forumName } : { forum: true };
+}
+
+async function resolveSource(did: string): Promise<SourceIdentity> {
+  let doc: DidDocument;
+  try {
+    doc = await deps.resolveDidDocument(did);
+  } catch {
+    return unresolvedSource(did);
+  }
+  if (!isObject(doc) || doc.id !== did) return unresolvedSource(did);
+
+  const handle = claimedHandle(doc);
+  const [resolved, forum] = await Promise.all([handle ? handleDid(handle) : null, forumProfile(did, doc)]);
+  return { did, handle, handleVerified: !!handle && resolved === did, ...forum };
+}
+
+// --- cache (bounded, oldest out) ----------------------------------------------
+
+const cache = new Map<string, { identity: SourceIdentity; at: number }>();
+const inflight = new Map<string, Promise<SourceIdentity>>();
+
+function cached(did: string): SourceIdentity | undefined {
+  const hit = cache.get(did);
+  if (!hit) return undefined;
+  if (Date.now() - hit.at >= (hit.identity.unavailable ? UNAVAILABLE_TTL_MS : SOURCE_TTL_MS)) {
+    cache.delete(did);
+    return undefined;
+  }
+  return hit.identity;
+}
+
+function remember(did: string, identity: SourceIdentity) {
+  cache.delete(did);
+  cache.set(did, { identity, at: Date.now() });
+  while (cache.size > SOURCE_CACHE_MAX) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
+}
+
+/** Who a source DID is, cached briefly; concurrent lookups for one DID share a resolution. Never throws. */
+export async function sourceIdentity(did: string): Promise<SourceIdentity> {
+  const hit = cached(did);
+  if (hit) return hit;
+  const running = inflight.get(did);
+  if (running) return running;
+  const lookup = resolveSource(did)
+    .catch(() => unresolvedSource(did))
+    .then((identity) => {
+      remember(did, identity);
+      return identity;
+    })
+    .finally(() => inflight.delete(did));
+  inflight.set(did, lookup);
+  return lookup;
+}
+
+// --- rate limit (per client address, sliding minute) ----------------------------
+
+const clientWindows = new Map<string, number[]>();
+
+/** Take one of a client's lookups for this minute, or false when they've used them all. */
+export function takeSourceLookup(client: string, now = Date.now()): boolean {
+  const recent = (clientWindows.get(client) ?? []).filter((at) => now - at < MINUTE_MS);
+  if (recent.length >= SOURCE_LOOKUPS_PER_CLIENT_PER_MINUTE) {
+    clientWindows.set(client, recent);
+    return false;
+  }
+  recent.push(now);
+  clientWindows.delete(client);
+  clientWindows.set(client, recent);
+  // Drop the least recently seen clients once too many are tracked; a dropped client starts a fresh window.
+  while (clientWindows.size > CLIENT_WINDOWS_MAX) {
+    const oldest = clientWindows.keys().next().value;
+    if (oldest === undefined) break;
+    clientWindows.delete(oldest);
+  }
+  return true;
+}
+
+// --- test seams -------------------------------------------------------------------
+
+/** Test-only: replace the resolver's network. Pass null to restore it. */
+export function setSourceDepsForTests(next: SourceResolverDeps | null) {
+  deps = next ?? networkDeps;
+}
+
+/** Test-only: the cache's current entry count. */
+export const sourceCacheSizeForTests = () => cache.size;
+
+export function resetSourceForTests() {
+  deps = networkDeps;
+  cache.clear();
+  inflight.clear();
+  clientWindows.clear();
+}

@@ -16,7 +16,7 @@ const THREAD = 'at://did:plc:author/app.atmobb.discussion.thread/3kgame';
 const v = BRIDGE_VERSION;
 
 describe('parseFrameMessage', () => {
-  it('accepts the three frame messages in their exact shapes', () => {
+  it('accepts the frame messages in their exact shapes', () => {
     expect(parseFrameMessage({ type: 'atmobb:action', v, id: 1, action: 'move', input: { army: 'Paris' } }, 'thread')).toEqual({
       type: 'atmobb:action',
       v,
@@ -56,6 +56,28 @@ describe('parseFrameMessage', () => {
     for (const data of bad) expect(parseFrameMessage(data, 'attach'), JSON.stringify(data, (_, x) => (typeof x === 'bigint' ? 'bigint' : x))).toBeNull();
   });
 
+  it('accepts a source message only on a standalone page, naming a DID in exactly that shape', () => {
+    const did = 'did:plc:dvh42fok55dox6pzlyevelz6';
+    expect(parseFrameMessage({ type: 'atmobb:source', v, did }, 'page')).toEqual({ type: 'atmobb:source', v, did });
+    expect(parseFrameMessage({ type: 'atmobb:source', v, did: 'did:web:forum.example.com' }, 'page')).toEqual({ type: 'atmobb:source', v, did: 'did:web:forum.example.com' });
+    expect(parseFrameMessage({ type: 'atmobb:source', v, did }, 'thread')).toBeNull();
+    expect(parseFrameMessage({ type: 'atmobb:source', v, did }, 'attach')).toBeNull();
+    const bad: unknown[] = [
+      { type: 'atmobb:source', v, did, handle: 'atmobb.app' },
+      { type: 'atmobb:source', v },
+      { type: 'atmobb:source', v, did: 7 },
+      { type: 'atmobb:source', v, did: '' },
+      { type: 'atmobb:source', v, did: 'atmobb.app' },
+      { type: 'atmobb:source', v, did: 'did:plc:' },
+      { type: 'atmobb:source', v, did: 'DID:plc:abc' },
+      { type: 'atmobb:source', v, did: 'did:plc:abc:' },
+      { type: 'atmobb:source', v, did: 'did:plc:a b' },
+      { type: 'atmobb:source', v, did: `did:plc:${'a'.repeat(2048)}` },
+      { type: 'atmobb:source', v: 2, did },
+    ];
+    for (const data of bad) expect(parseFrameMessage(data, 'page'), JSON.stringify(data)).toBeNull();
+  });
+
   it('accepts attach messages only in attach mode', () => {
     expect(parseFrameMessage({ type: 'atmobb:attach', v, params: {} }, 'thread')).toBeNull();
     expect(parseFrameMessage({ type: 'atmobb:attach', v, params: {} }, 'page')).toBeNull();
@@ -78,6 +100,7 @@ function harness(overrides: Partial<PanelBridgeOptions> = {}) {
     thread: THREAD,
     signedIn: true,
     path: '',
+    pageBase: '/ext/git.example/jack/diplomacy',
     frame: () => frame as unknown as Window,
     runAction: vi.fn(async (): Promise<ActionOutcome> => ({ ok: true, value: { count: 1 } })),
     resize: vi.fn(),
@@ -110,7 +133,7 @@ describe('createPanelBridge', () => {
   it('sends the frame its init on the first load, to any origin since a sandboxed frame has none', () => {
     const { bridge, frame } = harness();
     bridge.load();
-    expect(frame.postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'atmobb:init', v, mode: 'thread', thread: { uri: THREAD }, signedIn: true, path: '' }, '*');
+    expect(frame.postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'atmobb:init', v, mode: 'thread', thread: { uri: THREAD }, signedIn: true, path: '', pageBase: '/ext/git.example/jack/diplomacy' }, '*');
   });
 
   it('forwards an action from its own frame and answers with the result', async () => {
@@ -205,6 +228,26 @@ describe('createPanelBridge', () => {
   it('tells a standalone page its path and no thread', () => {
     const { bridge, frame } = harness({ mode: 'page', thread: null, signedIn: false, path: 'games/spring-1901' });
     bridge.load();
-    expect(frame.postMessage).toHaveBeenCalledWith({ type: 'atmobb:init', v, mode: 'page', thread: null, signedIn: false, path: 'games/spring-1901' }, '*');
+    expect(frame.postMessage).toHaveBeenCalledWith({ type: 'atmobb:init', v, mode: 'page', thread: null, signedIn: false, path: 'games/spring-1901', pageBase: '/ext/git.example/jack/diplomacy' }, '*');
+  });
+
+  it('hands each valid source on a standalone page to the page, later ones included', () => {
+    const source = vi.fn();
+    const { bridge, frame } = harness({ mode: 'page', thread: null, source });
+    bridge.load();
+    bridge.message({ source: frame as unknown as Window, data: { type: 'atmobb:source', v, did: 'did:plc:forumone' } });
+    bridge.message({ source: frame as unknown as Window, data: { type: 'atmobb:source', v, did: 'not a did' } });
+    bridge.message({ source: frame as unknown as Window, data: { type: 'atmobb:source', v, did: 'did:plc:forumtwo' } });
+    expect(source.mock.calls).toEqual([['did:plc:forumone'], ['did:plc:forumtwo']]);
+    expect(frame.postMessage).toHaveBeenCalledOnce();
+  });
+
+  it('ignores a source message on a thread, or from another window', () => {
+    const source = vi.fn();
+    const onThread = harness({ source });
+    onThread.bridge.message({ source: onThread.frame as unknown as Window, data: { type: 'atmobb:source', v, did: 'did:plc:forumone' } });
+    const onPage = harness({ mode: 'page', thread: null, source });
+    onPage.bridge.message({ source: { postMessage: vi.fn() } as unknown as Window, data: { type: 'atmobb:source', v, did: 'did:plc:forumone' } });
+    expect(source).not.toHaveBeenCalled();
   });
 });

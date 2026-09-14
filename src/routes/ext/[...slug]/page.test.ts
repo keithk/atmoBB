@@ -53,7 +53,7 @@ afterEach(async () => {
 describe('/ext/[...slug]', () => {
   it('shows the panel for the repository’s install, with the page path inside it', async () => {
     expect(await visit('/ext/git.example/jack/diplomacy/-/games/spring-1901', 'did:plc:member')).toMatchObject({
-      panel: { installId: 'AAAAAAAAAAAAAAAAAAAAAA', name: 'Diplomacy', entry: 'index.html' },
+      panel: { installId: 'AAAAAAAAAAAAAAAAAAAAAA', name: 'Diplomacy', entry: 'index.html', pageBase: '/ext/git.example/jack/diplomacy' },
       path: 'games/spring-1901',
       signedIn: true,
     });

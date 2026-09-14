@@ -47,7 +47,17 @@ export interface AttachMessage {
   v: typeof BRIDGE_VERSION;
   params: unknown;
 }
-export type FrameMessage = ActionMessage | ResizeMessage | AttachMessage;
+/**
+ * A standalone page only: the records shown come from this DID's repo. The
+ * page resolves it and labels the source outside the frame, where the panel
+ * can't forge it. A later source replaces an earlier one.
+ */
+export interface SourceMessage {
+  type: 'atmobb:source';
+  v: typeof BRIDGE_VERSION;
+  did: string;
+}
+export type FrameMessage = ActionMessage | ResizeMessage | AttachMessage | SourceMessage;
 
 // Page to frame.
 
@@ -60,6 +70,8 @@ export interface InitMessage {
   signedIn: boolean;
   /** On the extension's own page, the path after its page address; otherwise empty. */
   path: string;
+  /** The extension's standalone page address, `/ext/<repository>`, which outlives a reinstall. */
+  pageBase: string;
 }
 export interface BridgeError {
   code: string;
@@ -89,6 +101,12 @@ function jsonPayload(value: unknown): boolean {
   }
 }
 
+export const MAX_DID_LENGTH = 2048;
+// atproto's DID syntax: a lowercase method, then an identifier that doesn't end in a colon or percent sign.
+const DID_SYNTAX = /^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$/;
+
+export const isDid = (value: unknown): value is string => typeof value === 'string' && value.length <= MAX_DID_LENGTH && DID_SYNTAX.test(value);
+
 /** The frame message `data` is, or null for anything outside the schema or not allowed in `mode`. */
 export function parseFrameMessage(data: unknown, mode: PanelMode): FrameMessage | null {
   if (!isObject(data) || data.v !== BRIDGE_VERSION) return null;
@@ -108,6 +126,11 @@ export function parseFrameMessage(data: unknown, mode: PanelMode): FrameMessage 
       const { params } = data;
       if (mode !== 'attach' || !hasOnly(data, ['type', 'v', 'params']) || !jsonPayload(params)) return null;
       return { type: 'atmobb:attach', v: BRIDGE_VERSION, params: params ?? null };
+    }
+    case 'atmobb:source': {
+      const { did } = data;
+      if (mode !== 'page' || !hasOnly(data, ['type', 'v', 'did']) || !isDid(did)) return null;
+      return { type: 'atmobb:source', v: BRIDGE_VERSION, did };
     }
     default:
       return null;
@@ -139,11 +162,14 @@ export interface PanelBridgeOptions {
   thread: string | null;
   signedIn: boolean;
   path: string;
+  pageBase: string;
   /** The panel's own frame window, or null while it has none. */
   frame: () => Window | null;
   runAction: (action: string, input: unknown) => Promise<ActionOutcome>;
   /** Attach mode only. */
   attach?: (params: unknown) => void;
+  /** Page mode only: the DID whose repo the shown records come from. */
+  source?: (did: string) => void;
   resize: (height: number) => void;
   /** Remove the frame. Called at most once. */
   teardown: () => void;
@@ -190,6 +216,7 @@ export function createPanelBridge(options: PanelBridgeOptions): PanelBridge {
         thread: options.thread ? { uri: options.thread } : null,
         signedIn: options.signedIn,
         path: options.path,
+        pageBase: options.pageBase,
       });
     },
 
@@ -204,6 +231,9 @@ export function createPanelBridge(options: PanelBridgeOptions): PanelBridge {
           return;
         case 'atmobb:attach':
           options.attach?.(message.params);
+          return;
+        case 'atmobb:source':
+          options.source?.(message.did);
           return;
         case 'atmobb:action': {
           if (pending >= MAX_PENDING_ACTIONS) {

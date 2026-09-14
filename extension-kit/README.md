@@ -108,7 +108,8 @@ isn't exactly one of these:
 | panel → page | `{ type: 'atmobb:action', v: 1, id, action, input }` runs your `action` handler as the viewing member; `id` is a number or a short string |
 | panel → page | `{ type: 'atmobb:resize', v: 1, height }` sizes the frame, within limits |
 | panel → page | `{ type: 'atmobb:attach', v: 1, params }` attaches the extension with this setup (attach page only) |
-| page → panel | `{ type: 'atmobb:init', v: 1, mode, thread, signedIn, path }` once the panel loads; `mode` is `thread`, `page`, or `attach` |
+| panel → page | `{ type: 'atmobb:source', v: 1, did }` names the repo the records you're showing come from (standalone page only) |
+| page → panel | `{ type: 'atmobb:init', v: 1, mode, thread, signedIn, path, pageBase }` once the panel loads; `mode` is `thread`, `page`, or `attach`; `pageBase` is your standalone page's address |
 | page → panel | `{ type: 'atmobb:result', v: 1, id, ok, value }` or `{ ..., ok: false, error: { code, message } }` answers an action |
 
 Post to `parent` with target origin `'*'` (the frame has no origin of its own)
@@ -120,7 +121,20 @@ page, at `/ext/<repository host and path>` (for example
 `/ext/git.example/jack/diplomacy`, with a page inside it after `/-/`, like
 `/ext/git.example/jack/diplomacy/-/games/spring-1901`), signed-out visitors can
 run actions too, and `path` tells the panel which page it's on. That address
-follows the repository, so links keep working after a reinstall.
+follows the repository, so links keep working after a reinstall. Every mode's
+`init` carries it as `pageBase` (like `/ext/git.example/jack/diplomacy`), so a
+panel on a thread can tell signed-out readers where your standalone page is.
+Show it as text: the sandbox doesn't let the panel navigate the forum page, and
+following a link inside the frame closes the panel.
+
+When your standalone page shows records from another repo, such as a replay of
+a game a forum published, send `atmobb:source` with that repo's DID. atmoBB
+checks the DID itself and draws a line above your frame: "Records from" the
+account's verified handle (or the DID when the handle doesn't resolve back to
+it), the full DID, and "atmoBB forum" or "not an atmoBB forum" depending on
+whether the repo holds an `app.atmobb.forum.profile` record. Your panel can't
+change or cover that line. A later `atmobb:source` with a different DID
+replaces it. On threads and the attach page the message is ignored.
 
 ## Build
 
