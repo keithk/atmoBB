@@ -22,6 +22,8 @@
   interface Segment {
     text: string;
     features: FacetFeature[];
+    /** Mention whose facet starts here; overlapping styles may split it into later segments. */
+    mentionStart?: string;
   }
 
   /** Split `text` at every facet boundary so each segment has a fixed feature set. */
@@ -39,7 +41,11 @@
       const [s, e] = [points[i], points[i + 1]];
       if (s >= e) continue;
       const features = facets.filter((f) => f.index.byteStart <= s && f.index.byteEnd >= e).flatMap((f) => f.features);
-      out.push({ text: decoder.decode(bytes.slice(s, e)), features });
+      const mentionStart = facets
+        .filter((f) => f.index.byteStart === s)
+        .flatMap((f) => f.features)
+        .find((f) => kindOf(f) === 'mention')?.did;
+      out.push({ text: decoder.decode(bytes.slice(s, e)), features, ...(mentionStart ? { mentionStart } : {}) });
     }
     return out;
   }
@@ -75,7 +81,7 @@
   {#if has(seg.features, 'spoiler')}
     <SpoilerSpan>{@render styled(seg)}</SpoilerSpan>
   {:else if did}
-    <MemberLink {did} showAvatar class="rt-mention">{@render styled(seg)}</MemberLink>
+    <MemberLink {did} showAvatar={seg.mentionStart === did} class="rt-mention">{@render styled(seg)}</MemberLink>
   {:else if href}
     <a {href} target="_blank" rel="noopener noreferrer">{@render styled(seg)}</a>
   {:else}
