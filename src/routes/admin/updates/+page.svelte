@@ -32,7 +32,7 @@
       <div class="failure">
         <p class="failure__title">Update failed</p>
         <p>{data.status.message}</p>
-        <p>Review the log below, then run <code>cd /srv/atmobb && ./atmobb status</code>. Forward-only Happyview migrations are not automatically rolled back.</p>
+        <p>Review the log below, then run <code>./atmobb status</code> from this forum's bundle directory on the host. Forward-only Happyview migrations are not automatically rolled back.</p>
         {#if data.status.backup}<p>Pre-migration backup: <code>{data.status.backup}</code></p>{/if}
       </div>
     {:else if data.status?.status === 'succeeded'}

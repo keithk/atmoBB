@@ -46,6 +46,15 @@ need() {
   done
 }
 
+# The updater and hosting controller run this script as root under systemd's
+# NoNewPrivileges, where sudo refuses to start. Use sudo only when not root.
+if [ "$(id -u)" -eq 0 ]; then
+  as_root() { "$@"; }
+else
+  need sudo
+  as_root() { sudo "$@"; }
+fi
+
 need docker
 if docker info >/dev/null 2>&1; then
   DOCKER=docker
@@ -184,7 +193,7 @@ prompt() {
 }
 
 cmd_install() {
-  need curl jq openssl python3 sudo
+  need curl jq openssl python3
   case "$BUNDLE_DIR" in
     *[!A-Za-z0-9_./-]*) die "the bundle path cannot contain spaces or shell metacharacters: $BUNDLE_DIR" ;;
   esac
@@ -274,13 +283,13 @@ EOF
   fi
 
   echo "== preparing $DATA_DIR (owned by uid 10001, the container's atmobb user)"
-  sudo install -d -m 700 "$DATA_DIR"
-  sudo chown 10001:10001 "$DATA_DIR"
+  as_root install -d -m 700 "$DATA_DIR"
+  as_root chown 10001:10001 "$DATA_DIR"
 
   echo "== installing the restricted host updater"
-  sudo install -d -m 755 "$UPDATER_LIB_DIR" /etc/atmobb
-  sudo install -m 755 "$BUNDLE_DIR/updater.py" "$UPDATER_LIB_DIR/updater.py"
-  sudo install -m 755 "$BUNDLE_DIR/atmobb" "$UPDATER_LIB_DIR/atmobb"
+  as_root install -d -m 755 "$UPDATER_LIB_DIR" /etc/atmobb
+  as_root install -m 755 "$BUNDLE_DIR/updater.py" "$UPDATER_LIB_DIR/updater.py"
+  as_root install -m 755 "$BUNDLE_DIR/atmobb" "$UPDATER_LIB_DIR/atmobb"
   updater_env=$(mktemp)
   updater_unit=$(mktemp)
   python_bin=$(command -v python3)
@@ -296,7 +305,7 @@ ATMOBB_UPDATER_WORKER=$UPDATER_LIB_DIR/atmobb
 ATMOBB_UPDATER_LIB_DIR=$UPDATER_LIB_DIR
 ATMOBB_HOST_UPDATE_LOCK=/var/lock/atmobb-hosting.lock
 EOF
-  sudo install -m 600 "$updater_env" "$UPDATER_ENV_FILE"
+  as_root install -m 600 "$updater_env" "$UPDATER_ENV_FILE"
   cat > "$updater_unit" <<EOF
 [Unit]
 Description=atmobb restricted host updater
@@ -315,14 +324,14 @@ PrivateTmp=true
 [Install]
 WantedBy=multi-user.target
 EOF
-  sudo install -m 644 "$updater_unit" "/etc/systemd/system/$UPDATER_UNIT"
+  as_root install -m 644 "$updater_unit" "/etc/systemd/system/$UPDATER_UNIT"
   rm -f "$updater_env" "$updater_unit"
   trap - EXIT HUP INT TERM
-  sudo systemctl daemon-reload
-  sudo systemctl enable --now "$UPDATER_UNIT"
-  sudo systemctl restart "$UPDATER_UNIT"
+  as_root systemctl daemon-reload
+  as_root systemctl enable --now "$UPDATER_UNIT"
+  as_root systemctl restart "$UPDATER_UNIT"
   attempt=0
-  while ! sudo test -S "$UPDATER_SOCKET_DIR/updater.sock"; do
+  while ! as_root test -S "$UPDATER_SOCKET_DIR/updater.sock"; do
     attempt=$((attempt + 1))
     [ "$attempt" -lt 20 ] || die "the updater did not create its socket; inspect: sudo journalctl -u $UPDATER_UNIT"
     sleep 1
@@ -429,7 +438,6 @@ cmd_backfill() {
 }
 
 cmd_backup() {
-  need sudo
   [ -f "$ENV_FILE" ] || die "no .env here; run ./atmobb install first"
   dir=${1:-$BUNDLE_DIR/backups/$(date -u +%Y%m%dT%H%M%SZ)}
   data_dir=$(env_value ATMOBB_DATA_DIR)
@@ -438,7 +446,7 @@ cmd_backup() {
   mkdir -p "$dir"
   echo "== backing up to $dir" >&2
   compose exec -T postgres pg_dump -Fc -U happyview -d happyview > "$dir/postgres.dump"
-  sudo tar -C "$(dirname "$data_dir")" -czf - "$(basename "$data_dir")" > "$dir/oauth.tar.gz"
+  as_root tar -C "$(dirname "$data_dir")" -czf - "$(basename "$data_dir")" > "$dir/oauth.tar.gz"
   cp "$ENV_FILE" "$dir/env"
   cp "$BUNDLE_DIR/compose.yml" "$dir/compose.yml"
   for file in compose.caddy.yml compose.hosting.yml Caddyfile; do
