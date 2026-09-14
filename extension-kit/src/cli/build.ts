@@ -95,6 +95,10 @@ async function bundle(projectDir: string, workDir: string): Promise<string> {
       write: false,
       format: 'cjs',
       target: 'es2020',
+      // extism-js snapshots the whole script into the module, so unminified
+      // source roughly doubles the .wasm and its starting memory; a large
+      // extension can otherwise pass the release file-size limit.
+      minify: true,
       platform: 'neutral',
       mainFields: ['module', 'main'],
       logLevel: 'silent',
