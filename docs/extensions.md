@@ -94,7 +94,7 @@ timers.cancel(name)
 notify({ to, title, message, link? })  // up to 50 DIDs; the host prefixes your extension's name to the title
 ```
 
-`ATMOBB_EXTENSIONS_NOTIFY_PER_RECIPIENT_PER_DAY` (5) and `ATMOBB_EXTENSIONS_NOTIFY_PER_INSTALL_PER_DAY` (100) cap sends; title and message are cut to 100 and 500 characters. A `link` has to be a path on the forum. Recipients who haven't opted in, or aren't in open or member standing, are skipped without saying which.
+`ATMOBB_EXTENSIONS_NOTIFY_PER_RECIPIENT_PER_DAY` (20) and `ATMOBB_EXTENSIONS_NOTIFY_PER_INSTALL_PER_DAY` (100) cap sends; title and message are cut to 100 and 500 characters. A `link` has to be a path on the forum. Recipients who haven't opted in, or aren't in open or member standing, are skipped without saying which.
 
 ### Handlers
 

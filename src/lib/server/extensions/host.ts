@@ -131,7 +131,7 @@ function callLimits(): CallLimits {
 /** ATMOBB_EXTENSIONS_RECORD_WRITES_PER_HOUR: creates, puts, and deletes per install, well under the PDS's own write limit. */
 const recordWritesPerHour = () => envInt('ATMOBB_EXTENSIONS_RECORD_WRITES_PER_HOUR', 100);
 /** ATMOBB_EXTENSIONS_NOTIFY_PER_RECIPIENT_PER_DAY: notifications one install sends one member per day. */
-const notifyPerRecipientPerDay = () => envInt('ATMOBB_EXTENSIONS_NOTIFY_PER_RECIPIENT_PER_DAY', 5);
+const notifyPerRecipientPerDay = () => envInt('ATMOBB_EXTENSIONS_NOTIFY_PER_RECIPIENT_PER_DAY', 20);
 /** ATMOBB_EXTENSIONS_NOTIFY_PER_INSTALL_PER_DAY: notifications one install sends per day. */
 const notifyPerInstallPerDay = () => envInt('ATMOBB_EXTENSIONS_NOTIFY_PER_INSTALL_PER_DAY', 100);
 /** ATMOBB_EXTENSIONS_ACTIONS_PER_VIEWER_PER_MINUTE: actions one signed-in viewer, or one signed-out client address, runs on one install. */
