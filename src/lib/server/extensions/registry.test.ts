@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 const state = vi.hoisted(() => ({ env: {} as Record<string, string | undefined> }));
@@ -20,6 +20,7 @@ import {
   stageInstall,
   stageUpdate,
   uninstall,
+  listUninstalled,
   type InstallReview,
 } from './registry';
 
@@ -283,11 +284,15 @@ describe('disable, enable, uninstall', () => {
     expect(await getInstall(installed.id)).not.toBeNull();
     expect(await exists(join(extensionsDir(), installed.id))).toBe(true);
 
+    await writeFile(join(extensionsDir(), installed.id, 'kv.json'), '{}');
     expect(await uninstall(installed.id, { hasOpenWork, force: true })).toMatchObject({ ok: true });
     expect(await getInstall(installed.id)).toBeNull();
-    expect(await exists(join(extensionsDir(), installed.id))).toBe(false);
+    expect(await exists(join(extensionsDir(), installed.id, installed.sha))).toBe(false);
+    // Private data outlives the bundles until the uninstall grace period ends.
+    expect(await exists(join(extensionsDir(), installed.id, 'kv.json'))).toBe(true);
+    expect(await listUninstalled()).toEqual([{ installId: installed.id, uninstalledAt: expect.any(String) }]);
     expect(await listClaims()).toMatchObject({ [GAME]: { gitUrl: `https://git.test/${repo.name}` } });
-    expect(JSON.parse(await readFile(join(extensionsDir(), 'registry.json'), 'utf8'))).toEqual({ installs: [] });
+    expect(JSON.parse(await readFile(join(extensionsDir(), 'registry.json'), 'utf8'))).toMatchObject({ installs: [] });
   });
 
   it('uninstalls without asking when there is no open work', async () => {

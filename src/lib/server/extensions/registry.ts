@@ -130,8 +130,15 @@ const stagingDir = (stagingId: string) => join(extensionsRoot(), '.staging', sta
 /** Where an install's active bundle lives. */
 export const bundleDir = (install: Pick<ExtensionInstall, 'id' | 'sha'>) => join(extensionsRoot(), install.id, install.sha);
 
+export interface Uninstalled {
+  installId: string;
+  uninstalledAt: string;
+}
+
 interface RegistryStore {
   installs: ExtensionInstall[];
+  /** Removed installs whose private data still waits out the uninstall grace period. */
+  uninstalled?: Uninstalled[];
 }
 
 async function loadStore(): Promise<RegistryStore> {
@@ -167,6 +174,8 @@ function withStore<T>(fn: (store: RegistryStore) => Promise<T> | T): Promise<T> 
 const exists = (path: string) => stat(path).then(() => true, () => false);
 
 export const listInstalls = () => loadStore().then((store) => store.installs);
+
+export const listUninstalled = () => loadStore().then((store) => store.uninstalled ?? []);
 
 export const getInstall = (id: string) => loadStore().then((store) => store.installs.find((install) => install.id === id) ?? null);
 
@@ -538,7 +547,8 @@ export const enableInstall = (installId: string) => setState(installId, 'active'
 
 /**
  * Remove an install and its bundles. Its collection claims stay, because the
- * records it published stay in the forum's repo.
+ * records it published stay in the forum's repo. Its private data (k/v, timers)
+ * stays until the uninstall grace period ends and a purge removes it.
  */
 export function uninstall(installId: string, options: StopOptions = {}): Promise<{ ok: true } | Refused> {
   return withStore(async (store) => {
@@ -546,8 +556,10 @@ export function uninstall(installId: string, options: StopOptions = {}): Promise
     if (index === -1) return refused('installId', 'No such install');
     const blocked = await openWorkRefusal(store.installs[index], options);
     if (blocked) return blocked;
-    store.installs.splice(index, 1);
-    await rm(join(extensionsRoot(), installId), { recursive: true, force: true });
+    const [removed] = store.installs.splice(index, 1);
+    const shas = new Set([removed.sha, ...removed.history.map((release) => release.sha)]);
+    for (const sha of shas) await rm(join(extensionsRoot(), installId, sha), { recursive: true, force: true });
+    store.uninstalled = [...(store.uninstalled ?? []), { installId, uninstalledAt: new Date().toISOString() }];
     return { ok: true };
   });
 }

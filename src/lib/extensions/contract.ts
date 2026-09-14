@@ -73,6 +73,19 @@ export interface KvSet {
 export interface KvDelete {
   key: string;
 }
+export interface KvList {
+  /** Only keys starting with this are returned. */
+  prefix: string;
+  limit?: number;
+  /** From a previous KvListResult, to fetch the next page. */
+  cursor?: string;
+}
+export interface KvListResult {
+  /** Sorted. */
+  keys: string[];
+  /** Set when there are more matching keys past `limit`. */
+  cursor: string | null;
+}
 
 /** Records are always written to the forum's repo, as the forum account, in a declared collection. */
 export interface RecordCreate {
