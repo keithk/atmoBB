@@ -6,6 +6,9 @@ means. Every entry names the Happyview release it was tested against.
 
 ## Unreleased
 
+- Fixed the release installer failing with `invalid user: '10001'` on hosts whose `install` is uutils rather than GNU coreutils (Ubuntu 26.04 ships uutils by default).
+- The hosting overlay (`compose.hosting.yml`) now passes `RESEND_API_KEY` to the operator forum, so hosting request emails send on release-bundle installs.
+
 ## 0.3.0
 
 Tested against Happyview 2.14.0. No backfill is required.
