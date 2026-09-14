@@ -151,7 +151,12 @@ export const collectionScope = (collections: string[]) => collections.map((c) =>
 /** The NSID minus its final segment. */
 const nsidAuthority = (nsid: string) => nsid.split('.').slice(0, -1).join('.');
 
-function reservedReason(collection: string): string | null {
+/**
+ * Why extensions may never write `collection` (a forum-scope collection or a
+ * reserved namespace), or null when nothing reserves it. Checked at install
+ * and again before every write.
+ */
+export function reservedReason(collection: string): string | null {
   const lower = collection.toLowerCase();
   const set = forumScopeCollections.get(lower);
   if (set) return `${collection} is already granted to the forum account by ${set}`;
