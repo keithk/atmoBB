@@ -211,9 +211,15 @@ export function extensionRuntime(
         await plugin?.close().catch(() => {});
       }
     }
+    return withInstance(installId, install, (plugin) => invoke(plugin, name, input, options));
+  }
+
+  /** Run `task` on the install's instance, starting it when it isn't live. */
+  async function withInstance<T>(installId: string, install: Install, task: (plugin: Plugin) => Promise<T>): Promise<T> {
+    if (install.idle) clearTimeout(install.idle);
     install.plugin ??= load(installId).then(start);
     try {
-      return await invoke(await install.plugin, name, input, options);
+      return await task(await install.plugin);
     } catch (err) {
       // After a timeout or a throwing host function the SDK may be restarting
       // or closing its worker, so start clean on the next call.
@@ -239,6 +245,12 @@ export function extensionRuntime(
     call(installId: string, name: string, input: string, options: CallOptions = {}): Promise<string | null> {
       const install = installFor(installId);
       return enqueue(install, () => run(installId, install, name, input, options));
+    },
+
+    /** Whether the install's module exports `name`, in turn with the install's calls. */
+    has(installId: string, name: string): Promise<boolean> {
+      const install = installFor(installId);
+      return enqueue(install, () => withInstance(installId, install, (plugin) => plugin.functionExists(name)));
     },
 
     /** Close an install's instance once its queued calls finish, so the next call loads it again. */

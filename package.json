@@ -10,7 +10,7 @@
     "cookie": "0.7.2"
   },
   "scripts": {
-    "lex": "yes | lex gen-api ./src/lexicon lexicons/com/atproto/repo/*.json lexicons/app/atmobb/richtext/*.json lexicons/app/atmobb/actor/*.json lexicons/app/atmobb/forum/*.json lexicons/app/atmobb/moderation/*.json lexicons/app/atmobb/discussion/*.json lexicons/app/atmobb/poll/*.json",
+    "lex": "yes | lex gen-api ./src/lexicon lexicons/com/atproto/repo/*.json lexicons/app/atmobb/richtext/*.json lexicons/app/atmobb/actor/*.json lexicons/app/atmobb/forum/*.json lexicons/app/atmobb/moderation/*.json lexicons/app/atmobb/discussion/*.json lexicons/app/atmobb/poll/*.json lexicons/app/atmobb/extension/*.json",
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",

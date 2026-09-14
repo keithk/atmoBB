@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   extensionScope: vi.fn(),
   scopeStatus: vi.fn(),
   deleteRecord: vi.fn(),
+  rebuildBindings: vi.fn(),
 }));
 vi.mock('$env/dynamic/private', () => ({ env: state.env }));
 vi.mock('$lib/server/admin', () => ({ adminActor: state.admin }));
@@ -20,6 +21,7 @@ vi.mock('$lib/server/forum-repo', () => ({ forumWriteMode: () => 'pds', deleteFo
 vi.mock('$lib/server/atproto-oauth', () => ({ forumScopeStatus: state.scopeStatus }));
 vi.mock('$lib/server/extensions/lock', () => ({ extensionsLockHeld: state.lockHeld }));
 vi.mock('$lib/server/extensions/scopes', () => ({ refreshExtensionScopes: state.refreshScopes, extensionScope: state.extensionScope }));
+vi.mock('$lib/server/extensions/bindings', () => ({ rebuildBindingsInBackground: state.rebuildBindings }));
 vi.mock('$lib/server/extensions/host', () => ({
   openWork: state.openWork,
   migrate: state.migrate,
@@ -136,10 +138,13 @@ it('warns that an extension without the trusted mark is unverified, and still in
     changes: null,
   });
   expect(await listInstalls()).toEqual([]);
+  expect(state.rebuildBindings).not.toHaveBeenCalled();
 
   const confirmed = await run(index.actions.confirm, post(INDEX, { stagingId: staged.review.stagingId }));
   expect(confirmed).toMatchObject({ installed: { name: 'Diplomacy' }, reconnect: { needed: false } });
   expect(state.refreshScopes).toHaveBeenCalledTimes(1);
+  // A reinstalled repository gets a new install id, so thread bindings are re-mapped.
+  expect(state.rebuildBindings).toHaveBeenCalledTimes(1);
   expect(await listInstalls()).toEqual([expect.objectContaining({ id: confirmed.installed.id, sha, state: 'active' })]);
   expect(await loadIndex()).toMatchObject({ unavailable: null, installs: [{ id: confirmed.installed.id, name: 'Diplomacy', version: '0.1.0' }] });
 });

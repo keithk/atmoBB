@@ -122,6 +122,8 @@ describe('extensionRuntime', () => {
 
   it('resolves to null for an export the module lacks, and keeps the instance working', async () => {
     const rt = start();
+    expect(await rt.has('partial', 'timer')).toBe(false);
+    expect(await rt.has('partial', 'echo')).toBe(true);
     expect(await rt.call('partial', 'timer', '')).toBeNull();
     expect(await rt.call('partial', 'echo', 'still here')).toBe('still here');
   });

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 const state = vi.hoisted(() => ({ env: {} as Record<string, string | undefined> }));
 vi.mock('$env/dynamic/private', () => ({ env: state.env }));
-import { ENDORSEMENT_SCOPE, extensionScope, refreshExtensionScopes, scopeStatus } from './scopes';
+import { BINDING_SCOPE, ENDORSEMENT_SCOPE, extensionScope, refreshExtensionScopes, scopeStatus } from './scopes';
 
 let directory: string;
 
@@ -41,7 +41,18 @@ describe('extension scopes', () => {
       { state: 'disabled', collections: ['com.example.chess.move'] },
     ]);
     await refreshExtensionScopes();
-    expect(extensionScope()).toBe('repo:com.example.diplomacy.game repo:com.example.diplomacy.order');
+    expect(extensionScope()).toBe('repo:com.example.diplomacy.game repo:com.example.diplomacy.order repo:app.atmobb.extension.binding');
+  });
+
+  it('requests the thread binding scope only while an extension is active', async () => {
+    expect(BINDING_SCOPE).toBe('repo:app.atmobb.extension.binding');
+    await writeInstalls([{ state: 'disabled', collections: ['com.example.chess.move'] }]);
+    await refreshExtensionScopes();
+    expect(extensionScope()).toBe('');
+
+    await writeInstalls([{ state: 'active', collections: [] }]);
+    await refreshExtensionScopes();
+    expect(extensionScope()).toBe(BINDING_SCOPE);
   });
 
   it('requests nothing with ATMOBB_EXTENSIONS=off', async () => {
@@ -67,7 +78,7 @@ describe('granted scope check', () => {
   it('asks for a reconnect when an update approves a collection the session lacks, and is ok once granted', async () => {
     await writeInstalls([{ state: 'active', collections: ['com.example.diplomacy.game'] }]);
     await refreshExtensionScopes();
-    const granted = `${base} repo:com.example.diplomacy.game`;
+    const granted = `${base} repo:com.example.diplomacy.game ${BINDING_SCOPE}`;
     expect(scopeStatus(granted)).toEqual({ ok: true });
 
     await writeInstalls([{ state: 'active', collections: ['com.example.diplomacy.game', 'com.example.diplomacy.order'] }]);

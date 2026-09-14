@@ -25,6 +25,7 @@ const offline = () => Promise.reject(new TypeError('fetch failed'));
 
 const viewer = { did: 'did:plc:member', standing: 'member', staff: false, banned: false };
 const THREAD = 'at://did:plc:forum/app.atmobb.discussion.thread/3kthread';
+const OTHER_THREAD = 'at://did:plc:member/app.atmobb.discussion.thread/3kother';
 
 describe('new + build', () => {
   let project: string;
@@ -55,26 +56,42 @@ describe('new + build', () => {
     ]);
     expect(result.distDir).toBe(join(project, 'dist'));
 
+    const tallies = new Map<string, Record<string, unknown>>();
     const host = stubHost({
-      record_put: (p) => ({ ok: true, value: { uri: `at://did:plc:forum/${p.collection}/${p.rkey}`, cid: 'bafytally' } }),
+      record_create: (p) => {
+        const rkey = `tally${tallies.size + 1}`;
+        tallies.set(rkey, p.record as Record<string, unknown>);
+        return { ok: true, value: { uri: `at://did:plc:forum/${p.collection}/${rkey}`, cid: 'bafytally' } };
+      },
+      record_put: (p) => (tallies.set(p.rkey as string, p.record as Record<string, unknown>), { ok: true, value: { uri: `at://did:plc:forum/${p.collection}/${p.rkey}`, cid: 'bafytally' } }),
       timer_set: () => ({ ok: true, value: null }),
     });
     const runtime = extensionRuntime(async () => ({ wasm: release.files.get('extension.wasm')!, functions: host.functions }));
-    const act = async (action: string, input: unknown = {}, who = viewer) =>
-      JSON.parse((await runtime.call('counter', 'action', JSON.stringify({ viewer: who, action, input })))!);
+    const act = async (thread: string | null, action: string, input: unknown = {}) =>
+      JSON.parse((await runtime.call('counter', 'action', JSON.stringify({ viewer, thread: thread && { uri: thread }, action, input })))!);
+    const attach = async (thread: string, input: unknown) =>
+      runtime.call('counter', 'attach', JSON.stringify({ viewer: { ...viewer, staff: true }, thread: { uri: thread }, input }));
     try {
-      expect(await act('increment')).toEqual({ count: 1 });
-      expect(await act('increment')).toEqual({ count: 2 });
-      expect(await act('show')).toEqual({ count: 2 });
-      expect(host.kv.get('count')).toBe(2);
+      expect(JSON.parse((await attach(THREAD, { start: 5 }))!)).toEqual({ count: 5 });
+      expect(JSON.parse((await attach(OTHER_THREAD, {}))!)).toEqual({ count: 0 });
+      await expect(attach(`${THREAD}x`, { start: -1 })).rejects.toThrow();
 
-      expect(await act('attach', { thread: THREAD }, { ...viewer, staff: true })).toEqual({ count: 2 });
-      const tally = host.calls.find((c) => c.name === 'record_put')!.payload;
-      expect(tally).toMatchObject({ collection: 'com.example.counter.tally', rkey: 'counter', record: { thread: THREAD, count: 2 } });
+      expect(await act(THREAD, 'increment')).toEqual({ count: 6 });
+      expect(await act(THREAD, 'increment')).toEqual({ count: 7 });
+      expect(await act(OTHER_THREAD, 'increment')).toEqual({ count: 1 });
+      expect(await act(THREAD, 'show')).toEqual({ count: 7 });
+      expect(await act(OTHER_THREAD, 'show')).toEqual({ count: 1 });
+      await expect(runtime.call('counter', 'action', JSON.stringify({ viewer, thread: null, action: 'show', input: {} }))).rejects.toThrow();
+      await expect(act(`${THREAD}x`, 'show')).rejects.toThrow();
+
+      expect(tallies.get('tally1')).toMatchObject({ thread: THREAD, count: 7 });
+      expect(tallies.get('tally2')).toMatchObject({ thread: OTHER_THREAD, count: 1 });
 
       const timer = host.calls.find((c) => c.name === 'timer_set')!.payload;
+      expect(timer).toMatchObject({ payload: { thread: THREAD } });
       await runtime.call('counter', 'timer', JSON.stringify(timer));
-      expect(await act('show')).toEqual({ count: 0 });
+      expect(await act(THREAD, 'show')).toEqual({ count: 0 });
+      expect(await act(OTHER_THREAD, 'show')).toEqual({ count: 1 });
     } finally {
       await runtime.close();
     }

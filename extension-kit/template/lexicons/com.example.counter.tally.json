@@ -4,8 +4,8 @@
   "defs": {
     "main": {
       "type": "record",
-      "description": "The counter's latest count. Publishing it binds the counter to its thread.",
-      "key": "literal:counter",
+      "description": "A thread's latest count, one record per thread the counter is attached to.",
+      "key": "tid",
       "record": {
         "type": "object",
         "required": ["thread", "count", "updatedAt"],

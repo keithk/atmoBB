@@ -11,10 +11,10 @@ function output(value) {
 }
 
 function action() {
-  const { viewer, action, input } = JSON.parse(Host.inputString());
+  const { viewer, thread, action, input } = JSON.parse(Host.inputString());
   switch (action) {
     case 'viewer':
-      return output({ viewer, input });
+      return output({ viewer, thread, input });
     case 'effects':
       return output({
         kv: callHost('kv_set', { key: 'last', value: input.value }),
@@ -37,6 +37,13 @@ function action() {
   }
 }
 
+function attach() {
+  const { viewer, thread, input } = JSON.parse(Host.inputString());
+  if (input && input.fail) throw new Error('setup refused');
+  callHost('kv_set', { key: 'attached:' + thread.uri, value: input });
+  output({ viewer, thread, input });
+}
+
 function timer() {
   const { name, payload } = JSON.parse(Host.inputString());
   callHost('kv_set', { key: 'timer:' + name, value: payload });
@@ -50,4 +57,4 @@ function migrate() {
   callHost('kv_set', { key: 'migrated', value: JSON.parse(Host.inputString()) });
 }
 
-module.exports = { action, timer, openWork, migrate };
+module.exports = { action, attach, timer, openWork, migrate };

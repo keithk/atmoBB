@@ -110,14 +110,6 @@ export function validateManifest(raw: unknown, hostApi: string = HOST_API_VERSIO
     });
   }
 
-  if (raw.binding !== undefined) {
-    if (!isObject(raw.binding)) errors.push(fieldError('binding', 'must be an object with collection and threadField'));
-    else {
-      if (typeof raw.binding.collection !== 'string') errors.push(fieldError('binding.collection', 'must be a string'));
-      if (typeof raw.binding.threadField !== 'string' || !raw.binding.threadField) errors.push(fieldError('binding.threadField', 'must be a non-empty string'));
-    }
-  }
-
   if (!Array.isArray(raw.capabilities)) {
     errors.push(fieldError('capabilities', `must be a list drawn from ${CAPABILITIES.join(', ')}`));
   } else {
@@ -291,16 +283,6 @@ export function admitExtension(raw: unknown, lexiconFiles: Record<string, string
   });
   if (authorities.size > 1) {
     errors.push(fieldError('collections', `every collection must share one NSID authority; these span ${[...authorities].join(', ')}`));
-  }
-
-  const { binding } = manifest;
-  if (binding) {
-    const main = docs.get(binding.collection)?.defs.main;
-    if (!collections.includes(binding.collection)) {
-      errors.push(fieldError('binding.collection', `${binding.collection} is not a declared collection`));
-    } else if (main?.type === 'record' && main.record.properties?.[binding.threadField]?.type !== 'string') {
-      errors.push(fieldError('binding.threadField', `${binding.threadField} is not a string field on the ${binding.collection} record`));
-    }
   }
 
   if (errors.length) return { ok: false, errors };

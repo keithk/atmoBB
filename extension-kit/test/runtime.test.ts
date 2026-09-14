@@ -32,7 +32,7 @@ function start(host: ReturnType<typeof stubHost>) {
 }
 
 const call = async (runtime: ReturnType<typeof extensionRuntime>, action: string, input: unknown) =>
-  JSON.parse((await runtime.call('install', 'action', JSON.stringify({ viewer: { did: null, standing: 'nonmember', staff: false, banned: false }, action, input })))!);
+  JSON.parse((await runtime.call('install', 'action', JSON.stringify({ viewer: { did: null, standing: 'nonmember', staff: false, banned: false }, thread: null, action, input })))!);
 
 describe('author runtime', () => {
   it('round-trips Unicode and nested objects through k/v without loss', async () => {
@@ -70,6 +70,7 @@ describe('author runtime', () => {
     const runtime = start(host);
 
     expect(await runtime.call('install', 'openWork', '')).toBe('true');
+    expect(await runtime.call('install', 'attach', JSON.stringify({ thread: { uri: 'at://did:plc:forum/app.atmobb.discussion.thread/3k' }, input: {} }))).toBeNull();
     expect(await runtime.call('install', 'timer', JSON.stringify({ name: 'x', at: new Date().toISOString() }))).toBeNull();
     expect(await runtime.call('install', 'migrate', JSON.stringify({ from: 1, to: 2 }))).toBeNull();
   });

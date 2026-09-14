@@ -17,7 +17,7 @@ export type Capability = (typeof CAPABILITIES)[number];
 
 /** Every extension exports `action`; the rest are called only when present. */
 export const REQUIRED_HANDLER_EXPORTS = ['action'] as const;
-export const OPTIONAL_HANDLER_EXPORTS = ['timer', 'openWork', 'migrate'] as const;
+export const OPTIONAL_HANDLER_EXPORTS = ['attach', 'timer', 'openWork', 'migrate'] as const;
 export type HandlerExport = (typeof REQUIRED_HANDLER_EXPORTS)[number] | (typeof OPTIONAL_HANDLER_EXPORTS)[number];
 
 /** The manifest an extension ships, and what the admin reviews at install. */
@@ -33,8 +33,6 @@ export interface ExtensionManifest {
   dataVersion: number;
   /** NSIDs the extension writes to the forum's repo. Each needs a record lexicon in `lexicons`. */
   collections: string[];
-  /** A declared collection whose records attach to a thread, and the record field holding the thread's at-uri. */
-  binding?: { collection: string; threadField: string };
   capabilities: Capability[];
   /** Repository-relative path to the extension's UI entry point. */
   ui?: { entry: string };
@@ -51,10 +49,26 @@ export interface ViewerContext {
   banned: boolean;
 }
 
+/** A thread staff attached the extension to. */
+export interface ThreadRef {
+  /** The thread's at-uri. */
+  uri: string;
+}
+
 /** What `action` receives. */
 export interface ActionInput {
   viewer: ViewerContext;
+  /** The thread the action comes from, or null when it doesn't come from a thread. */
+  thread: ThreadRef | null;
   action: string;
+  input: unknown;
+}
+
+/** What `attach` receives when staff attach the extension to a thread. */
+export interface AttachInput {
+  viewer: ViewerContext;
+  thread: ThreadRef;
+  /** The setup the extension's own attach form collected. */
   input: unknown;
 }
 
@@ -161,7 +175,8 @@ export interface NotifyResult {
 //
 // Handler exports read their input with Host.inputString() and write their
 // output with Host.outputString(): `action` gets an ActionInput and outputs any
-// JSON value, `timer` gets a TimerSet, `openWork` gets nothing and outputs a
+// JSON value, `attach` gets an AttachInput and outputs any JSON value (throwing
+// refuses the attach), `timer` gets a TimerSet, `openWork` gets nothing and outputs a
 // JSON boolean, and `migrate` gets a MigrateInput. Console output goes to a
 // log the forum's admins can read.
 

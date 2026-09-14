@@ -1,5 +1,6 @@
 declare module 'main' {
   export function action(): I32;
+  export function attach(): I32;
   export function timer(): I32;
   export function openWork(): I32;
   export function migrate(): I32;

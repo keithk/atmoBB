@@ -7,7 +7,9 @@ import { env } from '$env/dynamic/private';
 import {
   HOST_FUNCTIONS,
   type ActionInput,
+  type AttachInput,
   type ExtensionManifest,
+  type HandlerExport,
   type HostError,
   type HostFunctionName,
   type HostFunctionTypes,
@@ -15,6 +17,7 @@ import {
   type MigrateInput,
   type NotifyPayload,
   type NotifyResult,
+  type ThreadRef,
   type TimerSet,
   type ViewerContext,
 } from '$lib/extensions/contract';
@@ -446,13 +449,17 @@ async function installFor(installId: string, requireActive: boolean): Promise<Ex
 
 const failureLabel = (error: unknown) => (error instanceof ExtensionCallError ? error.code : 'failed');
 
+/** Close the install's live instance when an update or rollback moved it to another release since the instance loaded. */
+async function evictMovedInstance(install: ExtensionInstall) {
+  const loaded = loadedSha.get(install.id);
+  if (loaded !== undefined && loaded !== install.sha) await rt().evict(install.id);
+}
+
 /** Run an export under a fresh budget. Null when the module doesn't export it. */
 async function runCall(install: ExtensionInstall, name: string, input: unknown, module?: ExtensionModule): Promise<string | null> {
   const started = performance.now();
   try {
-    // An update or rollback moved the install to another release since its instance loaded.
-    const loaded = loadedSha.get(install.id);
-    if (!module && loaded !== undefined && loaded !== install.sha) await rt().evict(install.id);
+    if (!module) await evictMovedInstance(install);
     const budget = new CallBudget(callLimits());
     let output: string | null;
     try {
@@ -497,14 +504,8 @@ export async function viewerContext(did: string | null): Promise<ViewerContext> 
   return { did, standing, staff, banned: !!ban };
 }
 
-/**
- * Run an install's `action` for a viewer. `viewerDid` must come from the
- * session; the handler is told the viewer's standing, staff role, and ban
- * status as the forum sees them. Resolves to the handler's JSON output.
- */
-export async function dispatchAction(installId: string, viewerDid: string | null, action: string, input: unknown): Promise<unknown> {
-  refuseUnlessRunning();
-  const install = await installFor(installId, true);
+/** Take a slot in the viewer's and the install's action windows, or refuse when either is full. */
+function takeActionSlot(installId: string, viewerDid: string | null) {
   const viewerKey = viewerDid ?? 'anonymous';
   if (
     slotsLeft(`actions|${installId}|${viewerKey}`, actionsPerViewerPerMinute(), MINUTE_MS) <= 0 ||
@@ -513,10 +514,52 @@ export async function dispatchAction(installId: string, viewerDid: string | null
     throw new ExtensionCallError('rate_limited', 'Too many actions; try again in a minute');
   }
   takeSlot(`actions|${installId}|${viewerKey}`, actionsPerViewerPerMinute(), MINUTE_MS);
+}
+
+/**
+ * Run an install's `action` for a viewer. `viewerDid` must come from the
+ * session; the handler is told the viewer's standing, staff role, and ban
+ * status as the forum sees them. `thread` is the bound thread the action comes
+ * from, which the caller has checked against the thread's binding, or null.
+ * Resolves to the handler's JSON output.
+ */
+export async function dispatchAction(
+  installId: string,
+  viewerDid: string | null,
+  thread: ThreadRef | null,
+  action: string,
+  input: unknown,
+): Promise<unknown> {
+  refuseUnlessRunning();
+  const install = await installFor(installId, true);
+  takeActionSlot(installId, viewerDid);
   const viewer = await viewerContext(viewerDid);
-  const output = await runCall(install, 'action', { viewer, action, input } satisfies ActionInput);
+  const output = await runCall(install, 'action', { viewer, thread, action, input } satisfies ActionInput);
   if (output === null) throw new ExtensionCallError('no_handler', `${install.manifest.name} has no action handler`);
   return parseOutput(output);
+}
+
+/**
+ * Run an install's `attach` after staff bound it to `thread`, with the setup
+ * its attach form collected. A throwing handler refuses the attach. Resolves
+ * to the handler's JSON output.
+ */
+export async function dispatchAttach(installId: string, viewerDid: string, thread: ThreadRef, input: unknown): Promise<unknown> {
+  refuseUnlessRunning();
+  const install = await installFor(installId, true);
+  takeActionSlot(installId, viewerDid);
+  const viewer = await viewerContext(viewerDid);
+  const output = await runCall(install, 'attach', { viewer, thread, input } satisfies AttachInput);
+  if (output === null) throw new ExtensionCallError('no_handler', `${install.manifest.name} can't be attached to threads`);
+  return parseOutput(output);
+}
+
+/** Whether an active install's release exports the handler `name`. */
+export async function hasHandler(installId: string, name: HandlerExport): Promise<boolean> {
+  refuseUnlessRunning();
+  const install = await installFor(installId, true);
+  await evictMovedInstance(install);
+  return rt().has(install.id, name);
 }
 
 /** The scheduler's dispatcher: run an install's `timer`, or nothing when it has none. */

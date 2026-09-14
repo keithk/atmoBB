@@ -1,5 +1,6 @@
 import type {
   ActionInput,
+  AttachInput,
   HostError,
   HostFunctionName,
   HostFunctionTypes,
@@ -26,6 +27,7 @@ import type {
 
 export type {
   ActionInput,
+  AttachInput,
   Capability,
   ExtensionManifest,
   KvListResult,
@@ -40,6 +42,7 @@ export type {
   RecordPut,
   RecordRef,
   StoredRecord,
+  ThreadRef,
   TimerSet,
   ViewerContext,
 } from '../../src/lib/extensions/contract';
@@ -147,6 +150,12 @@ export function notify(payload: NotifyPayload): NotifyResult {
 export interface ExtensionHandlers {
   /** A viewer's action. The return value (any JSON) goes back to the caller. */
   action(input: ActionInput): unknown;
+  /**
+   * Staff attached the extension to a thread, with the setup its attach form
+   * collected. Throwing refuses the attach, and atmoBB removes the binding.
+   * Without this handler the extension can't be attached to threads.
+   */
+  attach?(input: AttachInput): unknown;
   /** A timer set with `timers.set` came due. */
   timer?(timer: TimerSet): void;
   /** Whether there's work in progress an admin should know about before disabling or uninstalling. */
@@ -160,7 +169,7 @@ export function defineExtension(handlers: ExtensionHandlers): ExtensionHandlers 
   return handlers;
 }
 
-const HANDLER_NAMES = ['action', 'timer', 'openWork', 'migrate'] as const;
+const HANDLER_NAMES = ['action', 'attach', 'timer', 'openWork', 'migrate'] as const;
 
 function settled(handler: string, value: unknown): unknown {
   if (value instanceof Promise) throw new Error(`The ${handler} handler returned a Promise; handlers must be synchronous`);
@@ -179,7 +188,7 @@ export function guestExports(definition: unknown): Record<string, () => void> {
   if (typeof handlers !== 'object' || handlers === null || typeof (handlers as ExtensionHandlers).action !== 'function') {
     throw new Error('The entry module must `export default defineExtension({ action() { ... } })`');
   }
-  const { action, timer, openWork, migrate } = handlers as ExtensionHandlers;
+  const { action, attach, timer, openWork, migrate } = handlers as ExtensionHandlers;
   for (const name of HANDLER_NAMES) {
     const handler = (handlers as Record<string, unknown>)[name];
     if (handler !== undefined && typeof handler !== 'function') throw new Error(`The ${name} handler must be a function`);
@@ -191,6 +200,12 @@ export function guestExports(definition: unknown): Record<string, () => void> {
       Host.outputString(JSON.stringify(output === undefined ? null : output));
     },
   };
+  if (attach) {
+    exports.attach = () => {
+      const output = settled('attach', attach.call(handlers, readInput()));
+      Host.outputString(JSON.stringify(output === undefined ? null : output));
+    };
+  }
   if (timer) exports.timer = () => void settled('timer', timer.call(handlers, readInput()));
   if (openWork) exports.openWork = () => Host.outputString(JSON.stringify(settled('openWork', openWork.call(handlers)) === true));
   if (migrate) exports.migrate = () => void settled('migrate', migrate.call(handlers, readInput()));

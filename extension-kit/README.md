@@ -25,8 +25,8 @@ API an extension usually needs:
 
 | File | What it is |
 | --- | --- |
-| `manifest.json` | Name, version, host API, declared collections, the thread binding, capabilities, UI entry, lexicon files |
-| `src/index.ts` | The extension: `export default defineExtension({ action, timer })` |
+| `manifest.json` | Name, version, host API, declared collections, capabilities, UI entry, lexicon files |
+| `src/index.ts` | The extension: `export default defineExtension({ attach, action, timer })` |
 | `lexicons/com.example.counter.tally.json` | The record lexicon for the declared collection |
 | `ui/` | The panel: `index.html`, a script, and a stylesheet |
 
@@ -39,17 +39,24 @@ own, reversed) in the manifest, the lexicon, and `src/index.ts`.
 import { defineExtension, kv, records, timers, notify, HostCallError } from 'atmobb-extension-kit';
 
 export default defineExtension({
-  action({ viewer, action, input }) {
-    const count = (kv.get<number>('count') ?? 0) + 1;
-    kv.set('count', count);
+  action({ viewer, thread, action, input }) {
+    const key = `count:${thread?.uri}`;
+    const count = (kv.get<number>(key) ?? 0) + 1;
+    kv.set(key, count);
     return { count }; // any JSON goes back to the panel
   },
+  attach({ viewer, thread, input }) {}, // optional: staff attached the extension to a thread
   timer({ name, payload }) {},  // optional: a timer from timers.set came due
   openWork() { return false; }, // optional: work in progress an admin should see before disabling
   migrate({ from, to }) {},     // optional: runs when a new release raises dataVersion
 });
 ```
 
+- Staff attach an extension to a thread on a public board. atmoBB records the
+  binding itself, then calls `attach` with the setup the extension's attach
+  form collected; throwing refuses the attach and atmoBB removes the binding.
+  An extension without `attach` can't be attached to threads. `action` gets
+  the thread it runs in as `thread`, or null outside a thread.
 - `kv.get/set/delete/list` read and write the install's private store.
 - `records.create/put/delete/list/get` work with records in your declared collections.
 - `timers.set/cancel` schedule calls to your `timer` handler.

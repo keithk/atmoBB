@@ -1,6 +1,7 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { adminActor } from '$lib/server/admin';
+import { rebuildBindingsInBackground } from '$lib/server/extensions/bindings';
 import { listClaims } from '$lib/server/extensions/claims';
 import { ReleaseError } from '$lib/server/extensions/fetch';
 import { confirmInstall, discardStaged, latestReleaseTag, listInstalls, stageInstall } from '$lib/server/extensions/registry';
@@ -64,6 +65,8 @@ export const actions: Actions = {
     const result = await confirmInstall(String(form.get('stagingId') ?? ''));
     if (!result.ok) return fail(400, { errors: result.errors });
     const { install } = result;
+    // Bindings name repositories, so ones left by an earlier install of this repository map to the new install id.
+    rebuildBindingsInBackground();
     return { installed: { id: install.id, name: install.manifest.name }, reconnect: await refreshScopes() };
   },
 

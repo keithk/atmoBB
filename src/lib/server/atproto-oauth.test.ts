@@ -6,7 +6,7 @@ import type { OAuthSession } from '@atproto/oauth-client-node';
 const state = vi.hoisted(() => ({ env: {} as Record<string, string | undefined> }));
 vi.mock('$env/dynamic/private', () => ({ env: state.env }));
 import { MEMBER_SCOPE, MODERATION_SCOPE, STAMP_SCOPE, clientMetadata, forumScopeStatus, oauthClient, oauthScope, sysopScope } from './atproto-oauth';
-import { ENDORSEMENT_SCOPE, refreshExtensionScopes } from './extensions/scopes';
+import { BINDING_SCOPE, ENDORSEMENT_SCOPE, refreshExtensionScopes } from './extensions/scopes';
 
 // The scope strings every forum consented to before extensions existed.
 const MEMBER_SCOPE_BEFORE_EXTENSIONS =
@@ -76,8 +76,8 @@ describe('forum OAuth scopes', () => {
     state.env.ATMOBB_APP_URL = 'https://forum.example';
     await writeInstalls([{ state: 'active', collections: [GAME, ORDER] }]);
     await refreshExtensionScopes();
-    expect(sysopScope()).toBe(`${SYSOP_SCOPE_BEFORE_EXTENSIONS} repo:${GAME} repo:${ORDER}`);
-    expect(clientMetadata().scope.split(' ')).toEqual(expect.arrayContaining([`repo:${GAME}`, `repo:${ORDER}`]));
+    expect(sysopScope()).toBe(`${SYSOP_SCOPE_BEFORE_EXTENSIONS} repo:${GAME} repo:${ORDER} ${BINDING_SCOPE}`);
+    expect(clientMetadata().scope.split(' ')).toEqual(expect.arrayContaining([`repo:${GAME}`, `repo:${ORDER}`, BINDING_SCOPE]));
   });
 
   it("leaves a disabled extension's collections out", async () => {
@@ -117,7 +117,7 @@ describe('forum OAuth scopes', () => {
   });
 
   it("asks for a reconnect when the forum session lacks a newly approved collection, and is ok once it's granted", async () => {
-    let granted = `${SYSOP_SCOPE_BEFORE_EXTENSIONS} repo:${GAME}`;
+    let granted = `${SYSOP_SCOPE_BEFORE_EXTENSIONS} repo:${GAME} ${BINDING_SCOPE}`;
     const session = { getTokenInfo: async () => ({ scope: granted }) } as unknown as OAuthSession;
 
     await writeInstalls([{ state: 'active', collections: [GAME, ORDER] }]);

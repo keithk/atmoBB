@@ -13,10 +13,12 @@ QuickJS build is about 2.5 MB.
 
 `host-probe.wasm` is the extension `host.test.ts` drives through the real host
 ABI. It is built from `host-probe.js`, with `host-probe.interface.txt`
-declaring the handler exports (`action`, `timer`, `openWork`, `migrate`) and
+declaring the handler exports (`action`, `attach`, `timer`, `openWork`, `migrate`) and
 every `extism:host/user` host function. Its `action` handler switches on the
 action name to exercise the host (set a key, publish a record, and schedule a
 timer; call any host function repeatedly; produce large output; log and throw).
+Its `attach` handler records the setup it was given and echoes the viewer and
+thread, or throws when the setup asks it to fail.
 The tests that need a module without the optional handlers use a 53-byte
 exports-only module inlined in `host.test.ts` instead of a third QuickJS build.
 

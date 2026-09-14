@@ -102,7 +102,7 @@ describe('validateManifest', () => {
 
 describe('admitExtension', () => {
   it('admits a valid manifest and lists its approved collections and scope', () => {
-    const result = admit([GAME, ORDER], { binding: { collection: GAME, threadField: 'thread' } });
+    const result = admit([GAME, ORDER]);
     expect(result).toMatchObject({
       ok: true,
       authority: 'com.example.diplomacy',
@@ -195,12 +195,6 @@ describe('admitExtension', () => {
       lexicon(ORDER, { unit: { type: 'object', properties: {} } }),
     ]);
     expect(shallow).toMatchObject({ ok: true });
-  });
-
-  it('checks the binding points at a declared collection with a string thread field', () => {
-    expect(admit([GAME], { binding: { collection: ORDER, threadField: 'thread' } }).ok).toBe(false);
-    const errors = errorsOf(admit([GAME], { binding: { collection: GAME, threadField: 'nope' } }));
-    expect(errors).toContainEqual({ field: 'binding.threadField', message: expect.stringContaining('nope') });
   });
 
   it('refuses a manifest that fails validation before looking at collections', () => {

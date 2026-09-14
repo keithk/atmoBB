@@ -10,6 +10,7 @@ import { acquireExtensionsLock } from '$lib/server/extensions/lock';
 import { startScheduler } from '$lib/server/extensions/scheduler';
 import { dispatchTimer } from '$lib/server/extensions/host';
 import { startMaintenance } from '$lib/server/extensions/maintenance';
+import { rebuildBindingsInBackground } from '$lib/server/extensions/bindings';
 
 // Runs once when the server loads this module, so a production deploy with a
 // forgeable session secret dies at startup instead of serving requests.
@@ -24,7 +25,9 @@ if (senderDid()) senderKeypair().catch((err) => console.error('[notify] could no
 // only the process holding the extensions lock runs the timer poller; one
 // that can't get it serves requests with extensions disabled rather than
 // double-firing timers or racing another writer. The same process purges
-// uninstalled extensions' data once their grace period ends. Skipped during
+// uninstalled extensions' data once their grace period ends, and rebuilds the
+// thread binding cache from the forum repo, since page views only ever read
+// that cache. Skipped during
 // `vite build`/prerender, which imports this module without ever serving.
 export const init: ServerInit = async () => {
   if (building) return;
@@ -32,6 +35,7 @@ export const init: ServerInit = async () => {
   if (!lock) return;
   startScheduler({ dispatch: dispatchTimer });
   startMaintenance();
+  rebuildBindingsInBackground();
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     process.once(signal, () => lock.release());
   }

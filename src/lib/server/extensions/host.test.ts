@@ -15,6 +15,7 @@ const BOB = 'did:plc:bob';
 const CAROL = 'did:plc:carol';
 const GAME = 'com.example.diplomacy.game';
 const SENTINEL = 'SENTINEL-7d1c4e';
+const THREAD = `at://${ALICE}/app.atmobb.discussion.thread/3kthread`;
 
 const state = vi.hoisted(() => ({
   env: {} as Record<string, string | undefined>,
@@ -74,7 +75,9 @@ import {
   ExtensionCallError,
   closeExtensionHost,
   dispatchAction,
+  dispatchAttach,
   dispatchTimer,
+  hasHandler,
   extensionLog,
   migrate,
   openWork,
@@ -119,7 +122,7 @@ async function addInstall(id: string, options: { manifest?: ExtensionManifest; s
 }
 
 const hostCall = (installId: string, fn: string, payload: unknown, times = 1) =>
-  dispatchAction(installId, ALICE, 'host', { fn, payload, times }) as Promise<{ ok: boolean; value?: unknown; error?: { code: string } }[]>;
+  dispatchAction(installId, ALICE, null, 'host', { fn, payload, times }) as Promise<{ ok: boolean; value?: unknown; error?: { code: string } }[]>;
 
 const callError = (promise: Promise<unknown>) =>
   promise.then(
@@ -168,7 +171,7 @@ describe('dispatchAction', () => {
     const id = nextId();
     await addInstall(id);
     const at = new Date(Date.now() + 120_000).toISOString();
-    const result = await dispatchAction(id, ALICE, 'effects', { value: { turn: 1 }, collection: GAME, record: { turn: 1 }, at });
+    const result = await dispatchAction(id, ALICE, null, 'effects', { value: { turn: 1 }, collection: GAME, record: { turn: 1 }, at });
 
     expect(result).toEqual({
       kv: { ok: true, value: null },
@@ -189,8 +192,9 @@ describe('dispatchAction', () => {
     await addInstall(id);
     state.staff.add(ALICE);
     const forged = { viewer: { did: 'did:plc:mallory', standing: 'member', staff: true, banned: false } };
-    expect(await dispatchAction(id, ALICE, 'viewer', forged)).toEqual({
+    expect(await dispatchAction(id, ALICE, null, 'viewer', forged)).toEqual({
       viewer: { did: ALICE, standing: 'member', staff: true, banned: false },
+      thread: null,
       input: forged,
     });
     expect(forumStanding).toHaveBeenCalledWith(ALICE, expect.anything(), expect.anything());
@@ -199,11 +203,18 @@ describe('dispatchAction', () => {
   it('gives an anonymous viewer no DID and non-member standing', async () => {
     const id = nextId();
     await addInstall(id);
-    expect(await dispatchAction(id, null, 'viewer', {})).toEqual({
+    expect(await dispatchAction(id, null, null, 'viewer', {})).toEqual({
       viewer: { did: null, standing: 'nonmember', staff: false, banned: false },
+      thread: null,
       input: {},
     });
     expect(forumStanding).not.toHaveBeenCalled();
+  });
+
+  it('tells the handler which thread the action is for', async () => {
+    const id = nextId();
+    await addInstall(id);
+    expect(await dispatchAction(id, ALICE, { uri: THREAD }, 'viewer', {})).toMatchObject({ thread: { uri: THREAD } });
   });
 
   it('fails a call that makes more host calls than the cap', async () => {
@@ -223,8 +234,8 @@ describe('dispatchAction', () => {
     expect((await callError(hostCall(id, 'kv_set', { key: 'big', value: 'x'.repeat(1000) }))).code).toBe('call_limit');
     expect(await kvGet(id, { key: 'big' })).toEqual({ value: null });
 
-    expect(await dispatchAction(id, ALICE, 'big', 998)).toBe('x'.repeat(998));
-    expect((await callError(dispatchAction(id, ALICE, 'big', 999))).code).toBe('call_limit');
+    expect(await dispatchAction(id, ALICE, null, 'big', 998)).toBe('x'.repeat(998));
+    expect((await callError(dispatchAction(id, ALICE, null, 'big', 999))).code).toBe('call_limit');
 
     await kvSet(id, { key: 'wide', value: 'x'.repeat(1000) });
     expect((await callError(hostCall(id, 'kv_get', { key: 'wide' }))).code).toBe('call_limit');
@@ -265,18 +276,18 @@ describe('dispatchAction', () => {
   it('refuses calls for a disabled install, and every call while extensions are off or the lock is not held', async () => {
     const disabled = nextId();
     await addInstall(disabled, { state: 'disabled' });
-    expect((await callError(dispatchAction(disabled, ALICE, 'viewer', {}))).code).toBe('disabled');
+    expect((await callError(dispatchAction(disabled, ALICE, null, 'viewer', {}))).code).toBe('disabled');
     expect((await callError(dispatchTimer(disabled, { name: 'x', at: new Date().toISOString() }))).code).toBe('disabled');
-    expect((await callError(dispatchAction(nextId(), ALICE, 'viewer', {}))).code).toBe('not_installed');
+    expect((await callError(dispatchAction(nextId(), ALICE, null, 'viewer', {}))).code).toBe('not_installed');
 
     const id = nextId();
     await addInstall(id);
     state.env.ATMOBB_EXTENSIONS = 'off';
-    expect((await callError(dispatchAction(id, ALICE, 'viewer', {}))).code).toBe('unavailable');
+    expect((await callError(dispatchAction(id, ALICE, null, 'viewer', {}))).code).toBe('unavailable');
     expect((await callError(openWork(id))).code).toBe('unavailable');
     delete state.env.ATMOBB_EXTENSIONS;
     state.lockHeld = false;
-    expect((await callError(dispatchAction(id, ALICE, 'viewer', {}))).code).toBe('unavailable');
+    expect((await callError(dispatchAction(id, ALICE, null, 'viewer', {}))).code).toBe('unavailable');
     expect((await callError(dispatchTimer(id, { name: 'x', at: new Date().toISOString() }))).code).toBe('unavailable');
   });
 
@@ -284,10 +295,10 @@ describe('dispatchAction', () => {
     state.env.ATMOBB_EXTENSIONS_ACTIONS_PER_VIEWER_PER_MINUTE = '2';
     const id = nextId();
     await addInstall(id);
-    await dispatchAction(id, ALICE, 'viewer', {});
-    await dispatchAction(id, ALICE, 'viewer', {});
-    expect((await callError(dispatchAction(id, ALICE, 'viewer', {}))).code).toBe('rate_limited');
-    expect(await dispatchAction(id, BOB, 'viewer', {})).toMatchObject({ viewer: { did: BOB } });
+    await dispatchAction(id, ALICE, null, 'viewer', {});
+    await dispatchAction(id, ALICE, null, 'viewer', {});
+    expect((await callError(dispatchAction(id, ALICE, null, 'viewer', {}))).code).toBe('rate_limited');
+    expect(await dispatchAction(id, BOB, null, 'viewer', {})).toMatchObject({ viewer: { did: BOB } });
   });
 
   it('keeps payloads out of server output, sending guest console output and errors to the install log', async () => {
@@ -305,7 +316,7 @@ describe('dispatchAction', () => {
       });
     }
 
-    const error = await callError(dispatchAction(id, ALICE, 'leak', SENTINEL));
+    const error = await callError(dispatchAction(id, ALICE, null, 'leak', SENTINEL));
     expect(error.code).toBe('failed');
     expect(error.message).not.toContain(SENTINEL);
     // Let any late worker output arrive before checking.
@@ -370,6 +381,27 @@ describe('notify', () => {
 });
 
 describe('optional handlers', () => {
+  it('runs attach with the viewer, the thread, and the setup input, and reports whether the module exports it', async () => {
+    const id = nextId();
+    await addInstall(id);
+    state.staff.add(ALICE);
+    expect(await hasHandler(id, 'attach')).toBe(true);
+    expect(await dispatchAttach(id, ALICE, { uri: THREAD }, { players: 7 })).toEqual({
+      viewer: { did: ALICE, standing: 'member', staff: true, banned: false },
+      thread: { uri: THREAD },
+      input: { players: 7 },
+    });
+    expect(await kvGet(id, { key: `attached:${THREAD}` })).toEqual({ value: { players: 7 } });
+    expect((await callError(dispatchAttach(id, ALICE, { uri: THREAD }, { fail: true }))).code).toBe('failed');
+  });
+
+  it('refuses attach for a module without the export', async () => {
+    const id = nextId();
+    await addInstall(id, { wasm: 'bare' });
+    expect(await hasHandler(id, 'attach')).toBe(false);
+    expect((await callError(dispatchAttach(id, ALICE, { uri: THREAD }, {}))).code).toBe('no_handler');
+  });
+
   it('no-ops a timer and reports no open work when the module lacks those exports', async () => {
     const id = nextId();
     await addInstall(id, { wasm: 'bare' });

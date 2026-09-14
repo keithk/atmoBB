@@ -15,6 +15,10 @@ import { listInstalls } from './registry';
 /** Lets the forum account publish endorsements when the forum runs the extension directory. */
 export const ENDORSEMENT_SCOPE = 'repo:app.atmobb.extension.endorsement';
 
+/** Where atmoBB records which extension staff attached to a thread, in the forum's repo. */
+export const BINDING_COLLECTION = 'app.atmobb.extension.binding';
+export const BINDING_SCOPE = `repo:${BINDING_COLLECTION}`;
+
 export type ScopeStatus = { ok: true } | { ok: false; missing: string[] };
 
 let installScope = '';
@@ -26,7 +30,9 @@ export async function refreshExtensionScopes(): Promise<void> {
   const current = ++generation;
   // With extensions off the registry isn't read, so a broken one can't block logins.
   const installs = extensionsEnabled() ? await listInstalls() : [];
-  const collections = new Set(installs.filter((install) => install.state === 'active').flatMap((install) => install.manifest.collections));
+  const active = installs.filter((install) => install.state === 'active');
+  const collections = new Set(active.flatMap((install) => install.manifest.collections));
+  if (active.length) collections.add(BINDING_COLLECTION);
   // A slower, earlier refresh must not overwrite a newer one.
   if (current !== generation) return;
   installScope = collectionScope([...collections]);
