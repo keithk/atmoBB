@@ -150,28 +150,56 @@ export interface PollOptions {
   now?: () => Date;
 }
 
-/** Fire every due timer once through `dispatch`, dropping timers for installs that are gone or disabled. */
-export async function pollTimers(options: PollOptions = {}): Promise<void> {
+const sameTimer = (a: StoredTimer, b: StoredTimer) =>
+  a.installId === b.installId && a.name === b.name && a.at === b.at && a.nextAttemptAt === b.nextAttemptAt && a.attempts === b.attempts;
+
+let polling: Promise<void> | null = null;
+
+/**
+ * Fire every due timer once through `dispatch`, dropping timers for installs
+ * that are gone or disabled. Handlers run outside the store's lock, because
+ * a handler may set or cancel timers itself; a timer it replaced or cancelled
+ * while running is left as the handler left it. A poll that starts while
+ * another is still running waits for that one instead of firing again.
+ */
+export function pollTimers(options: PollOptions = {}): Promise<void> {
+  polling ??= fireDue(options).finally(() => {
+    polling = null;
+  });
+  return polling;
+}
+
+async function fireDue(options: PollOptions): Promise<void> {
   const dispatch = options.dispatch ?? noDispatcher;
   const now = options.now ?? (() => new Date());
-  await withStore(async (store) => {
-    const current = now().getTime();
-    const due = store.timers.filter((timer) => new Date(timer.nextAttemptAt).getTime() <= current);
-    for (const timer of due) {
+  const current = now().getTime();
+  const due = await withStore(async (store) => {
+    const fire: StoredTimer[] = [];
+    for (const timer of store.timers.filter((t) => new Date(t.nextAttemptAt).getTime() <= current)) {
       const install = await getInstall(timer.installId);
-      if (!install || install.state !== 'active') {
-        store.timers = store.timers.filter((t) => t !== timer);
-        continue;
-      }
-      try {
-        await dispatch(timer.installId, { name: timer.name, at: timer.at, payload: timer.payload });
-        store.timers = store.timers.filter((t) => t !== timer);
-      } catch {
-        timer.attempts += 1;
-        timer.nextAttemptAt = new Date(current + backoffMs(timer.attempts)).toISOString();
-      }
+      if (install?.state === 'active') fire.push({ ...timer });
+      else store.timers = store.timers.filter((t) => t !== timer);
     }
+    return fire;
   });
+  for (const timer of due) {
+    let failed = false;
+    try {
+      await dispatch(timer.installId, { name: timer.name, at: timer.at, payload: timer.payload });
+    } catch {
+      failed = true;
+    }
+    await withStore((store) => {
+      const stored = store.timers.find((t) => sameTimer(t, timer));
+      if (!stored) return;
+      if (!failed) {
+        store.timers = store.timers.filter((t) => t !== stored);
+        return;
+      }
+      stored.attempts += 1;
+      stored.nextAttemptAt = new Date(current + backoffMs(stored.attempts)).toISOString();
+    });
+  }
 }
 
 export interface SchedulerHandle {

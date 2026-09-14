@@ -112,6 +112,27 @@ describe('pollTimers', () => {
     expect(dispatch).toHaveBeenCalledExactlyOnceWith(INSTALL, expect.objectContaining({ payload: 'second' }));
   });
 
+  it('lets a handler set and cancel timers while it runs, keeping a timer it re-set under its own name', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    await scheduleTimer(INSTALL, { name: 'turn', at: new Date(Date.now() + 60_000).toISOString(), payload: 1 });
+    await scheduleTimer(INSTALL, { name: 'reminder', at: new Date(Date.now() + 600_000).toISOString() });
+    vi.setSystemTime(Date.now() + 61_000);
+
+    const dispatch = vi.fn(async (installId: string) => {
+      await scheduleTimer(installId, { name: 'turn', at: new Date(Date.now() + 120_000).toISOString(), payload: 2 });
+      await cancelTimer(installId, 'reminder');
+    });
+    const deadlock = new Promise((_, reject) => setTimeout(() => reject(new Error('poll never finished')), 2_000));
+    await Promise.race([pollTimers({ dispatch }), deadlock]);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(Date.now() + 600_000);
+    await pollTimers({ dispatch });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(dispatch).toHaveBeenLastCalledWith(INSTALL, expect.objectContaining({ name: 'turn', payload: 2 }));
+  });
+
   it('fires overdue timers after a simulated restart on the same store', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
