@@ -184,7 +184,7 @@ describe('pollTimers', () => {
     expect(dispatch).toHaveBeenCalledTimes(1);
   });
 
-  it('drops a due timer for a disabled install instead of firing it', async () => {
+  it('holds a due timer for a disabled install instead of firing it, then fires it once the install is active again', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
     await scheduleTimer(INSTALL, { name: 'x', at: new Date(Date.now() + 60_000).toISOString() });
@@ -195,10 +195,10 @@ describe('pollTimers', () => {
     await pollTimers({ dispatch });
     expect(dispatch).not.toHaveBeenCalled();
 
-    // Confirm it was dropped, not merely deferred: re-enabling doesn't bring it back.
+    // Still held, not backed off: re-enabling fires it right away, on the next poll.
     state.getInstall.mockResolvedValue({ id: INSTALL, state: 'active' });
     await pollTimers({ dispatch });
-    expect(dispatch).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledExactlyOnceWith(INSTALL, expect.objectContaining({ name: 'x' }));
   });
 
   it('drops a due timer whose install no longer exists', async () => {

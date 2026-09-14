@@ -13,7 +13,9 @@ import { beforeDeadline } from './deadline';
 // removal fires it again on the next boot, and handlers must tolerate that. A
 // dispatch that throws or runs past its deadline leaves the timer in place with
 // a backed-off retry time instead of losing it. A due timer whose install is
-// gone or disabled is dropped rather than fired or retried.
+// gone is dropped, but one whose install is merely disabled is left in the
+// store untouched: it stays due and fires, late, once the install is active
+// again, rather than being lost to a temporary disable.
 
 export type TimerDispatcher = (installId: string, timer: TimerSet) => Promise<void>;
 
@@ -168,8 +170,10 @@ const sameTimer = (a: StoredTimer, b: StoredTimer) =>
 let polling: Promise<void> | null = null;
 
 /**
- * Fire every due timer once through `dispatch`, dropping timers for installs
- * that are gone or disabled. Handlers run outside the store's lock, because
+ * Fire every due timer once through `dispatch`. A timer whose install is gone
+ * is dropped; a timer whose install is disabled is left pending and skipped,
+ * with no attempt or backoff charged against it, so it fires as soon as the
+ * install is active again. Handlers run outside the store's lock, because
  * a handler may set or cancel timers itself; a timer it replaced or cancelled
  * while running is left as the handler left it, and one an earlier handler in
  * the same poll replaced or cancelled doesn't fire. A dispatch that runs past
@@ -193,8 +197,9 @@ async function fireDue(options: PollOptions): Promise<void> {
     const fire: StoredTimer[] = [];
     for (const timer of store.timers.filter((t) => new Date(t.nextAttemptAt).getTime() <= current)) {
       const install = await getInstall(timer.installId);
-      if (install?.state === 'active') fire.push({ ...timer });
-      else store.timers = store.timers.filter((t) => t !== timer);
+      if (install === null) store.timers = store.timers.filter((t) => t !== timer);
+      else if (install.state === 'active') fire.push({ ...timer });
+      // A disabled install's timer stays in the store untouched, due, and unfired.
     }
     return fire;
   });
