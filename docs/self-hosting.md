@@ -2,8 +2,8 @@
 
 The setup I support is one Linux host running Postgres, the official Happyview image, and the atmobb app. There are two ways to get there:
 
-- **The prebuilt release** (recommended). Run the one-line installer, or download its versioned bundle by hand, and everything runs as pinned container images under Docker Compose. Caddy is either bundled or your own reverse proxy. No build tools or source checkout on the server.
-- **From source.** Clone the repository and run `infra/install-self-host.sh`, which builds the app on the server and runs it under systemd behind a host-installed Caddy. Use this if you're changing the code or want to run `main`.
+- **The prebuilt release** (recommended). Run the one-line installer, or download its versioned bundle by hand, and everything runs as pinned container images under Docker Compose. Caddy is either bundled or your own reverse proxy. Stable versions need no build tools or source checkout. An admin can also explicitly choose to build an exact, unreleased `main` commit on this host.
+- **From source.** Clone the repository and run `infra/install-self-host.sh`, which builds the app on the server and runs it under systemd behind a host-installed Caddy. Use this if you're developing or changing how the services are installed.
 
 Both are rerunnable and keep existing secrets and the Happyview operator key. Both leave the same things on disk: Postgres data, OAuth state in `/var/lib/atmobb/oauth`, and a few env files. You can move from one to the other by pointing the new install at the same directory.
 
@@ -63,7 +63,7 @@ tar -xzf atmobb-X.Y.Z.tar.gz --strip-components=1 -C /srv/atmobb
 cd /srv/atmobb
 ```
 
-The bundle holds `compose.yml`, the optional `compose.caddy.yml` overlay and its `Caddyfile`, `env.example`, and the `./atmobb` operator script. Run the installer as your normal login user:
+The bundle holds `compose.yml`, the optional `compose.caddy.yml` overlay and its `Caddyfile`, `env.example`, the `./atmobb` operator script, and the restricted updater service. Run the installer as your normal login user:
 
 ```sh
 ./atmobb install \
@@ -79,10 +79,13 @@ It shows the resolved DIDs and settings before changing anything, then:
 
 1. writes `.env` (mode 600) with generated secrets, keeping any that already exist;
 2. creates `/var/lib/atmobb/oauth` for OAuth state, owned by uid 10001, the container's `atmobb` user;
-3. pulls the pinned images and starts Postgres and Happyview;
-4. creates the Happyview operator key on first run and stores it in `.env`;
-5. runs the setup job, which checks the Happyview version and installs atmobb's lexicons, Lua queries, and derived tables;
-6. starts the web app, and Caddy if requested.
+3. installs the root-owned, fixed-action `atmobb-updater` service and its authenticated Unix socket;
+4. pulls the pinned images and starts Postgres and Happyview;
+5. creates the Happyview operator key on first run and stores it in `.env`;
+6. runs the setup job, which checks the Happyview version and installs atmobb's lexicons, Lua queries, and derived tables;
+7. starts the web app, and Caddy if requested.
+
+On an existing release-bundle installation, rerun the same `./atmobb install` command and options to install or refresh Admin → Updates. The command is rerunnable: it preserves `.env`, generated secrets, OAuth state, the Happyview operator key, and database data.
 
 `./atmobb help` lists the other commands: `upgrade`, `upgrade-happyview`, `backfill`, `backup`, `status`, `logs`. Anything else is plain `docker compose` in that directory.
 
@@ -237,7 +240,7 @@ $COMPOSE logs --tail=200 happyview postgres
 
 ### Backups
 
-From the bundle, `./atmobb backup` writes `postgres.dump`, `oauth.tar.gz`, and a copy of `.env` to `./backups/<timestamp>/` (or a directory you pass). `./atmobb upgrade-happyview` runs the same backup before touching anything.
+From the bundle, `./atmobb backup` writes `postgres.dump`, `oauth.tar.gz`, `.env`, `compose.yml`, and any bundled Caddy configuration to `./backups/<timestamp>/` (or a directory you pass). `./atmobb upgrade-happyview` and Admin → Updates use the same backup before migrations or activation.
 
 From source, back up Postgres, OAuth state, and configuration by hand:
 
@@ -258,7 +261,33 @@ ls -lh "$BACKUP_DIR"
 
 Read the release notes first. Every release states the Happyview version it runs against, and a release that changes it says so on its first line. [Releasing](releasing.md) explains what patch, minor, and major mean for you.
 
-**Bundle.** Download and unpack the new tarball over the bundle directory (`.env` and `backups/` are yours and aren't in the tarball), then:
+**Admin updates for a release-bundle installation.** Open **Admin → Updates** as a forum admin and choose **update to latest stable release**. The restricted host updater:
+
+1. resolves the latest published release, downloads its bundle and checksum, verifies the bundle, and pulls its pinned prebuilt images;
+2. leaves the running containers untouched if download or pull preparation fails;
+3. backs up Postgres, OAuth state, `.env`, and Compose/Caddy configuration before any migration or activation;
+4. activates the prepared bundle, starts its pinned Happyview version, and waits for startup migrations;
+5. force-runs the release's setup job so new lexicons, Lua queries, and derived-table setup are applied before atmobb starts;
+6. starts atmobb and reports success only after its HTTP version, required containers, running image pins, and setup exit status all match.
+
+The page shows persisted progress and the bounded update log. Its status survives the web app restarting because the updater runs separately on the host and stores state under `/var/lib/atmobb-updater`.
+
+**Advanced: unreleased `main`.** Expand **Advanced options**, read the warning, and type `main` to confirm. This resolves the branch to a specific 40-character commit, downloads exactly that source archive, and builds `atmobb-main:<commit>` locally before touching the running stack. The installed commit remains visible in Admin → Updates. `main` is not a release: it may be broken, may contain forward-only changes, and building it can consume substantial time, memory, and disk, fail, or degrade a small VPS. Use stable unless you deliberately accept those risks.
+
+Both admin paths move the bundled atmobb, Happyview, Postgres, setup, and optional Caddy definitions together rather than updating only the frontend. The web app can request only stable or main over an authenticated Unix socket; it does not receive the Docker socket, a shell, a selectable ref, or the Happyview operator key.
+
+If an update fails, open its log and note whether it reports a pre-migration backup. Then inspect the host directly:
+
+```sh
+cd /srv/atmobb
+./atmobb status
+./atmobb logs --tail=200 postgres happyview setup atmobb
+sudo journalctl -u atmobb-updater -n 200 --no-pager
+```
+
+A preparation failure occurs before activation and leaves the previous containers running. A failure after activation or a Happyview migration needs operator recovery. Happyview migrations may be forward-only, so the updater does not automatically claim or attempt rollback; preserve the backup path shown in Admin → Updates, copy it off-host, and restore the database, OAuth state, and matching saved configuration together if recovery requires a restore.
+
+**Manual bundle update.** You can still download and unpack a new release tarball over the bundle directory (`.env` and `backups/` are yours and aren't in the tarball), then run:
 
 ```sh
 cd /srv/atmobb
@@ -299,6 +328,9 @@ Bundle install:
 | `/srv/atmobb/compose.yml` | The pinned stack. Replaced by each release. |
 | `/var/lib/atmobb/oauth` | Persistent user and forum OAuth sessions, plus `notify/` with the atmo.pub signing key and notification state, mounted at `/data` in the app container. Owned by uid 10001. |
 | `atmobb_pgdata` volume | Postgres data. |
+| `/etc/atmobb/updater.env` | Root-only updater authentication and bundle location. |
+| `/var/lib/atmobb-updater` | Persistent update state, bounded log, and temporary staging directories. |
+| `/run/atmobb-updater/updater.sock` | Restricted fixed-action updater socket mounted into the web container; not a Docker socket. |
 
 Source install:
 
@@ -320,6 +352,7 @@ Relevant app environment variables:
 | `HAPPYVIEW_URL` | Public Happyview base URL. |
 | `ATMOBB_FORUM_DID` | DID of the dedicated forum account. |
 | `ATMOBB_COOKIE_SECRET` | Signs app login cookies; rotating it logs everyone out. |
+| `ATMOBB_UPDATER_TOKEN` | Generated by the bundle installer. Authenticates the app to the fixed-action host updater over its local Unix socket. |
 | `DATA_DIR` | Persistent OAuth state, the forum's atmo.pub signing key, members' notification state, and the invite links of a gated forum (`invites.json`). Losing it disconnects every account, makes the forum a new sender so members approve it again, and voids every unredeemed invite. |
 | `HAPPYVIEW_SESSION_SECRET` | Copy of Happyview's session secret for private boards. Must be at least 32 bytes; in production the app refuses to start with a weak one, and treats a weak `ATMOBB_COOKIE_SECRET` the same way. |
 | `HAPPYVIEW_CLIENT_KEY` | Optional app identity for Happyview rate limiting. |

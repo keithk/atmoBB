@@ -4,10 +4,10 @@
 # secrets and the Happyview operator key.
 set -eu
 
-BUNDLE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+BUNDLE_DIR=${ATMOBB_BUNDLE_DIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}
 cd "$BUNDLE_DIR"
 ENV_FILE=$BUNDLE_DIR/.env
-PROJECT=atmobb
+PROJECT=${ATMOBB_COMPOSE_PROJECT:-atmobb}
 
 usage() {
   cat <<'EOF'
@@ -163,7 +163,10 @@ prompt() {
 }
 
 cmd_install() {
-  need curl jq openssl sudo
+  need curl jq openssl python3 sudo
+  case "$BUNDLE_DIR" in
+    *[!A-Za-z0-9_./-]*) die "the bundle path cannot contain spaces or shell metacharacters: $BUNDLE_DIR" ;;
+  esac
   APP_HOST=$(env_value APP_HOST)
   HAPPYVIEW_HOST=$(env_value HAPPYVIEW_HOST)
   ADMIN_HANDLE=
@@ -239,12 +242,59 @@ EOF
   [ -n "$(env_value SESSION_SECRET)" ] || set_env SESSION_SECRET "$(openssl rand -hex 32)"
   [ -n "$(env_value TOKEN_ENCRYPTION_KEY)" ] || set_env TOKEN_ENCRYPTION_KEY "$(openssl rand -base64 32)"
   [ -n "$(env_value ATMOBB_COOKIE_SECRET)" ] || set_env ATMOBB_COOKIE_SECRET "$(openssl rand -hex 32)"
+  [ -n "$(env_value ATMOBB_UPDATER_TOKEN)" ] || set_env ATMOBB_UPDATER_TOKEN "$(openssl rand -hex 32)"
   if [ "$USE_CADDY" -eq 1 ]; then
     set_env COMPOSE_FILE "compose.yml:compose.caddy.yml"
   fi
 
   echo "== preparing $DATA_DIR (owned by uid 10001, the container's atmobb user)"
   sudo install -d -o 10001 -g 10001 -m 700 "$DATA_DIR"
+
+  echo "== installing the restricted host updater"
+  sudo install -d -m 755 /usr/local/lib/atmobb /etc/atmobb
+  sudo install -m 755 "$BUNDLE_DIR/updater.py" /usr/local/lib/atmobb/updater.py
+  sudo install -m 755 "$BUNDLE_DIR/atmobb" /usr/local/lib/atmobb/atmobb
+  updater_env=$(mktemp)
+  updater_unit=$(mktemp)
+  python_bin=$(command -v python3)
+  trap 'rm -f "$updater_env" "$updater_unit"' EXIT HUP INT TERM
+  umask 077
+  cat > "$updater_env" <<EOF
+ATMOBB_BUNDLE_DIR=$BUNDLE_DIR
+ATMOBB_UPDATER_TOKEN=$(env_value ATMOBB_UPDATER_TOKEN)
+ATMOBB_UPDATER_SOCKET_GID=10001
+EOF
+  sudo install -m 600 "$updater_env" /etc/atmobb/updater.env
+  cat > "$updater_unit" <<EOF
+[Unit]
+Description=atmobb restricted host updater
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/atmobb/updater.env
+ExecStart=$python_bin /usr/local/lib/atmobb/updater.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  sudo install -m 644 "$updater_unit" /etc/systemd/system/atmobb-updater.service
+  rm -f "$updater_env" "$updater_unit"
+  trap - EXIT HUP INT TERM
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now atmobb-updater
+  sudo systemctl restart atmobb-updater
+  attempt=0
+  while ! sudo test -S /run/atmobb-updater/updater.sock; do
+    attempt=$((attempt + 1))
+    [ "$attempt" -lt 20 ] || die "the updater did not create its socket; inspect: sudo journalctl -u atmobb-updater"
+    sleep 1
+  done
 
   echo "== starting Postgres and Happyview"
   compose config --quiet
@@ -358,6 +408,10 @@ cmd_backup() {
   compose exec -T postgres pg_dump -Fc -U happyview -d happyview > "$dir/postgres.dump"
   sudo tar -C "$(dirname "$data_dir")" -czf - "$(basename "$data_dir")" > "$dir/oauth.tar.gz"
   cp "$ENV_FILE" "$dir/env"
+  cp "$BUNDLE_DIR/compose.yml" "$dir/compose.yml"
+  for file in compose.caddy.yml Caddyfile; do
+    [ ! -f "$BUNDLE_DIR/$file" ] || cp "$BUNDLE_DIR/$file" "$dir/$file"
+  done
   ls -lh "$dir" >&2
   echo "These files contain credentials and private data. Copy them off this host." >&2
   printf '%s\n' "$dir"
@@ -371,6 +425,130 @@ cmd_status() {
     echo "atmobb is not answering on 127.0.0.1:3001 yet"
 }
 
+# Called only by the root-owned updater daemon. Preparation (downloads, pulls,
+# or a source build) finishes before backup and before the running stack moves.
+cmd_internal_update() {
+  target=${1:-}
+  token=$(env_value ATMOBB_UPDATER_TOKEN)
+  [ -n "$token" ] && [ "${ATMOBB_UPDATER_INTERNAL:-}" = "$token" ] || die "_update is reserved for atmobb-updater"
+  [ "$target" = stable ] || [ "$target" = main ] || die "update target must be stable or main"
+  need curl jq openssl tar
+  state_dir=${ATMOBB_UPDATER_STATE_DIR:-/var/lib/atmobb-updater}
+  updater_lib=${ATMOBB_UPDATER_LIB_DIR:-/usr/local/lib/atmobb}
+  release_api=${ATMOBB_UPDATE_RELEASE_API:-https://api.github.com/repos/keithk/atmoBB/releases/latest}
+  main_api=${ATMOBB_UPDATE_MAIN_API:-https://api.github.com/repos/keithk/atmoBB/commits/main}
+  archive_base=${ATMOBB_UPDATE_ARCHIVE_BASE:-https://github.com/keithk/atmoBB/archive}
+  health_url=${ATMOBB_UPDATE_HEALTH_URL:-http://127.0.0.1:3001/api/version}
+  work=$state_dir/work.$$
+  result=$state_dir/result.json
+  rm -rf "$work"
+  mkdir -p "$work/bundle"
+  trap 'rm -rf "$work"' EXIT HUP INT TERM
+
+  if [ "$target" = stable ]; then
+    echo "== resolving latest stable release"
+    curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+      -H 'Accept: application/vnd.github+json' -H 'User-Agent: atmobb-updater' \
+      "$release_api" -o "$work/release.json"
+    tag=$(jq -er '.tag_name | select(type == "string" and test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))' "$work/release.json") ||
+      die "latest GitHub release has no valid version tag"
+    version=${tag#v}
+    asset=atmobb-$version.tar.gz
+    bundle_url=$(jq -er --arg n "$asset" '.assets[] | select(.name == $n) | .browser_download_url' "$work/release.json") || die "$asset is missing"
+    sums_url=$(jq -er '.assets[] | select(.name == "SHA256SUMS") | .browser_download_url' "$work/release.json") || die "SHA256SUMS is missing"
+    echo "== downloading and verifying $tag"
+    curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error --retry 3 "$bundle_url" -o "$work/$asset"
+    curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error --retry 3 "$sums_url" -o "$work/SHA256SUMS"
+    expected=$(awk -v name="$asset" '$2 == name || $2 == "*" name { print tolower($1); exit }' "$work/SHA256SUMS")
+    case "$expected" in *[!0-9a-f]*|'') die "release checksum is invalid" ;; esac
+    [ "${#expected}" -eq 64 ] || die "release checksum has the wrong length"
+    actual=$(openssl dgst -sha256 "$work/$asset" | awk '{print tolower($NF)}')
+    [ "$actual" = "$expected" ] || die "release checksum verification failed"
+    tar -xzf "$work/$asset" --strip-components=1 -C "$work/bundle"
+    echo "== pulling pinned release images before changing the stack"
+    stage_compose="$DOCKER compose --project-name $PROJECT --env-file $ENV_FILE -f $work/bundle/compose.yml"
+    [ -z "$(env_value COMPOSE_FILE)" ] || stage_compose="$stage_compose -f $work/bundle/compose.caddy.yml"
+    $stage_compose pull
+    commit=
+  else
+    echo "== resolving main to an exact commit"
+    curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+      -H 'Accept: application/vnd.github+json' -H 'User-Agent: atmobb-updater' \
+      "$main_api" -o "$work/commit.json"
+    commit=$(jq -er '.sha | select(type == "string" and test("^[0-9a-f]{40}$"))' "$work/commit.json") || die "GitHub returned an invalid main commit"
+    echo "== downloading main@$commit"
+    curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error --retry 3 \
+      "$archive_base/$commit.tar.gz" -o "$work/main.tar.gz"
+    mkdir "$work/source"
+    tar -xzf "$work/main.tar.gz" --strip-components=1 -C "$work/source"
+    version=$(jq -er .version "$work/source/package.json")
+    happyview=$(sed -n 's/^ARG HAPPYVIEW_VERSION=//p' "$work/source/Dockerfile")
+    [ -n "$happyview" ] || die "main has no Happyview version pin"
+    image="atmobb-main:$commit"
+    echo "== building $image before changing the running stack"
+    $DOCKER build --build-arg "HAPPYVIEW_VERSION=$happyview" -t "$image" "$work/source"
+    for file in compose.yml compose.caddy.yml Caddyfile atmobb updater.py env.example; do
+      cp "$work/source/infra/release/$file" "$work/bundle/$file"
+    done
+    cp "$work/source/docs/self-hosting.md" "$work/bundle/SELF-HOSTING.md"
+    cp "$work/source/LICENSE" "$work/bundle/"
+    sed "s#ghcr.io/keithk/atmobb:[0-9][0-9A-Za-z.+-]*#$image#g" "$work/bundle/compose.yml" > "$work/bundle/compose.yml.tmp"
+    mv "$work/bundle/compose.yml.tmp" "$work/bundle/compose.yml"
+    echo "== pulling main's pinned infrastructure images"
+    stage_compose="$DOCKER compose --project-name $PROJECT --env-file $ENV_FILE -f $work/bundle/compose.yml"
+    [ -z "$(env_value COMPOSE_FILE)" ] || stage_compose="$stage_compose -f $work/bundle/compose.caddy.yml"
+    $stage_compose pull postgres happyview
+    [ -z "$(env_value COMPOSE_FILE)" ] || $stage_compose pull caddy
+  fi
+  echo "ATMOBB_TARGET_VERSION=$version"
+  echo "ATMOBB_TARGET_COMMIT=$commit"
+
+  echo "== backing up before any migration or container replacement"
+  backup=$(cmd_backup)
+  echo "ATMOBB_BACKUP=$backup"
+  echo "== backup complete: $backup"
+  echo "== activating prepared bundle"
+  owner=$(stat -c '%u:%g' "$ENV_FILE")
+  for file in compose.yml compose.caddy.yml Caddyfile atmobb updater.py env.example SELF-HOSTING.md LICENSE; do
+    [ -f "$work/bundle/$file" ] || continue
+    case "$file" in atmobb|updater.py) mode=755 ;; *) mode=644 ;; esac
+    install -m "$mode" "$work/bundle/$file" "$BUNDLE_DIR/$file"
+    chown "$owner" "$BUNDLE_DIR/$file"
+  done
+  install -d -m 755 "$updater_lib"
+  install -m 755 "$BUNDLE_DIR/updater.py" "$updater_lib/updater.py"
+  install -m 755 "$BUNDLE_DIR/atmobb" "$updater_lib/atmobb"
+  echo "== starting pinned Happyview and applying migrations/setup"
+  compose up -d postgres happyview
+  wait_for_happyview
+  # Force this release's one-shot setup even when two locally built image tags
+  # happen to resolve to the same image ID. This applies Lua, lexicons, and
+  # derived-table setup before the app can move to the prepared image.
+  compose up --no-deps --force-recreate setup
+  echo "== starting atmobb"
+  compose up -d --remove-orphans
+  attempt=0
+  until response=$(curl --silent --fail "$health_url" 2>/dev/null); do
+    attempt=$((attempt + 1))
+    [ "$attempt" -lt 90 ] || die "atmobb did not become healthy in 3 minutes; run ./atmobb status and docker compose logs"
+    sleep 2
+  done
+  running_version=$(printf '%s' "$response" | jq -er .version)
+  [ "$running_version" = "$version" ] || die "health check reached atmobb $running_version, expected $version"
+  [ -n "$(compose ps --status running -q postgres)" ] && [ -n "$(compose ps --status running -q happyview)" ] && [ -n "$(compose ps --status running -q atmobb)" ] ||
+    die "one or more required containers are not running; run ./atmobb status"
+  [ "$(running_image atmobb)" = "$(pinned_image atmobb)" ] || die "atmobb is healthy but still runs the previous image"
+  [ "$(running_image happyview)" = "$(pinned_image happyview)" ] || die "Happyview is healthy but still runs the previous image"
+  setup_id=$(compose ps -a -q setup | head -n 1)
+  [ -n "$setup_id" ] && [ "$($DOCKER inspect --format '{{.State.ExitCode}}' "$setup_id")" = 0 ] ||
+    die "the Happyview setup container did not finish successfully; inspect docker compose logs setup"
+  tmp_result=$result.$$
+  jq -n --arg version "$version" --arg commit "$commit" --arg backup "$backup" \
+    '{installedVersion:$version, backup:$backup} + (if $commit == "" then {installedCommit:null} else {installedCommit:$commit} end)' > "$tmp_result"
+  mv "$tmp_result" "$result"
+  echo "== update complete and healthy"
+}
+
 command=${1:-help}
 [ "$#" -eq 0 ] || shift
 case "$command" in
@@ -381,6 +559,7 @@ case "$command" in
   backup) cmd_backup "$@" >/dev/null ;;
   status) cmd_status ;;
   logs) compose logs "$@" ;;
+  _update) cmd_internal_update "$@" ;;
   help|-h|--help) usage ;;
   *) die "unknown command: $command (try ./atmobb help)" ;;
 esac

@@ -81,10 +81,14 @@ services:
       HAPPYVIEW_SESSION_SECRET: ${SESSION_SECRET}
       HAPPYVIEW_CLIENT_KEY: ${HAPPYVIEW_CLIENT_KEY:-}
       ATMOBB_AVATAR_BUILDER_URL: ${ATMOBB_AVATAR_BUILDER_URL:-}
+      ATMOBB_UPDATER_TOKEN: ${ATMOBB_UPDATER_TOKEN:-}
     volumes:
       # OAuth sessions for every member and the forum account. Owned by uid
       # 10001 on the host; back it up with Postgres (`./atmobb backup`).
       - ${ATMOBB_DATA_DIR:-/var/lib/atmobb/oauth}:/data
+      # A fixed-action, authenticated host service owns Docker access. The web
+      # app can request stable or main; it cannot run commands or use Docker.
+      - /run/atmobb-updater:/run/atmobb-updater
     depends_on:
       setup:
         condition: service_completed_successfully

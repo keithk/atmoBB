@@ -55,6 +55,22 @@ bun run dev
 
 See [Local development](docs/development.md) for verification, teardown, and troubleshooting.
 
+## Self-host a forum
+
+The supported production path is the versioned Docker Compose release bundle. On a Linux host with Docker Compose 2.20+, run the installer as your normal user:
+
+```sh
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/keithk/atmoBB/main/install.sh | sh
+```
+
+It verifies the latest release bundle, installs its pinned prebuilt atmobb and Happyview images, configures Postgres and HTTPS, applies the bundled lexicons, Lua queries, and derived-table setup, and installs a restricted host updater. Existing bundle installations can rerun `cd /srv/atmobb && ./atmobb install` with their original options to add or refresh the updater without rotating existing secrets.
+
+Admins update from **Admin → Updates**. The normal action downloads and verifies the latest stable release and pulls its pinned images. **Advanced options → main** is deliberately dangerous: it resolves `main` to an exact commit and builds that unreleased code on the forum host. The page requires explicit confirmation, records the installed commit, and warns that a build can take substantial time, memory, and disk, fail, or degrade a small VPS.
+
+Both paths finish downloads, pulls, or builds before replacing containers. Before migrations or activation they back up Postgres, OAuth state, secrets, and Compose/Caddy configuration; then they move the whole pinned stack together, reapply Happyview setup, and report progress, failure logs, and health results in the admin page. Happyview migrations may be forward-only, so keep the reported local backup, copy backups off-host, and follow the recovery guidance rather than assuming an automatic rollback.
+
+See [Self-hosting](docs/self-hosting.md) for DNS and account prerequisites, manual installation, backups, update recovery, and source installs.
+
 ## Architecture
 
 - **App** (`src/`): SvelteKit with adapter-node. It reads from the appview over XRPC and writes to members' PDSes and the forum account's PDS with its own OAuth client.

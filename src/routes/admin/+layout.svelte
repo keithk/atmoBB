@@ -12,6 +12,7 @@
     { label: 'Members', href: '/admin/members' },
     { label: 'Topics', href: '/admin/topics' },
     ...(data.hostingEnabled ? [{ label: 'Hosting', href: '/admin/hosting' }] : []),
+    { label: 'Updates', href: '/admin/updates' },
     { label: 'Connection', href: '/admin/connect' },
   ]);
   const isActive = (href: string) =>
