@@ -1,6 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { getBoardThreads, getThreadPage, threadUri, resolveHandle, FORUM_DID, type ThreadPage } from '$lib/server/appview';
+import { getBoardThreads, getThreadPage, threadUri, resolveHandle, spaceOfBoard, FORUM_DID, type ThreadPage } from '$lib/server/appview';
 import { castVote, createReply, deletePost, retractVote, updatePost } from '$lib/server/pds';
 import { pollClosed } from '$lib/poll';
 import { banMessage, bannedFrom } from '$lib/server/standing';
@@ -32,6 +32,7 @@ import { handleNotifyVisit } from '$lib/server/notify/visit';
 import { neverAskedAboutNotifications } from '$lib/server/notify/store';
 import { notifyForPost } from '$lib/server/notify/dispatch';
 import { parseThreadTags } from '$lib/thread-tags';
+import { threadExtension } from '$lib/server/extensions/panels';
 
 const NS = 'app.atmobb';
 
@@ -94,7 +95,7 @@ export const load: PageServerLoad = async ({ params, url, parent, locals, isData
     }
     error(404, 'This thread lives on another forum.');
   }
-  const [{ staffRole }, boardName] = await Promise.all([
+  const [{ staffRole, sidebarBoards }, boardName] = await Promise.all([
     parent(),
     page.thread
       ? getBoardThreads(page.thread.value.board, undefined, 1)
@@ -202,6 +203,14 @@ export const load: PageServerLoad = async ({ params, url, parent, locals, isData
     offerNotifications: locals.user ? await neverAskedAboutNotifications(locals.user.did) : false,
     boardName,
     canModerate: page.thread ? await canModerate(locals.user?.did, page.thread.value.board) : false,
+    // The extension panel for a bound thread; staff on an unbound public thread get attach links instead.
+    extension: page.thread
+      ? await threadExtension({
+          thread: uri,
+          viewerDid: locals.user?.did ?? null,
+          boardPublic: sidebarBoards.some((board) => board.uri === page.thread!.value.board && !spaceOfBoard(board.value.access)),
+        })
+      : null,
     handles,
     presence,
     limit: LIMIT,

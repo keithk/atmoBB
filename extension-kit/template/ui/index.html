@@ -7,7 +7,14 @@
     <script src="panel.js" defer></script>
   </head>
   <body>
-    <output id="count" aria-live="polite">–</output>
-    <button id="increment" type="button">+1</button>
+    <section id="counter" hidden>
+      <output id="count" aria-live="polite">–</output>
+      <button id="increment" type="button">+1</button>
+    </section>
+    <section id="setup" hidden>
+      <label>Start counting at <input id="start" type="number" min="0" step="1" value="0" /></label>
+      <button id="attach" type="button">Attach counter</button>
+    </section>
+    <p id="status" role="status"></p>
   </body>
 </html>

@@ -1,13 +1,20 @@
 body {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
   margin: 0;
   padding: 1rem;
   font: 1rem system-ui, sans-serif;
 }
 
+section:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
 output {
   font-size: 2rem;
   font-variant-numeric: tabular-nums;
+}
+
+#status:empty {
+  display: none;
 }

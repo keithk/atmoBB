@@ -68,6 +68,42 @@ Each function needs its capability in the manifest (`kv`, `records`,
 `rate_limited`. Handlers run synchronously. `console.log` output goes to the
 extension log on the install's admin page.
 
+## The panel
+
+`ui.entry` is the panel's HTML page. atmoBB shows it in a frame on threads the
+extension is attached to, on the extension's own page, and on the page where
+staff attach it to a thread. The frame is sandboxed to scripts only: the panel
+can't read the forum page, its cookies, or the session, can't fetch anything,
+submit forms, open windows, or start workers, and can load scripts, styles,
+images, and fonts only from its own UI directory. Scripts must be classic
+scripts (`<script src="panel.js" defer>`), not modules. The files beside the
+entry can be `.js`, `.css`, `.svg`, `.png`, `.webp`, `.woff2`, or `.json`;
+anything else isn't served. A panel that navigates away from its page is
+closed.
+
+The panel talks to atmoBB over `postMessage` with the parent page, in bridge
+version 1. Every message carries `v: 1`, and the page ignores any message that
+isn't exactly one of these:
+
+| Direction | Message |
+| --- | --- |
+| panel → page | `{ type: 'atmobb:action', v: 1, id, action, input }` runs your `action` handler as the viewing member; `id` is a number or a short string |
+| panel → page | `{ type: 'atmobb:resize', v: 1, height }` sizes the frame, within limits |
+| panel → page | `{ type: 'atmobb:attach', v: 1, params }` attaches the extension with this setup (attach page only) |
+| page → panel | `{ type: 'atmobb:init', v: 1, mode, thread, signedIn, path }` once the panel loads; `mode` is `thread`, `page`, or `attach` |
+| page → panel | `{ type: 'atmobb:result', v: 1, id, ok, value }` or `{ ..., ok: false, error: { code, message } }` answers an action |
+
+Post to `parent` with target origin `'*'` (the frame has no origin of its own)
+and accept only messages whose `event.source` is `parent`. The template's
+`ui/panel.js` does all of this.
+
+On a thread, only signed-in members can run actions. On the extension's own
+page, at `/ext/<repository host and path>` (for example
+`/ext/git.example/jack/diplomacy`, with a page inside it after `/-/`, like
+`/ext/git.example/jack/diplomacy/-/games/spring-1901`), signed-out visitors can
+run actions too, and `path` tells the panel which page it's on. That address
+follows the repository, so links keep working after a reinstall.
+
 ## Build
 
 `npm run build` (`atmobb-extension build`) writes `dist/`:

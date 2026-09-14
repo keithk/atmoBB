@@ -301,6 +301,41 @@ describe('dispatchAction', () => {
     expect(await dispatchAction(id, BOB, null, 'viewer', {})).toMatchObject({ viewer: { did: BOB } });
   });
 
+  it('rate-limits signed-out actions per client address, in windows apart from signed-in viewers', async () => {
+    state.env.ATMOBB_EXTENSIONS_ACTIONS_PER_VIEWER_PER_MINUTE = '2';
+    state.env.ATMOBB_EXTENSIONS_ANONYMOUS_ACTIONS_PER_INSTALL_PER_MINUTE = '3';
+    state.env.ATMOBB_EXTENSIONS_ACTIONS_PER_INSTALL_PER_MINUTE = '3';
+    const id = nextId();
+    await addInstall(id);
+
+    await dispatchAction(id, null, null, 'viewer', {}, { client: '203.0.113.1' });
+    await dispatchAction(id, null, null, 'viewer', {}, { client: '203.0.113.1' });
+    expect((await callError(dispatchAction(id, null, null, 'viewer', {}, { client: '203.0.113.1' }))).code).toBe('rate_limited');
+    await dispatchAction(id, null, null, 'viewer', {}, { client: '203.0.113.2' });
+    // The install's signed-out window is full now, whichever address asks.
+    expect((await callError(dispatchAction(id, null, null, 'viewer', {}, { client: '203.0.113.3' }))).code).toBe('rate_limited');
+
+    // None of that touches a member's actions.
+    for (let i = 0; i < 2; i++) expect(await dispatchAction(id, ALICE, { uri: THREAD }, 'viewer', {})).toMatchObject({ viewer: { did: ALICE } });
+    expect(await dispatchAction(id, BOB, { uri: THREAD }, 'viewer', {})).toMatchObject({ viewer: { did: BOB } });
+  });
+
+  it('runs one signed-out action per install at a time, so a flood of them never queues ahead of members', async () => {
+    const id = nextId();
+    await addInstall(id);
+    const first = dispatchAction(id, null, null, 'viewer', {}, { client: '203.0.113.1' });
+    expect((await callError(dispatchAction(id, null, null, 'viewer', {}, { client: '203.0.113.2' }))).code).toBe('rate_limited');
+    expect(await dispatchAction(id, ALICE, { uri: THREAD }, 'viewer', {})).toMatchObject({ viewer: { did: ALICE } });
+    await first;
+    expect(await dispatchAction(id, null, null, 'viewer', {}, { client: '203.0.113.2' })).toMatchObject({ viewer: { did: null } });
+  });
+
+  it('refuses a signed-out action from a thread', async () => {
+    const id = nextId();
+    await addInstall(id);
+    expect((await callError(dispatchAction(id, null, { uri: THREAD }, 'viewer', {}, { client: '203.0.113.1' }))).code).toBe('sign_in_required');
+  });
+
   it('keeps payloads out of server output, sending guest console output and errors to the install log', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     const id = nextId();

@@ -4,7 +4,7 @@ import { bindingAccess, bindingRkey, cacheBinding, cachedBinding, uncacheBinding
 import { ExtensionCallError, dispatchAttach, hasHandler } from './host';
 import { extensionsLockHeld } from './lock';
 import { extensionsEnabled } from './manifest';
-import { getInstall } from './registry';
+import { getInstall, type ExtensionInstall } from './registry';
 import { BINDING_COLLECTION } from './scopes';
 
 // Staff attach an extension to a thread. atmoBB writes the binding record
@@ -23,7 +23,7 @@ export interface AttachRequest {
 
 export type AttachResult = { ok: true; binding: ThreadBinding; result: unknown } | { ok: false; status: number; message: string };
 
-const refused = (status: number, message: string): AttachResult => ({ ok: false, status, message });
+const refused = (status: number, message: string) => ({ ok: false as const, status, message });
 
 const ACCESS_STATUS: Record<Exclude<BindingAccess, { ok: true }>['reason'], number> = {
   missing: 404,
@@ -33,7 +33,14 @@ const ACCESS_STATUS: Record<Exclude<BindingAccess, { ok: true }>['reason'], numb
   unavailable: 502,
 };
 
-export async function attachThread({ installId, viewerDid, thread, params }: AttachRequest): Promise<AttachResult> {
+export type AttachCheck = { ok: true; install: ExtensionInstall; viewerDid: string } | { ok: false; status: number; message: string };
+
+/**
+ * Whether staff may attach the install to the thread right now: everything
+ * attachThread checks before writing anything, for the attach page to run
+ * before it draws the extension's form.
+ */
+export async function checkAttach({ installId, viewerDid, thread }: Omit<AttachRequest, 'params'>): Promise<AttachCheck> {
   if (!viewerDid) return refused(401, 'Sign in as staff to attach an extension to a thread.');
   if (!(await canModerateForum(viewerDid))) return refused(403, 'Only staff who moderate the whole forum can attach extensions to threads.');
   if (!extensionsEnabled()) return refused(503, 'Extensions are turned off on this forum.');
@@ -58,6 +65,15 @@ export async function attachThread({ installId, viewerDid, thread, params }: Att
   } catch (error) {
     return refused(502, `${name} couldn't be loaded: ${callMessage(error)}`);
   }
+  return { ok: true, install, viewerDid };
+}
+
+export async function attachThread(request: AttachRequest): Promise<AttachResult> {
+  const check = await checkAttach(request);
+  if (!check.ok) return check;
+  const { installId, thread, params } = request;
+  const { install, viewerDid } = check;
+  const { name } = install.manifest;
 
   const rkey = bindingRkey(thread);
   const record = { $type: BINDING_COLLECTION, thread, extension: install.normalizedUrl, attachedBy: viewerDid, createdAt: new Date().toISOString() };

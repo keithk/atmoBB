@@ -143,7 +143,8 @@ export function rebuildBindingsInBackground() {
 }
 
 export type BindingAccess =
-  | { ok: true }
+  /** `board` is the thread's board, for checks that depend on it. */
+  | { ok: true; board: string }
   | { ok: false; reason: 'missing' | 'hidden' | 'elsewhere' | 'members-only' | 'unavailable'; message: string };
 
 /**
@@ -168,7 +169,7 @@ export async function bindingAccess(threadUri: string): Promise<BindingAccess> {
         message: 'That thread is on a members-only board. Extensions publish their records publicly, so they only run on public boards.',
       };
     }
-    return { ok: true };
+    return { ok: true, board: thread.value.board };
   } catch {
     return { ok: false, reason: 'unavailable', message: "Couldn't check the thread right now. Try again in a minute." };
   }

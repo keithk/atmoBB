@@ -349,6 +349,7 @@ Relevant app environment variables:
 | variable | purpose |
 |---|---|
 | `ORIGIN` / `ATMOBB_APP_URL` | Exact public HTTPS app origin, without a trailing slash. |
+| `ADDRESS_HEADER` / `XFF_DEPTH` | Which proxy header carries the visitor's address, for example `X-Forwarded-For` and `1` behind Caddy. Signed-out visitors' extension actions are rate-limited per address; without these, every visitor counts as the proxy's address and shares one limit. |
 | `HAPPYVIEW_URL` | Public Happyview base URL. |
 | `ATMOBB_FORUM_DID` | DID of the dedicated forum account. |
 | `ATMOBB_COOKIE_SECRET` | Signs app login cookies; rotating it logs everyone out. |

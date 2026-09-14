@@ -11,6 +11,7 @@ import { startScheduler } from '$lib/server/extensions/scheduler';
 import { dispatchTimer } from '$lib/server/extensions/host';
 import { startMaintenance } from '$lib/server/extensions/maintenance';
 import { rebuildBindingsInBackground } from '$lib/server/extensions/bindings';
+import { isFramePath } from '$lib/server/extensions/frame';
 
 // Runs once when the server loads this module, so a production deploy with a
 // forgeable session secret dies at startup instead of serving requests.
@@ -42,6 +43,12 @@ export const init: ServerInit = async () => {
 };
 
 export const handle: Handle = async ({ event, resolve }) => {
+  // Extension panel frames are served to a sandboxed document that must never
+  // see the session, so their requests don't read the cookie at all.
+  if (isFramePath(event.url.pathname)) {
+    event.locals.user = null;
+    return resolve(event);
+  }
   const did = sessionDid(event.cookies);
   event.locals.user = did ? { did, handle: await resolveHandle(did) } : null;
   if (did) {

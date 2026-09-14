@@ -52,6 +52,7 @@ export type ExtensionCallErrorCode =
   | 'not_installed'
   | 'disabled'
   | 'rate_limited'
+  | 'sign_in_required'
   | 'no_handler'
   | 'timeout'
   | 'memory'
@@ -115,10 +116,12 @@ const recordWritesPerHour = () => envInt('ATMOBB_EXTENSIONS_RECORD_WRITES_PER_HO
 const notifyPerRecipientPerDay = () => envInt('ATMOBB_EXTENSIONS_NOTIFY_PER_RECIPIENT_PER_DAY', 5);
 /** ATMOBB_EXTENSIONS_NOTIFY_PER_INSTALL_PER_DAY: notifications one install sends per day. */
 const notifyPerInstallPerDay = () => envInt('ATMOBB_EXTENSIONS_NOTIFY_PER_INSTALL_PER_DAY', 100);
-/** ATMOBB_EXTENSIONS_ACTIONS_PER_VIEWER_PER_MINUTE: actions one viewer (or all signed-out viewers together) runs on one install. */
+/** ATMOBB_EXTENSIONS_ACTIONS_PER_VIEWER_PER_MINUTE: actions one signed-in viewer, or one signed-out client address, runs on one install. */
 const actionsPerViewerPerMinute = () => envInt('ATMOBB_EXTENSIONS_ACTIONS_PER_VIEWER_PER_MINUTE', 30);
-/** ATMOBB_EXTENSIONS_ACTIONS_PER_INSTALL_PER_MINUTE: actions one install runs. */
+/** ATMOBB_EXTENSIONS_ACTIONS_PER_INSTALL_PER_MINUTE: actions one install runs for signed-in viewers. */
 const actionsPerInstallPerMinute = () => envInt('ATMOBB_EXTENSIONS_ACTIONS_PER_INSTALL_PER_MINUTE', 300);
+/** ATMOBB_EXTENSIONS_ANONYMOUS_ACTIONS_PER_INSTALL_PER_MINUTE: actions one install runs for signed-out visitors, all addresses together. */
+const anonymousActionsPerInstallPerMinute = () => envInt('ATMOBB_EXTENSIONS_ANONYMOUS_ACTIONS_PER_INSTALL_PER_MINUTE', 60);
 
 const MAX_NOTIFY_RECIPIENTS = 50;
 const NOTIFY_TITLE_MAX = 100;
@@ -168,6 +171,7 @@ export const extensionLog = (installId: string): ExtensionLogLine[] => [...(logs
 export function resetHostLimitsForTests() {
   windows = new Map();
   logs = new Map();
+  anonymousInFlight = new Set();
 }
 
 // --- host functions ------------------------------------------------------------
@@ -504,16 +508,29 @@ export async function viewerContext(did: string | null): Promise<ViewerContext> 
   return { did, standing, staff, banned: !!ban };
 }
 
-/** Take a slot in the viewer's and the install's action windows, or refuse when either is full. */
-function takeActionSlot(installId: string, viewerDid: string | null) {
-  const viewerKey = viewerDid ?? 'anonymous';
-  if (
-    slotsLeft(`actions|${installId}|${viewerKey}`, actionsPerViewerPerMinute(), MINUTE_MS) <= 0 ||
-    !takeSlot(`actions|${installId}`, actionsPerInstallPerMinute(), MINUTE_MS)
-  ) {
+/**
+ * Take a slot in the viewer's and the install's action windows, or refuse when
+ * either is full. Signed-out actions count per client address and against
+ * their own install window, so they can't use up members' slots.
+ */
+function takeActionSlot(installId: string, viewerDid: string | null, client = 'unknown') {
+  const [viewerKey, installKey, installLimit] = viewerDid
+    ? [`actions|${installId}|${viewerDid}`, `actions|${installId}`, actionsPerInstallPerMinute()]
+    : [`anonymous-actions|${installId}|${client}`, `anonymous-actions|${installId}`, anonymousActionsPerInstallPerMinute()];
+  if (slotsLeft(viewerKey, actionsPerViewerPerMinute(), MINUTE_MS) <= 0 || !takeSlot(installKey, installLimit, MINUTE_MS)) {
     throw new ExtensionCallError('rate_limited', 'Too many actions; try again in a minute');
   }
-  takeSlot(`actions|${installId}|${viewerKey}`, actionsPerViewerPerMinute(), MINUTE_MS);
+  takeSlot(viewerKey, actionsPerViewerPerMinute(), MINUTE_MS);
+}
+
+// Installs with a signed-out action running or queued. Calls to an install run
+// one at a time, so holding signed-out actions to one each keeps a flood of
+// them from queueing ahead of members.
+let anonymousInFlight = new Set<string>();
+
+export interface ActionOptions {
+  /** A signed-out visitor's client address, which their actions are counted by. */
+  client?: string;
 }
 
 /**
@@ -521,7 +538,8 @@ function takeActionSlot(installId: string, viewerDid: string | null) {
  * session; the handler is told the viewer's standing, staff role, and ban
  * status as the forum sees them. `thread` is the bound thread the action comes
  * from, which the caller has checked against the thread's binding, or null.
- * Resolves to the handler's JSON output.
+ * Actions from a thread need a signed-in viewer. Resolves to the handler's
+ * JSON output.
  */
 export async function dispatchAction(
   installId: string,
@@ -529,14 +547,24 @@ export async function dispatchAction(
   thread: ThreadRef | null,
   action: string,
   input: unknown,
+  options: ActionOptions = {},
 ): Promise<unknown> {
   refuseUnlessRunning();
+  if (!viewerDid && thread) throw new ExtensionCallError('sign_in_required', 'Sign in to use this extension on a thread');
   const install = await installFor(installId, true);
-  takeActionSlot(installId, viewerDid);
-  const viewer = await viewerContext(viewerDid);
-  const output = await runCall(install, 'action', { viewer, thread, action, input } satisfies ActionInput);
-  if (output === null) throw new ExtensionCallError('no_handler', `${install.manifest.name} has no action handler`);
-  return parseOutput(output);
+  if (!viewerDid && anonymousInFlight.has(installId)) {
+    throw new ExtensionCallError('rate_limited', 'This extension is busy; try again in a moment');
+  }
+  takeActionSlot(installId, viewerDid, options.client);
+  if (!viewerDid) anonymousInFlight.add(installId);
+  try {
+    const viewer = await viewerContext(viewerDid);
+    const output = await runCall(install, 'action', { viewer, thread, action, input } satisfies ActionInput);
+    if (output === null) throw new ExtensionCallError('no_handler', `${install.manifest.name} has no action handler`);
+    return parseOutput(output);
+  } finally {
+    if (!viewerDid) anonymousInFlight.delete(installId);
+  }
 }
 
 /**

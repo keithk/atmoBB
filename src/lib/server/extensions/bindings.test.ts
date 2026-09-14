@@ -159,7 +159,7 @@ describe('bindingFor', () => {
 
 describe('bindingAccess', () => {
   it('passes a visible thread on a public board, and fails once the board turns members-only', async () => {
-    expect(await bindingAccess(threadAt('3kone'))).toEqual({ ok: true });
+    expect(await bindingAccess(threadAt('3kone'))).toEqual({ ok: true, board: BOARD });
     expect(state.getBoardAccess).toHaveBeenCalledWith(BOARD);
 
     state.getBoardAccess.mockResolvedValue(`at://${FORUM}/space/app.atmobb.forum.privateBoard/games`);
