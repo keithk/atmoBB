@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { env } from '$env/dynamic/private';
+import type { RichTextBlock } from '$lib/richtext/bbcode';
 import { fleetEnabled, fleetStatus, provisionHostedInstance } from './hosting-host';
 
 // Invite requests stay in the app; the root-owned host service owns capacity
@@ -25,7 +26,11 @@ export interface HostingRequest {
   requesterDid: string;
   requesterHandle: string;
   email?: string;
-  invite: string;
+  /** Absent when the operator let people request without an invite code. */
+  invite?: string;
+  /** What the requester is building, in their words, and a link to it. */
+  about?: string;
+  aboutUrl?: string;
   createdAt: string;
   status: HostingRequestStatus;
   siteId?: string;
@@ -34,9 +39,17 @@ export interface HostingRequest {
   notifiedAt?: string;
 }
 
+/** The operator's copy for /host and whether requests need an invite. */
+export interface HostingPage {
+  heading?: string;
+  body?: RichTextBlock[];
+  requireInvite: boolean;
+}
+
 interface HostingStore {
   invites: HostingInvite[];
   requests: HostingRequest[];
+  page?: Partial<HostingPage>;
 }
 
 export const hostingEnabled = () =>
@@ -128,6 +141,19 @@ export function validSubdomain(subdomain: string): string | null {
 }
 
 export const listInvites = () => loadStore().then((s) => s.invites);
+// Invites stay required until the operator turns them off.
+export const hostingPage = () =>
+  loadStore().then((s): HostingPage => ({ ...s.page, requireInvite: s.page?.requireInvite ?? true }));
+
+export function saveHostingPage(page: HostingPage): Promise<void> {
+  return withStore((store) => {
+    store.page = {
+      heading: page.heading || undefined,
+      body: page.body?.length ? page.body : undefined,
+      requireInvite: page.requireInvite,
+    };
+  });
+}
 export const listRequests = () => loadStore().then((s) => s.requests);
 export const requestsFor = (did: string) =>
   loadStore().then((s) => s.requests.filter((r) => r.requesterDid === did));
@@ -154,6 +180,8 @@ export async function submitRequest(input: {
   requesterDid: string;
   requesterHandle: string;
   email?: string;
+  about?: string;
+  aboutUrl?: string;
 }): Promise<{ error: string } | { request: HostingRequest }> {
   if (!fleetEnabled()) return { error: 'New hosting requests are paused until isolated hosting is configured.' };
   let takenNames: Set<string>;
@@ -166,9 +194,11 @@ export async function submitRequest(input: {
   }
 
   return withStore((store) => {
-    const invite = store.invites.find((i) => i.code === input.code.trim());
-    if (!invite) return { error: 'That invite code isn\'t valid.' };
-    if (invite.usedAt) return { error: 'That invite code has already been used.' };
+    // With invites off the code is ignored, so a leftover one isn't spent.
+    const requireInvite = store.page?.requireInvite ?? true;
+    const invite = requireInvite ? store.invites.find((i) => i.code === input.code.trim()) : undefined;
+    if (requireInvite && !invite) return { error: 'That invite code isn\'t valid.' };
+    if (invite?.usedAt) return { error: 'That invite code has already been used.' };
 
     const subdomainError = validSubdomain(input.subdomain);
     if (subdomainError) return { error: subdomainError };
@@ -190,12 +220,16 @@ export async function submitRequest(input: {
       requesterDid: input.requesterDid,
       requesterHandle: input.requesterHandle,
       email: input.email || undefined,
-      invite: invite.code,
+      invite: invite?.code,
+      about: input.about || undefined,
+      aboutUrl: input.aboutUrl || undefined,
       createdAt: new Date().toISOString(),
       status: 'pending',
     };
-    invite.usedBy = input.requesterDid;
-    invite.usedAt = request.createdAt;
+    if (invite) {
+      invite.usedBy = input.requesterDid;
+      invite.usedAt = request.createdAt;
+    }
     store.requests.push(request);
     return { request };
   });

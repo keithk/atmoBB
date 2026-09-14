@@ -1,5 +1,8 @@
 # Hosted tenants
 
+> [!NOTE]
+> You don't need any of this to run a forum. Hosting stays off unless you set `ATMOBB_HOSTING=1`, which only makes sense on a forum that runs other people's forums. Without it, `/host` and Admin → Hosting don't exist.
+
 New hosted forums use **one isolated Compose installation per forum**, with an app, Happyview, PostgreSQL, secrets, OAuth storage, and updater. Hosting is opt-in on one operator forum. Its `/admin/hosting` page owns invitations, approvals, an additional-forum limit, and fleet update controls. Tenant admins use their own `/admin/updates`.
 
 **Experimental:** 2 GB RAM is an unbenchmarked planning target, not a supported minimum or a disk footprint. Measure install/backfill, ordinary use, backups, and stable/main update peaks on your host before accepting tenants. Each Happyview can index network-wide records; disk growth is not necessarily limited to one forum. The limit counts installations, not RAM reservations. It excludes the operator forum and legacy installations, which still consume resources. PostgreSQL's 200-connection ceiling is not a host sizing formula.
@@ -40,6 +43,14 @@ Use a trusted release bundle built from code containing `ATMOBB_INSTANCE_CONFIG_
 5. In `/admin/hosting`, set the maximum number of **additional isolated forums**, create an invite, and approve a request. Setting zero pauses new approvals; lowering a limit never stops or deletes an existing forum. Pending requests do not reserve a slot; approval does, atomically, before creating anything.
 
 The hosting controller is separate from tenant updates. Update its root-owned code/template deliberately by rerunning the installer during a maintenance window with no provisioning/update running. This does not upgrade existing tenants. Do not run multiple hosting controllers against the same state.
+
+## The hosting page
+
+`/host` is what people read before they request a forum. In Admin → Hosting, the **Hosting page** card sets its heading and body with the same editor as the forum intro, without images. Leave the body empty to show the built-in explanation. The request form always follows it.
+
+The same card turns invite codes off. With **Require an invite code** unchecked, anyone logged in can send a request, and you still approve each one against capacity. Invite codes you already minted stay valid for when you turn them back on. Requests can also say what the requester is building, with a link; both show next to the request.
+
+The heading, body, and invite setting live in `hosting.json` in the operator forum's data directory, with the invites and requests.
 
 ## Instance identity and recovery
 

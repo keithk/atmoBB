@@ -5,7 +5,7 @@ import { join } from 'node:path';
 const host = vi.hoisted(() => ({ provision: vi.fn(), status: vi.fn() }));
 vi.mock('$env/dynamic/private', () => ({ env: {} }));
 vi.mock('./hosting-host', () => ({ fleetEnabled: () => true, fleetStatus: host.status, provisionHostedInstance: host.provision }));
-import { approveRequest, checkProvisioning, createInvite, listRequests, rejectRequest, submitRequest } from './hosting';
+import { approveRequest, checkProvisioning, createInvite, hostingPage, listInvites, listRequests, rejectRequest, saveHostingPage, submitRequest } from './hosting';
 let directory: string;
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'atmobb-hosting-test-'));
@@ -43,4 +43,14 @@ it('does not discard corrupt queue state', async () => {
   await writeFile(join(directory, 'hosting.json'), '{corrupt');
   await expect(createInvite()).rejects.toThrow();
   expect(await readFile(join(directory, 'hosting.json'), 'utf8')).toBe('{corrupt');
+});
+it('takes requests without a code once invites are off, leaving unused codes unspent', async () => {
+  expect(await hostingPage()).toMatchObject({ requireInvite: true });
+  const invite = await createInvite();
+  expect(await submitRequest({ code: '', subdomain: 'crochet', forumHandle: 'crochet.example.test', forumDid: 'did:plc:crochet', requesterDid: 'did:plc:maker', requesterHandle: 'maker.example.test' })).toMatchObject({ error: expect.stringContaining('invite') });
+  await saveHostingPage({ heading: 'Free forums', requireInvite: false });
+  const result = await submitRequest({ code: invite.code, subdomain: 'crochet', forumHandle: 'crochet.example.test', forumDid: 'did:plc:crochet', requesterDid: 'did:plc:maker', requesterHandle: 'maker.example.test', about: 'A pattern app', aboutUrl: 'https://patterns.example.test' });
+  expect(result).toMatchObject({ request: { subdomain: 'crochet', about: 'A pattern app', aboutUrl: 'https://patterns.example.test' } });
+  expect('request' in result && result.request.invite).toBeUndefined();
+  expect((await listInvites()).find((i) => i.code === invite.code)?.usedAt).toBeUndefined();
 });

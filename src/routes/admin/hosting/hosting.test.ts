@@ -1,8 +1,8 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-const state = vi.hoisted(() => ({ admin: vi.fn(), capacity: vi.fn(), update: vi.fn(), check: vi.fn() }));
+const state = vi.hoisted(() => ({ admin: vi.fn(), capacity: vi.fn(), update: vi.fn(), check: vi.fn(), savePage: vi.fn() }));
 vi.mock('$lib/server/admin', () => ({ adminActor: state.admin }));
 vi.mock('$lib/server/hosting-host', () => ({ fleetEnabled: () => true, fleetStatus: async () => ({ limit: 3, used: 0, instances: [] }), setHostingLimit: state.capacity, updateHostedInstance: state.update }));
-vi.mock('$lib/server/hosting', () => ({ hostingEnabled: () => true, hostingDomainSuffix: () => 'example.test', checkProvisioning: state.check, listInvites: async () => [], listRequests: async () => [], approveRequest: vi.fn(), rejectRequest: vi.fn(), createInvite: vi.fn() }));
+vi.mock('$lib/server/hosting', () => ({ hostingEnabled: () => true, hostingDomainSuffix: () => 'example.test', checkProvisioning: state.check, listInvites: async () => [], listRequests: async () => [], hostingPage: async () => ({ requireInvite: true }), saveHostingPage: state.savePage, approveRequest: vi.fn(), rejectRequest: vi.fn(), createInvite: vi.fn() }));
 import { actions, load } from './+page.server';
 
 beforeEach(() => { vi.clearAllMocks(); state.admin.mockResolvedValue('did:plc:operator'); state.check.mockResolvedValue(undefined); });
@@ -15,6 +15,15 @@ it('rechecks admin access for the page and every mutation', async () => {
   expect(state.capacity).not.toHaveBeenCalled();
   expect(state.update).not.toHaveBeenCalled();
   expect(state.check).not.toHaveBeenCalled();
+  expect(state.savePage).not.toHaveBeenCalled();
+});
+
+it('saves the hosting page with invites off when the box is unchecked and drops pasted images', async () => {
+  await actions.page!(event({ heading: 'Free forums', body: 'Hello\n\n[img=bafy]' }));
+  expect(state.savePage).toHaveBeenCalledWith({ heading: 'Free forums', body: [expect.objectContaining({ text: 'Hello' })], requireInvite: false });
+  await actions.page!(event({ heading: '', body: '', requireInvite: 'on' }));
+  expect(state.savePage).toHaveBeenLastCalledWith({ heading: '', body: [], requireInvite: true });
+  expect(await actions.page!(event({ heading: 'x'.repeat(101) }))).toMatchObject({ status: 400 });
 });
 
 it('accepts zero and boundary capacity but rejects fractional, negative, missing, and excessive limits', async () => {

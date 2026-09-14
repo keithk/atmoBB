@@ -1,6 +1,8 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { adminActor } from '$lib/server/admin';
+import { parseBBCode } from '$lib/richtext/bbcode';
+import { blocksToDoc } from '$lib/richtext/blocks-tiptap';
 import { fleetEnabled, fleetStatus, setHostingLimit, updateHostedInstance } from '$lib/server/hosting-host';
 import {
   approveRequest,
@@ -8,9 +10,11 @@ import {
   createInvite,
   hostingEnabled,
   hostingDomainSuffix,
+  hostingPage,
   listInvites,
   listRequests,
   rejectRequest,
+  saveHostingPage,
 } from '$lib/server/hosting';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -19,18 +23,23 @@ export const load: PageServerLoad = async ({ locals }) => {
   let fleetError: string | undefined;
   try { await checkProvisioning(); }
   catch (err) { fleetError = err instanceof Error ? err.message : 'Hosting service unavailable.'; }
-  const [invites, requests] = await Promise.all([listInvites(), listRequests()]);
+  const [invites, requests, page] = await Promise.all([listInvites(), listRequests(), hostingPage()]);
+  const base = {
+    invites,
+    requests,
+    suffix: hostingDomainSuffix(),
+    page: { heading: page.heading ?? '', requireInvite: page.requireInvite },
+    pageDoc: page.body?.length ? blocksToDoc(page.body) : undefined,
+  };
   if (!fleetEnabled()) {
-    return { invites, requests, suffix: hostingDomainSuffix(), fleet: null };
+    return { ...base, fleet: null };
   }
   try {
     if (fleetError) throw new Error(fleetError);
-    return { invites, requests, suffix: hostingDomainSuffix(), fleet: await fleetStatus() };
+    return { ...base, fleet: await fleetStatus() };
   } catch (err) {
     return {
-      invites,
-      requests,
-      suffix: hostingDomainSuffix(),
+      ...base,
       fleet: null,
       fleetError: err instanceof Error ? err.message : 'The isolated hosting service is unavailable.',
     };
@@ -60,6 +69,18 @@ export const actions: Actions = {
     } catch (err) {
       return fail(409, { message: err instanceof Error ? err.message : 'Request could not be rejected.' });
     }
+  },
+
+  page: async ({ request, locals }) => {
+    if (!hostingEnabled()) error(404, 'Not found');
+    if (!(await adminActor(locals))) return fail(403, { message: 'Only admins can make this change.' });
+    const form = await request.formData();
+    const heading = String(form.get('heading') ?? '').trim();
+    if (heading.length > 100) return fail(400, { message: 'Keep the heading to 100 characters.' });
+    // The page has no image uploads, so any pasted image placeholder is dropped.
+    const body = parseBBCode(String(form.get('body') ?? '')).filter((b) => !b.$type.endsWith('#image'));
+    await saveHostingPage({ heading, body, requireInvite: form.get('requireInvite') === 'on' });
+    return { pageSaved: true };
   },
 
   invite: async ({ request, locals }) => {

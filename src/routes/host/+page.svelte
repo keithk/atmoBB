@@ -1,4 +1,6 @@
 <script lang="ts">
+  import RichText from '$lib/components/RichText.svelte';
+
   let { data, form } = $props();
 
   const statusLabel: Record<string, string> = {
@@ -10,10 +12,13 @@
   };
 </script>
 
-<h1>Host a forum</h1>
+<h1>{data.page.heading || 'Host a forum'}</h1>
 
 <div class="atm-card atm-card--edge host__intro">
   <div class="atm-card__body">
+    {#if data.page.body?.length}
+      <RichText body={data.page.body} />
+    {:else}
     <p>
       This is a very early attempt at “hosted for you” forums on atproto. It's meant for people
       who already understand how atproto works and are comfortable with rough edges. Requesting a
@@ -41,6 +46,7 @@
       account instead of using your personal one. The forum account will own its boards, staff
       list, and moderation history.
     </p>
+    {/if}
   </div>
 </div>
 
@@ -71,10 +77,12 @@
     <div class="atm-card__header"><span>Request a forum</span></div>
     <div class="atm-card__body">
       <form class="atm-editform" method="POST">
-        <div class="atm-field">
-          <span class="atm-label">Invite code</span>
-          <input class="atm-input" name="code" required autocomplete="off" />
-        </div>
+        {#if data.page.requireInvite}
+          <div class="atm-field">
+            <span class="atm-label">Invite code</span>
+            <input class="atm-input" name="code" required autocomplete="off" />
+          </div>
+        {/if}
         <div class="atm-field">
           <span class="atm-label">Subdomain</span>
           <div class="host__subdomain">
@@ -87,6 +95,15 @@
           <span class="atm-label">Forum account handle</span>
           <input class="atm-input" name="forumHandle" required placeholder="my-forum.bsky.social" />
           <span class="atm-hint">Use the new account you made for this forum.</span>
+        </div>
+        <div class="atm-field">
+          <span class="atm-label">What are you building? (optional)</span>
+          <textarea class="atm-textarea" name="about" rows="3" maxlength="500"></textarea>
+          <span class="atm-hint">An app, a project, a group. A sentence or two helps with approval.</span>
+        </div>
+        <div class="atm-field">
+          <span class="atm-label">Link (optional)</span>
+          <input class="atm-input" name="aboutUrl" type="url" maxlength="300" placeholder="https://" />
         </div>
         <div class="atm-field">
           <span class="atm-label">Email (optional)</span>

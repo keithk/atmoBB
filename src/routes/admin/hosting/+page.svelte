@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invalidateAll } from '$app/navigation';
+  import RichTextEditor from '$lib/components/RichTextEditor.svelte';
   import { relTime } from '$lib/reltime';
   import { onMount } from 'svelte';
 
@@ -15,6 +16,13 @@
   });
 </script>
 
+<p class="atm-hint hosting__optional">
+  Hosting is optional. It's on here because this forum runs with <code>ATMOBB_HOSTING=1</code> (the hosting overlay sets
+  it), so other people can request forums that you run for them. Most forums leave it off, and then neither this page
+  nor <a href="/host">/host</a> exists.
+</p>
+
+{#if form?.pageSaved}<p class="atm-ok">Hosting page saved.</p>{/if}
 {#if form?.approved}<p class="atm-ok">Approved. The site is building; this page flips it to live when it's up.</p>{/if}
 {#if form?.invited}<p class="atm-ok">New invite code: <code>{form.invited}</code></p>{/if}
 {#if form?.capacityUpdated}<p class="atm-ok">Fleet capacity updated.</p>{/if}
@@ -95,6 +103,12 @@
           <span class="hosting__meta">
             forum @{r.forumHandle} · requested by @{r.requesterHandle} · {relTime(r.createdAt)} · {r.siteId ? 'legacy shared hosting' : 'isolated fleet'}
           </span>
+          {#if r.about || r.aboutUrl}
+            <span class="reqrow__about">
+              {#if r.about}{r.about}{/if}
+              {#if r.aboutUrl}<a href={r.aboutUrl} rel="noopener noreferrer nofollow" target="_blank">{r.aboutUrl}</a>{/if}
+            </span>
+          {/if}
           {#if r.status === 'failed' && r.error}
             <span class="hosting__error">{r.error}</span>
           {/if}
@@ -123,6 +137,33 @@
     {:else}
       <p class="atm-empty atm-empty--bare">No requests yet. Hand out an invite code.</p>
     {/each}
+  </div>
+</div>
+
+<div class="atm-card hosting__page">
+  <div class="atm-card__header"><span>Hosting page</span></div>
+  <div class="atm-card__body">
+    <form class="atm-editform" method="POST" action="?/page">
+      <div class="atm-field">
+        <span class="atm-label">Heading</span>
+        <input class="atm-input" name="heading" maxlength="100" value={data.page.heading} placeholder="Host a forum" />
+      </div>
+      <div class="atm-field">
+        <span class="atm-label">What people read on <a href="/host">/host</a></span>
+        <RichTextEditor name="body" placeholder="Who this hosting is for, what you promise, what it costs you…" initial={data.pageDoc} allowImages={false} />
+        <span class="atm-hint">Leave it empty to show the built-in explanation. The request form always appears below it.</span>
+      </div>
+      <label class="hosting__check">
+        <input type="checkbox" name="requireInvite" checked={data.page.requireInvite} />
+        <span>
+          <b>Require an invite code</b>
+          <small>Off, anyone logged in can send a request. You still approve every one, and capacity still applies.</small>
+        </span>
+      </label>
+      <div class="atm-editform__actions">
+        <button class="atm-btn atm-btn--primary atm-btn--sm">save page</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -173,9 +214,16 @@
   }
   .reqrow__who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .reqrow__acts { display: flex; gap: var(--space-2); align-items: center; }
+  .hosting__optional { margin: 0 0 var(--space-4); max-width: 72ch; }
+  .reqrow__about { display: flex; flex-direction: column; gap: 2px; font: var(--type-meta); overflow-wrap: anywhere; }
+  .hosting__page,
   .hosting__invites {
     margin-top: var(--space-5);
   }
+  .hosting__check { display: flex; gap: 6px; align-items: flex-start; font: var(--type-ui); }
+  .hosting__check input { margin-top: 4px; }
+  .hosting__check span { display: grid; gap: 2px; }
+  .hosting__check b { font-weight: var(--w-semibold); }
   .hosting__invite {
     display: flex;
     align-items: baseline;
