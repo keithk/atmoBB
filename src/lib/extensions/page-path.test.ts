@@ -58,4 +58,9 @@ describe('extensionLinkHref', () => {
   it('returns null for a page that would not land under this pageBase', () => {
     expect(extensionLinkHref(pageBase, '')).toBeNull();
   });
+
+  it('refuses a page whose percent-encoded dot segments would resolve outside pageBase', () => {
+    expect(extensionLinkHref(pageBase, '%2e%2e/%2e%2e/admin/extensions')).toBeNull();
+    expect(extensionLinkHref(pageBase, '%2E./%2E./admin/extensions')).toBeNull();
+  });
 });

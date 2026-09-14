@@ -126,6 +126,8 @@ export const isDid = (value: unknown): value is string => typeof value === 'stri
 // allowed characters, but `//` is how both `https://` and `//host` smuggle
 // one in), no `..` segment, and no backslashes.
 const LINK_PAGE_SYNTAX = /^[A-Za-z0-9._~:@%+\-/]+$/;
+// A `.` or `..` segment, written literally or percent-encoded (`%2e`), in any mix of the two.
+const DOT_SEGMENT = /^(?:\.|%2e){1,2}$/i;
 
 const isValidLinkPage = (page: string): boolean =>
   page.length > 0 &&
@@ -133,7 +135,7 @@ const isValidLinkPage = (page: string): boolean =>
   LINK_PAGE_SYNTAX.test(page) &&
   !page.startsWith('/') &&
   !page.includes('//') &&
-  !page.split('/').includes('..');
+  !page.split('/').some((segment) => DOT_SEGMENT.test(segment));
 
 /** The frame message `data` is, or null for anything outside the schema or not allowed in `mode`. */
 export function parseFrameMessage(data: unknown, mode: PanelMode): FrameMessage | null {

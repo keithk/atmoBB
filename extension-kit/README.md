@@ -47,7 +47,7 @@ export default defineExtension({
     return { count }; // any JSON goes back to the panel
   },
   attach({ viewer, thread, forum, input }) {}, // optional: staff attached the extension to a thread
-  timer({ name, payload, forum }) {},  // optional: a timer from timers.set came due
+  timer({ name, at, payload, forum }) {},  // optional: a timer from timers.set came due
   openWork() { return false; }, // optional: work in progress an admin should see before disabling
   migrate({ from, to }) {},     // optional: runs when a new release raises dataVersion
 });

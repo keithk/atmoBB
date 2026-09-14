@@ -13,7 +13,7 @@ import { parseAtUri } from '$lib/appview-paths';
 // forum-repo helpers; every install (including this one) reads the result
 // back through endorsementFor.
 
-const SHA_PATTERN = /^[0-9a-f]{7,64}$/;
+const SHA_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 
 function refuseUrl(gitUrl: string): string | null {
   try {
@@ -43,7 +43,7 @@ export const actions: Actions = {
     if (!gitUrl) return fail(400, { message: 'Enter the repository’s git URL.', fields });
     const urlProblem = refuseUrl(gitUrl);
     if (urlProblem) return fail(400, { message: urlProblem, fields });
-    if (!SHA_PATTERN.test(sha)) return fail(400, { message: 'Enter the release SHA staff reviewed, as hex (7 to 64 characters).', fields });
+    if (!SHA_PATTERN.test(sha)) return fail(400, { message: 'Enter the full commit SHA staff reviewed (40 or 64 hex characters).', fields });
     if (listing && !parseAtUri(listing)) return fail(400, { message: 'The listing thread must be an at:// URI.', fields });
 
     try {

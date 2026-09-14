@@ -111,6 +111,8 @@ describe('parseFrameMessage', () => {
       { type: 'atmobb:link', v, page: '//evil.test', label: 'Go' },
       { type: 'atmobb:link', v, page: '../x', label: 'Go' },
       { type: 'atmobb:link', v, page: 'a/../x', label: 'Go' },
+      { type: 'atmobb:link', v, page: '%2e%2e/x', label: 'Go' },
+      { type: 'atmobb:link', v, page: 'a/%2E./x', label: 'Go' },
       { type: 'atmobb:link', v, page: '/abs', label: 'Go' },
       { type: 'atmobb:link', v, page: 'a\\b', label: 'Go' },
       { type: 'atmobb:link', v, page: 'x'.repeat(513), label: 'Go' },

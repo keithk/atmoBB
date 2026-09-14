@@ -61,5 +61,10 @@ export function extensionLinkHref(pageBase: string, page: string): string | null
   const parsed = parseExtensionPagePath(pageBase);
   if (!parsed) return null;
   const href = extensionPagePath(parsed.repository, page);
-  return href.startsWith(`${pageBase}/-/`) ? href : null;
+  // Compare resolved paths, not raw strings: a browser collapses percent-encoded
+  // dot segments (like `%2e%2e`) the same way it collapses literal ones, so the
+  // containment check has to see the address the same way the browser will.
+  const base = new URL(pageBase, 'https://forum.invalid').pathname;
+  const resolved = new URL(href, 'https://forum.invalid').pathname;
+  return resolved.startsWith(`${base}/-/`) ? href : null;
 }
