@@ -168,6 +168,14 @@ describe('POST /x/[install]/attach', () => {
     expect((await attach({ contentType: 'application/json; charset=utf-8' })).status).toBe(200);
   });
 
+  it("checks the Origin against the request's own origin when ATMOBB_APP_URL isn't set, as on a dev server", async () => {
+    delete state.env.ATMOBB_APP_URL;
+    expect((await attach({ origin: 'https://evil.test' })).status).toBe(403);
+    expect((await attach({ origin: null })).status).toBe(403);
+    await nothingHappened();
+    expect((await attach()).status).toBe(200);
+  });
+
   it('refuses a thread on a members-only board, explaining why', async () => {
     state.getBoardAccess.mockResolvedValue(`at://${FORUM}/space/app.atmobb.forum.privateBoard/games`);
     expect(await attach()).toMatchObject({ status: 403, body: { message: expect.stringContaining('members-only') } });

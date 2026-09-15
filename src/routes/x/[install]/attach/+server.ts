@@ -11,8 +11,8 @@ import { forumJsonPostProblem } from '$lib/server/extensions/requests';
 
 const refuse = (status: number, message: string) => json({ message }, { status });
 
-export const POST: RequestHandler = async ({ request, params, locals }) => {
-  const problem = forumJsonPostProblem(request);
+export const POST: RequestHandler = async ({ request, url, params, locals }) => {
+  const problem = forumJsonPostProblem(request, url);
   if (problem === 'origin') return refuse(403, 'Attach requests must come from this forum.');
   if (problem === 'media-type') return refuse(415, 'Send the attach request as JSON.');
 

@@ -133,6 +133,14 @@ describe('POST /x/[install]/action', () => {
     expect((await act({ contentType: 'application/json; charset=utf-8' })).status).toBe(200);
   });
 
+  it("checks the Origin against the request's own origin when ATMOBB_APP_URL isn't set, as on a dev server", async () => {
+    delete state.env.ATMOBB_APP_URL;
+    expect((await act({ origin: 'https://evil.test' })).status).toBe(403);
+    expect((await act({ origin: null })).status).toBe(403);
+    expect(state.dispatchAction).not.toHaveBeenCalled();
+    expect((await act()).status).toBe(200);
+  });
+
   it('takes the action only from the body, never the URL', async () => {
     expect((await act({ body: { thread: THREAD }, query: '?action=move&input=%7B%7D' })).status).toBe(400);
     expect(state.dispatchAction).not.toHaveBeenCalled();

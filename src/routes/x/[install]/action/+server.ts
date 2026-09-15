@@ -48,8 +48,8 @@ const CALL_STATUS: Record<ExtensionCallErrorCode, number> = {
   bad_output: 502,
 };
 
-export const POST: RequestHandler = async ({ request, params, locals, getClientAddress }) => {
-  const problem = forumJsonPostProblem(request);
+export const POST: RequestHandler = async ({ request, url, params, locals, getClientAddress }) => {
+  const problem = forumJsonPostProblem(request, url);
   if (problem === 'origin') return refuse(403, 'bad_origin', 'Actions must come from this forum.');
   if (problem === 'media-type') return refuse(415, 'bad_request', 'Send the action as JSON.');
 
