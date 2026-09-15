@@ -135,8 +135,10 @@ The panel and the page trade `postMessage`s in bridge version 1, every message c
 | panel → page | `{ type: 'atmobb:attach', v: 1, params }` (attach page only) attaches with this setup |
 | panel → page | `{ type: 'atmobb:source', v: 1, did }` (standalone page only) names the repo the records you're showing come from |
 | panel → page | `{ type: 'atmobb:link', v: 1, page, label }` (thread and page modes only) draws a link to one of your standalone pages, outside the frame |
+| panel → page | `{ type: 'atmobb:names', v: 1, id, dids, handles }` (every mode) asks who up to 100 DIDs are and whose up to 20 handles are |
 | page → panel | `{ type: 'atmobb:init', v: 1, mode, thread, signedIn, path, pageBase }` once, on load; `mode` is `thread`, `page`, or `attach`, and `pageBase` is your standalone page's address, like `/ext/git.example/jack/diplomacy` |
 | page → panel | `{ type: 'atmobb:result', v: 1, id, ok, value }` or `{ ..., ok: false, error: { code, message } }`, answering an action |
+| page → panel | `{ type: 'atmobb:names-result', v: 1, id, names, dids }`, answering a names message |
 
 Post to `parent` with target origin `'*'` (the frame's own origin is opaque) and accept only messages whose `event.source` is `parent`; the template's `ui/panel.js` already does this. Action names top out at 128 characters, message ids at 64, and action input or attach params at 64 KB of JSON; a panel can have at most 8 actions waiting on the server at once.
 
@@ -145,6 +147,20 @@ Post to `parent` with target origin `'*'` (the frame's own origin is opaque) and
 On your standalone page, send `atmobb:source` when you show records read from another repo, like a replay of a game some forum published. atmoBB draws a line above your frame, where your panel can't reach or imitate it: "Records from" the account's handle when the handle resolves back to that DID (otherwise just the DID), the full DID either way, and a chip saying "atmoBB forum" when the DID's repo holds an `app.atmobb.forum.profile` record, or "not an atmoBB forum" when it doesn't or couldn't be checked. It shows "Checking source…" while it looks. atmoBB reads the DID document and the forum profile straight from the account's own PDS, not from any forum's index, so the line works for a forum that has shut down as long as its account's repo is still served. One source shows at a time; sending a different DID replaces the line, and sending the same DID again does nothing. The message is ignored on threads and on the attach page, where the records are the forum's own.
 
 The page looks the source up at `GET /x/<install>/source?did=<did>`, which answers `{ did, handle, handleVerified, forum, forumName? }`, plus `unavailable: true` when the DID document or the repo couldn't be read (with `forum: false`). It's limited to 30 lookups a minute per client address and caches answers for five minutes (thirty seconds when unavailable).
+
+Your panel only ever sees people as DIDs, and it can't look anyone up itself: your handlers have no network and the frame's CSP is `connect-src 'none'`. Send `atmobb:names` to show people by name, or to let someone type a handle where you need a DID. `dids` lists up to 100 DIDs and `handles` up to 20 handles, with or without a leading `@`; you may leave either list out, but not both, and a message with a malformed entry or too many is ignored, so it gets no answer. The page answers with `atmobb:names-result` carrying the same `id`:
+
+```js
+{
+  type: 'atmobb:names-result', v: 1, id,
+  names: { 'did:plc:…': { handle: 'keith.is', displayName: 'Keith' }, 'did:plc:…': null },
+  dids: { '@keith.is': 'did:plc:…', 'nobody.example': null },
+}
+```
+
+`names` has an entry for each DID you asked about and `dids` one for each handle, keyed exactly as you sent it. A handle only counts when it resolves back to the same DID, the check a source line makes; otherwise the entry is null, and so is one for an account that couldn't be read in time. Show the DID when a name is null. `displayName` is the member's display name as this forum shows it, when they've set one. The answer is display help, not proof: your handlers still get only the viewer's DID, so check any DID a form submits on the server side as you would anyway.
+
+The page asks `GET /x/<install>/names?did=<did>&did=…&handle=<handle>&…` for these. It's limited to 30 requests a minute per install per client address, answers within about eight seconds with null for any lookup still running, and caches names for five minutes (thirty seconds for a null). Ask once per DID per page load, not on every render.
 
 On a thread, only signed-in members can run actions. On your standalone page, signed-out visitors can too, counted per client address (see [self-hosting](self-hosting.md#extensions) for `ADDRESS_HEADER`/`XFF_DEPTH`, which that count depends on behind a proxy). Signed-in actions are capped at `ATMOBB_EXTENSIONS_ACTIONS_PER_VIEWER_PER_MINUTE` (30) per viewer per install and `ATMOBB_EXTENSIONS_ACTIONS_PER_INSTALL_PER_MINUTE` (300) per install; signed-out actions share `ATMOBB_EXTENSIONS_ANONYMOUS_ACTIONS_PER_INSTALL_PER_MINUTE` (60) across every address, one running at a time per install.
 

@@ -110,8 +110,10 @@ isn't exactly one of these:
 | panel → page | `{ type: 'atmobb:attach', v: 1, params }` attaches the extension with this setup (attach page only) |
 | panel → page | `{ type: 'atmobb:source', v: 1, did }` names the repo the records you're showing come from (standalone page only) |
 | panel → page | `{ type: 'atmobb:link', v: 1, page, label }` draws a link to one of your standalone pages, outside the frame (thread and page modes only) |
+| panel → page | `{ type: 'atmobb:names', v: 1, id, dids, handles }` asks who up to 100 DIDs are and whose up to 20 handles are (every mode) |
 | page → panel | `{ type: 'atmobb:init', v: 1, mode, thread, signedIn, path, pageBase }` once the panel loads; `mode` is `thread`, `page`, or `attach`; `pageBase` is your standalone page's address |
 | page → panel | `{ type: 'atmobb:result', v: 1, id, ok, value }` or `{ ..., ok: false, error: { code, message } }` answers an action |
+| page → panel | `{ type: 'atmobb:names-result', v: 1, id, names, dids }` answers a names message: `names` maps each DID to `{ handle, displayName? }` or null, `dids` maps each handle, as sent, to its DID or null |
 
 Post to `parent` with target origin `'*'` (the frame has no origin of its own)
 and accept only messages whose `event.source` is `parent`. The template's

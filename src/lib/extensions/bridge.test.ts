@@ -1,18 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   BRIDGE_VERSION,
+  MAX_NAME_DIDS,
+  MAX_NAME_HANDLES,
   MAX_PENDING_ACTIONS,
   PANEL_MAX_HEIGHT,
   PANEL_MIN_HEIGHT,
   actionOutcome,
   clampHeight,
   createPanelBridge,
+  namesFromResponse,
   parseFrameMessage,
   type ActionOutcome,
+  type NamesAnswer,
   type PanelBridgeOptions,
 } from './bridge';
 
 const THREAD = 'at://did:plc:author/app.atmobb.discussion.thread/3kgame';
+const KEITH = 'did:plc:5qartdsce62n2wfyvtocmoob';
+const JACK = 'did:plc:dvh42fok55dox6pzlyevelz6';
 const v = BRIDGE_VERSION;
 
 describe('parseFrameMessage', () => {
@@ -125,6 +131,59 @@ describe('parseFrameMessage', () => {
     ];
     for (const data of bad) expect(parseFrameMessage(data, 'thread'), JSON.stringify(data)).toBeNull();
   });
+
+  it('accepts a names message in every mode, with either list left out but not both', () => {
+    const message = { type: 'atmobb:names', v, id: 3, dids: [KEITH, JACK], handles: ['@keith.is', 'Jack.Example.com'] };
+    for (const mode of ['thread', 'page', 'attach'] as const) expect(parseFrameMessage(message, mode)).toEqual(message);
+    expect(parseFrameMessage({ type: 'atmobb:names', v, id: 'n', dids: [KEITH] }, 'thread')).toEqual({ type: 'atmobb:names', v, id: 'n', dids: [KEITH], handles: [] });
+    expect(parseFrameMessage({ type: 'atmobb:names', v, id: 'n', handles: ['keith.is'] }, 'attach')).toEqual({ type: 'atmobb:names', v, id: 'n', dids: [], handles: ['keith.is'] });
+    const most = { type: 'atmobb:names', v, id: 1, dids: Array.from({ length: MAX_NAME_DIDS }, () => KEITH), handles: Array.from({ length: MAX_NAME_HANDLES }, () => 'keith.is') };
+    expect(parseFrameMessage(most, 'page')).toEqual(most);
+  });
+
+  it('refuses a names message with too many entries, a malformed one, or nothing to ask', () => {
+    const bad: unknown[] = [
+      { type: 'atmobb:names', v, id: 1 },
+      { type: 'atmobb:names', v, id: 1, dids: [], handles: [] },
+      { type: 'atmobb:names', v, dids: [KEITH] },
+      { type: 'atmobb:names', v, id: 1.5, dids: [KEITH] },
+      { type: 'atmobb:names', v: 2, id: 1, dids: [KEITH] },
+      { type: 'atmobb:names', v, id: 1, dids: [KEITH], extra: true },
+      { type: 'atmobb:names', v, id: 1, dids: Array.from({ length: MAX_NAME_DIDS + 1 }, () => KEITH) },
+      { type: 'atmobb:names', v, id: 1, handles: Array.from({ length: MAX_NAME_HANDLES + 1 }, () => 'keith.is') },
+      { type: 'atmobb:names', v, id: 1, dids: KEITH },
+      { type: 'atmobb:names', v, id: 1, dids: { 0: KEITH, length: 1 } },
+      { type: 'atmobb:names', v, id: 1, dids: [KEITH, 'keith.is'] },
+      { type: 'atmobb:names', v, id: 1, dids: [KEITH, null] },
+      { type: 'atmobb:names', v, id: 1, handles: 'keith.is' },
+      { type: 'atmobb:names', v, id: 1, handles: [KEITH] },
+      { type: 'atmobb:names', v, id: 1, handles: ['@@keith.is'] },
+      { type: 'atmobb:names', v, id: 1, handles: ['keith'] },
+      { type: 'atmobb:names', v, id: 1, handles: ['keith .is'] },
+      { type: 'atmobb:names', v, id: 1, handles: ['keith.1s'] },
+      { type: 'atmobb:names', v, id: 1, handles: [`${'a'.repeat(63)}.`.repeat(4) + 'is'] },
+      { type: 'atmobb:names', v, id: 1, handles: [7] },
+    ];
+    for (const data of bad) expect(parseFrameMessage(data, 'thread'), JSON.stringify(data)).toBeNull();
+  });
+});
+
+describe('namesFromResponse', () => {
+  it('answers exactly what was asked, dropping anything malformed or extra', () => {
+    const body = {
+      names: { [KEITH]: { handle: 'keith.is', displayName: 'Keith', extra: 1 }, [JACK]: { handle: '@jack.example.com' }, 'did:plc:other': { handle: 'other.example.com' } },
+      dids: { '@keith.is': KEITH, 'jack.example.com': 'jack', 'other.example.com': KEITH },
+    };
+    expect(namesFromResponse([KEITH, JACK], ['@keith.is', 'jack.example.com'], 200, body)).toEqual({
+      names: { [KEITH]: { handle: 'keith.is', displayName: 'Keith' }, [JACK]: null },
+      dids: { '@keith.is': KEITH, 'jack.example.com': null },
+    });
+  });
+
+  it('answers null for everything asked when the endpoint refused', () => {
+    expect(namesFromResponse([KEITH], ['keith.is'], 429, { code: 'rate_limited', names: { [KEITH]: { handle: 'keith.is' } } })).toEqual({ names: { [KEITH]: null }, dids: { 'keith.is': null } });
+    expect(namesFromResponse([KEITH], [], 200, null)).toEqual({ names: { [KEITH]: null }, dids: {} });
+  });
 });
 
 describe('clampHeight', () => {
@@ -146,6 +205,7 @@ function harness(overrides: Partial<PanelBridgeOptions> = {}) {
     pageBase: '/ext/git.example/jack/diplomacy',
     frame: () => frame as unknown as Window,
     runAction: vi.fn(async (): Promise<ActionOutcome> => ({ ok: true, value: { count: 1 } })),
+    names: vi.fn(async (): Promise<NamesAnswer> => ({ names: { [KEITH]: { handle: 'keith.is', displayName: 'Keith' } }, dids: {} })),
     resize: vi.fn(),
     teardown: vi.fn(),
     ...overrides,
@@ -305,5 +365,42 @@ describe('createPanelBridge', () => {
     const onAttach = harness({ mode: 'attach', link: attach });
     onAttach.bridge.message({ source: onAttach.frame as unknown as Window, data: { type: 'atmobb:link', v, page: 'games/spring-1901', label: 'Replay board' } });
     expect(attach).not.toHaveBeenCalled();
+  });
+
+  it('looks names up for its own frame in every mode and answers with the same id', async () => {
+    for (const mode of ['thread', 'page', 'attach'] as const) {
+      const { bridge, frame, options, posted } = harness({ mode });
+      bridge.message({ source: frame as unknown as Window, data: { type: 'atmobb:names', v, id: 'n1', dids: [KEITH], handles: ['@keith.is'] } });
+      expect(options.names).toHaveBeenCalledExactlyOnceWith([KEITH], ['@keith.is']);
+      await flush();
+      expect(posted()).toEqual([{ type: 'atmobb:names-result', v, id: 'n1', names: { [KEITH]: { handle: 'keith.is', displayName: 'Keith' } }, dids: {} }]);
+    }
+  });
+
+  it('answers null for everything asked when the lookup fails', async () => {
+    const names = vi.fn(async (): Promise<NamesAnswer> => {
+      throw new TypeError('Failed to fetch');
+    });
+    const { bridge, frame, posted } = harness({ names });
+    bridge.message({ source: frame as unknown as Window, data: { type: 'atmobb:names', v, id: 2, dids: [KEITH, JACK], handles: ['keith.is'] } });
+    await flush();
+    expect(posted()).toEqual([{ type: 'atmobb:names-result', v, id: 2, names: { [KEITH]: null, [JACK]: null }, dids: { 'keith.is': null } }]);
+  });
+
+  it('ignores a names message from another window or outside the schema, and drops an answer once the panel is torn down', async () => {
+    let finish!: (answer: NamesAnswer) => void;
+    const names = vi.fn(() => new Promise<NamesAnswer>((resolve) => (finish = resolve)));
+    const { bridge, frame } = harness({ names });
+    bridge.message({ source: { postMessage: vi.fn() } as unknown as Window, data: { type: 'atmobb:names', v, id: 1, dids: [KEITH] } });
+    bridge.message({ source: frame as unknown as Window, data: { type: 'atmobb:names', v, id: 1, dids: ['keith.is'] } });
+    expect(names).not.toHaveBeenCalled();
+
+    bridge.load();
+    bridge.message({ source: frame as unknown as Window, data: { type: 'atmobb:names', v, id: 1, dids: [KEITH] } });
+    bridge.load();
+    frame.postMessage.mockClear();
+    finish({ names: { [KEITH]: null }, dids: {} });
+    await flush();
+    expect(frame.postMessage).not.toHaveBeenCalled();
   });
 });

@@ -23,6 +23,10 @@ export const MAX_PENDING_ACTIONS = 8;
 export const MAX_LINK_PAGE_LENGTH = 512;
 export const MAX_LINK_LABEL_LENGTH = 80;
 
+/** Most DIDs and handles one names message may ask about. */
+export const MAX_NAME_DIDS = 100;
+export const MAX_NAME_HANDLES = 20;
+
 /** Where the panel is shown: on a bound thread, on the extension's own page, or on the staff attach page. */
 export type PanelMode = 'thread' | 'page' | 'attach';
 
@@ -74,7 +78,21 @@ export interface LinkMessage {
   page: string;
   label: string;
 }
-export type FrameMessage = ActionMessage | ResizeMessage | AttachMessage | SourceMessage | LinkMessage;
+/**
+ * Every mode: ask who people are. The panel knows people only by DID and can't
+ * reach the network, so the page looks the names up and answers with a
+ * names-result carrying the same id. Either list may be left out, but not both.
+ */
+export interface NamesMessage {
+  type: 'atmobb:names';
+  v: typeof BRIDGE_VERSION;
+  id: MessageId;
+  /** DIDs to name. */
+  dids: string[];
+  /** Handles to find the DIDs of, with or without a leading `@`. */
+  handles: string[];
+}
+export type FrameMessage = ActionMessage | ResizeMessage | AttachMessage | SourceMessage | LinkMessage | NamesMessage;
 
 // Page to frame.
 
@@ -97,7 +115,20 @@ export interface BridgeError {
 export type ActionOutcome = { ok: true; value: unknown } | { ok: false; error: BridgeError };
 /** The answer to one action message, matched by its id. */
 export type ResultMessage = { type: 'atmobb:result'; v: typeof BRIDGE_VERSION; id: MessageId } & ActionOutcome;
-export type HostMessage = InitMessage | ResultMessage;
+/** What a panel may call a person: a handle verified to resolve back to their DID, and their display name on this forum when they have one. */
+export interface PersonName {
+  handle: string;
+  displayName?: string;
+}
+export interface NamesAnswer {
+  /** Each DID asked about, null when it has no verified handle or couldn't be looked up. */
+  names: Record<string, PersonName | null>;
+  /** Each handle asked about, exactly as asked, to the DID it verifiably belongs to, or null. */
+  dids: Record<string, string | null>;
+}
+/** The answer to one names message, matched by its id. */
+export type NamesResultMessage = { type: 'atmobb:names-result'; v: typeof BRIDGE_VERSION; id: MessageId } & NamesAnswer;
+export type HostMessage = InitMessage | ResultMessage | NamesResultMessage;
 
 const hasOnly = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).every((key) => keys.includes(key));
 
@@ -120,6 +151,20 @@ export const MAX_DID_LENGTH = 2048;
 const DID_SYNTAX = /^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$/;
 
 export const isDid = (value: unknown): value is string => typeof value === 'string' && value.length <= MAX_DID_LENGTH && DID_SYNTAX.test(value);
+
+export const MAX_HANDLE_LENGTH = 253;
+// atproto's handle syntax: dot-separated labels of letters, digits, and inner hyphens, the last starting with a letter.
+const HANDLE_SYNTAX = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
+
+/** Whether `value` is a handle, with or without a leading `@`. */
+export const isHandle = (value: unknown): value is string => {
+  if (typeof value !== 'string') return false;
+  const handle = value.startsWith('@') ? value.slice(1) : value;
+  return handle.length <= MAX_HANDLE_LENGTH && HANDLE_SYNTAX.test(handle);
+};
+
+const isList = (value: unknown, max: number, valid: (entry: unknown) => entry is string): value is string[] =>
+  Array.isArray(value) && value.length <= max && value.every((entry) => valid(entry));
 
 // A page path stays relative, inside a safe character set, and never climbs
 // out of the extension's own pages: no scheme or host (`:` and `/` are
@@ -171,6 +216,12 @@ export function parseFrameMessage(data: unknown, mode: PanelMode): FrameMessage 
       if (!trimmedLabel || trimmedLabel.length > MAX_LINK_LABEL_LENGTH) return null;
       return { type: 'atmobb:link', v: BRIDGE_VERSION, page, label: trimmedLabel };
     }
+    case 'atmobb:names': {
+      const { id, dids = [], handles = [] } = data;
+      if (!hasOnly(data, ['type', 'v', 'id', 'dids', 'handles']) || !validId(id)) return null;
+      if (!isList(dids, MAX_NAME_DIDS, isDid) || !isList(handles, MAX_NAME_HANDLES, isHandle) || (!dids.length && !handles.length)) return null;
+      return { type: 'atmobb:names', v: BRIDGE_VERSION, id, dids: [...dids], handles: [...handles] };
+    }
     default:
       return null;
   }
@@ -193,6 +244,26 @@ export function actionOutcome(status: number, body: unknown): ActionOutcome {
   };
 }
 
+const personName = (value: unknown): PersonName | null => {
+  if (!isObject(value) || !isHandle(value.handle) || value.handle.startsWith('@')) return null;
+  return typeof value.displayName === 'string' && value.displayName ? { handle: value.handle, displayName: value.displayName } : { handle: value.handle };
+};
+
+/**
+ * The names to answer a panel with, from the names endpoint's status and JSON
+ * body: an entry for exactly the DIDs and handles asked about, null for each
+ * the endpoint didn't resolve, and null for all of them when it refused.
+ */
+export function namesFromResponse(dids: string[], handles: string[], status: number, body: unknown): NamesAnswer {
+  const answer = status === 200 && isObject(body) ? body : {};
+  const names = isObject(answer.names) ? answer.names : {};
+  const found = isObject(answer.dids) ? answer.dids : {};
+  return {
+    names: Object.fromEntries(dids.map((did) => [did, Object.hasOwn(names, did) ? personName(names[did]) : null])),
+    dids: Object.fromEntries(handles.map((handle) => [handle, Object.hasOwn(found, handle) && isDid(found[handle]) ? found[handle] : null])),
+  };
+}
+
 export const clampHeight = (height: number) => Math.min(PANEL_MAX_HEIGHT, Math.max(PANEL_MIN_HEIGHT, Math.round(height)));
 
 export interface PanelBridgeOptions {
@@ -211,6 +282,8 @@ export interface PanelBridgeOptions {
   source?: (did: string) => void;
   /** Thread and page modes only: a link to a page of the extension's own, or '' to clear it. */
   link?: (page: string, label: string) => void;
+  /** Who the DIDs are and whose the handles are. */
+  names: (dids: string[], handles: string[]) => Promise<NamesAnswer>;
   resize: (height: number) => void;
   /** Remove the frame. Called at most once. */
   teardown: () => void;
@@ -278,6 +351,12 @@ export function createPanelBridge(options: PanelBridgeOptions): PanelBridge {
           return;
         case 'atmobb:link':
           options.link?.(message.page, message.label);
+          return;
+        case 'atmobb:names':
+          options
+            .names(message.dids, message.handles)
+            .catch(() => namesFromResponse(message.dids, message.handles, 0, null))
+            .then((answer) => post({ type: 'atmobb:names-result', v: BRIDGE_VERSION, id: message.id, ...answer }));
           return;
         case 'atmobb:action': {
           if (pending >= MAX_PENDING_ACTIONS) {

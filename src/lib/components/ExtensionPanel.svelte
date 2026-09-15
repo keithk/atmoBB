@@ -8,9 +8,11 @@
   // the panel only names a DID, and atmoBB checks who that is. Same for a link
   // to the extension's own pages: the panel only names a page path, and this
   // component builds the href, since a link followed inside the sandboxed
-  // frame would just navigate the frame and close the panel.
+  // frame would just navigate the frame and close the panel. And the panel
+  // can't look anyone up itself, so it asks the bridge for names and this
+  // component fetches them from the install's names endpoint.
   import { onMount } from 'svelte';
-  import { actionOutcome, createPanelBridge, type ActionOutcome, type PanelMode } from '$lib/extensions/bridge';
+  import { actionOutcome, createPanelBridge, namesFromResponse, type ActionOutcome, type NamesAnswer, type PanelMode } from '$lib/extensions/bridge';
   import { extensionLinkHref } from '$lib/extensions/page-path';
   import { createSourceTracker, sourceFromResponse, sourceLine, type SourceIdentity, type SourceState } from '$lib/extensions/source';
 
@@ -56,6 +58,12 @@
     return sourceFromResponse(did, response.status, await response.json().catch(() => null));
   }
 
+  async function lookupNames(dids: string[], handles: string[]): Promise<NamesAnswer> {
+    const query = new URLSearchParams([...dids.map((did) => ['did', did]), ...handles.map((handle) => ['handle', handle])]);
+    const response = await fetch(`/x/${encodeURIComponent(installId)}/names?${query}`, { headers: { accept: 'application/json' } });
+    return namesFromResponse(dids, handles, response.status, await response.json().catch(() => null));
+  }
+
   onMount(() => {
     // Built by hand rather than in markup so the sandbox is in place before
     // the frame's first navigation and the load listener sees its first load.
@@ -80,6 +88,7 @@
         const href = page ? extensionLinkHref(pageBase, page) : null;
         link = href ? { href, label } : null;
       },
+      names: lookupNames,
       resize: (next) => (height = next),
       teardown: () => {
         frame.remove();

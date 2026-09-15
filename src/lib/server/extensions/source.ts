@@ -11,7 +11,9 @@ import { RateWindows } from './rate-window';
 // goes to the DID's own identity and PDS through the hardened fetcher, never
 // through Happyview, so the answer holds for a forum this install has never
 // indexed or one that no longer runs. Visitors reach this signed out, so
-// lookups are counted per client address.
+// lookups are counted per client address. The names panels show people by
+// (names.ts) resolve and verify handles, and read records, through the same
+// helpers.
 
 export const FORUM_PROFILE_COLLECTION = 'app.atmobb.forum.profile';
 /** The forum profile's record key; the lexicon fixes it as `literal:self`. */
@@ -29,7 +31,7 @@ const CLIENT_WINDOWS_MAX = 5_000;
 const HANDLE_TIMEOUT_MS = 3_000;
 const HANDLE_MAX_BYTES = 2_048;
 const PROFILE_TIMEOUT_MS = 5_000;
-/** A forum profile carries up to 100 KB of custom CSS besides everything else. */
+/** A forum profile carries up to 100 KB of custom CSS besides everything else; an actor profile, per-forum overrides. */
 const PROFILE_MAX_BYTES = 512 * 1024;
 const FORUM_NAME_MAX = 100;
 
@@ -52,7 +54,7 @@ const decodeJson = (body: Uint8Array): unknown => {
 };
 
 /** The DID a handle resolves to: its `_atproto` TXT record when it has one, otherwise its HTTPS well-known. */
-async function handleDid(handle: string): Promise<string | null> {
+export async function handleDid(handle: string): Promise<string | null> {
   let records: string[][] = [];
   try {
     records = await deps.resolveTxt(`_atproto.${handle}`);
@@ -74,21 +76,34 @@ async function handleDid(handle: string): Promise<string | null> {
 }
 
 /** The handle a DID document claims, lowercased, or null when its first at:// alias isn't a usable handle. */
-function claimedHandle(doc: DidDocument): string | null {
+export function claimedHandle(doc: DidDocument): string | null {
   const alias = doc.alsoKnownAs?.find((entry) => typeof entry === 'string' && entry.startsWith('at://'));
   const handle = alias?.slice('at://'.length).toLowerCase();
   return handle && isValidHandle(handle) && !handle.endsWith('.invalid') ? handle : null;
 }
 
-type ForumCheck = { forum: boolean; forumName?: string; unavailable?: true };
+/** The DID's document, or null when it can't be read or is another DID's. */
+export async function didDocumentFor(did: string): Promise<DidDocument | null> {
+  try {
+    const doc = await deps.resolveDidDocument(did);
+    return isObject(doc) && doc.id === did ? doc : null;
+  } catch {
+    return null;
+  }
+}
 
-/** Whether the DID's own PDS holds a forum profile record for it. */
-async function forumProfile(did: string, doc: DidDocument): Promise<ForumCheck> {
+export type RepoRecord = { status: 'found'; value: unknown } | { status: 'missing' } | { status: 'unavailable' };
+
+/**
+ * One record read straight from the DID's own PDS: found, missing when the
+ * repo has no such record (or there's no PDS to hold one), or unavailable when
+ * the PDS couldn't be read.
+ */
+export async function repoRecord(did: string, doc: DidDocument, collection: string, rkey: string): Promise<RepoRecord> {
   const pds = pdsServiceEndpoint(doc, did);
-  // No PDS means no repo, so no forum profile could be read from it.
-  if (typeof pds !== 'string' || !pds) return { forum: false };
+  if (typeof pds !== 'string' || !pds) return { status: 'missing' };
 
-  const query = new URLSearchParams({ repo: did, collection: FORUM_PROFILE_COLLECTION, rkey: FORUM_PROFILE_RKEY });
+  const query = new URLSearchParams({ repo: did, collection, rkey });
   let res: OutboundFetchResult;
   try {
     res = await deps.fetch(`${pds.replace(/\/+$/, '')}/xrpc/com.atproto.repo.getRecord?${query}`, {
@@ -97,26 +112,29 @@ async function forumProfile(did: string, doc: DidDocument): Promise<ForumCheck> 
       timeoutMs: PROFILE_TIMEOUT_MS,
     });
   } catch {
-    return { forum: false, unavailable: true };
+    return { status: 'unavailable' };
   }
   const body = decodeJson(res.body);
-  if (res.status === 400 && isObject(body) && body.error === 'RecordNotFound') return { forum: false };
-  if (res.status !== 200 || !isObject(body)) return { forum: false, unavailable: true };
+  if (res.status === 400 && isObject(body) && body.error === 'RecordNotFound') return { status: 'missing' };
+  if (res.status !== 200 || !isObject(body)) return { status: 'unavailable' };
+  if (body.uri !== undefined && body.uri !== `at://${did}/${collection}/${rkey}`) return { status: 'missing' };
+  return { status: 'found', value: body.value };
+}
 
-  const expectedUri = `at://${did}/${FORUM_PROFILE_COLLECTION}/${FORUM_PROFILE_RKEY}`;
-  if ((body.uri !== undefined && body.uri !== expectedUri) || !isObject(body.value) || typeof body.value.name !== 'string') return { forum: false };
-  const forumName = body.value.name.trim().slice(0, FORUM_NAME_MAX);
+type ForumCheck = { forum: boolean; forumName?: string; unavailable?: true };
+
+/** Whether the DID's own PDS holds a forum profile record for it. */
+async function forumProfile(did: string, doc: DidDocument): Promise<ForumCheck> {
+  const record = await repoRecord(did, doc, FORUM_PROFILE_COLLECTION, FORUM_PROFILE_RKEY);
+  if (record.status === 'unavailable') return { forum: false, unavailable: true };
+  if (record.status === 'missing' || !isObject(record.value) || typeof record.value.name !== 'string') return { forum: false };
+  const forumName = record.value.name.trim().slice(0, FORUM_NAME_MAX);
   return forumName ? { forum: true, forumName } : { forum: true };
 }
 
 async function resolveSource(did: string): Promise<SourceIdentity> {
-  let doc: DidDocument;
-  try {
-    doc = await deps.resolveDidDocument(did);
-  } catch {
-    return unresolvedSource(did);
-  }
-  if (!isObject(doc) || doc.id !== did) return unresolvedSource(did);
+  const doc = await didDocumentFor(did);
+  if (!doc) return unresolvedSource(did);
 
   const handle = claimedHandle(doc);
   const [resolved, forum] = await Promise.all([handle ? handleDid(handle) : null, forumProfile(did, doc)]);

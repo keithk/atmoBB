@@ -7,8 +7,10 @@
 //                  { type: 'atmobb:attach', v: 1, params }   (attach page only)
 //                  { type: 'atmobb:source', v: 1, did }      (standalone page only)
 //                  { type: 'atmobb:link', v: 1, page, label } (not on the attach page)
+//                  { type: 'atmobb:names', v: 1, id, dids, handles }
 //   page -> panel  { type: 'atmobb:init', v: 1, mode, thread, signedIn, path, pageBase }
 //                  { type: 'atmobb:result', v: 1, id, ok, value | error }
+//                  { type: 'atmobb:names-result', v: 1, id, names, dids }
 //
 // `mode` is 'thread' on a thread, 'page' on the extension's own page, and
 // 'attach' on the page where staff attach it to a thread. The page drops any
