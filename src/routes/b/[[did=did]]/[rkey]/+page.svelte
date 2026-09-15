@@ -23,6 +23,8 @@
   const staff = $derived(data.canModerate);
   const name = (t: { authorProfile?: { displayName?: string }; author: string }) =>
     t.authorProfile?.displayName ?? data.handles[t.author] ?? t.author.slice(8, 20);
+  const href = (t: { uri: string; title: string; boardName?: string }) =>
+    threadPath(t.uri, t.boardName ?? data.board?.name, t.title);
 
   const filtered = $derived(!!(data.filters.q || data.filters.tag));
   const boardThreads = $derived(data.board?.threadCount ?? 0);
@@ -123,7 +125,7 @@
   {#each data.threads as t}
     <article class="atm-threadrow" class:atm-threadrow--pinned={t.pinned} class:atm-threadrow--locked={t.locked}>
       <div>
-        <div class="atm-threadrow__title"><a href={threadPath(t.uri)}>{t.title}</a></div>
+        <div class="atm-threadrow__title"><a href={href(t)}>{t.title}</a></div>
         {#if t.tags?.length}
           <div class="atm-topic-tags" aria-label="Tags">
             {#each t.tags as tag}<a class="atm-topic-tag" href="{basePath}?tag={encodeURIComponent(tag)}">{tag}</a>{/each}
@@ -135,7 +137,7 @@
             <span>&middot; via <span class="atm-via">{t.origin.name ?? t.origin.did.slice(8, 24)}</span></span>
           {/if}
           <span>&middot; started {relTime(t.createdAt)}</span>
-          <TopicReadStatus accountDid={user?.did} forumDid={data.forumDid} threadUri={t.uri} canonicalHref={threadPath(t.uri)} createdAt={t.createdAt} lastActivity={t.lastActivity} replyCount={t.replyCount} lastPostBy={t.replyCount === 0 ? t.author : t.lastReplyBy} />
+          <TopicReadStatus accountDid={user?.did} forumDid={data.forumDid} threadUri={t.uri} canonicalHref={href(t)} createdAt={t.createdAt} lastActivity={t.lastActivity} replyCount={t.replyCount} lastPostBy={t.replyCount === 0 ? t.author : t.lastReplyBy} />
           {#if staff}
             {#snippet modact(action: string, label: string, title: string)}
               <form class="atm-modact" method="POST" action="?/moderateThread">
@@ -234,6 +236,7 @@
           };
         }}
       >
+        <input type="hidden" name="boardName" value={data.board?.name ?? ''} />
         <div class="atm-field">
           <span class="atm-label">Title</span>
           <input class="atm-input" name="title" maxlength="300" required placeholder="Give your thread a title" />

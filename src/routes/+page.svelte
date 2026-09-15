@@ -121,7 +121,7 @@
                 <Avatar seed={board.latest.author} profile={board.latest.authorProfile} size={40} />
                 <div class="atm-boardrow__last-body">
                   <div class="atm-boardrow__last-title">
-                    <a href={threadPath(board.latest.uri)}>{board.latest.title}</a>
+                    <a href={threadPath(board.latest.uri, board.value.name, board.latest.title)}>{board.latest.title}</a>
                   </div>
                   <div>
                     by <MemberLink did={board.latest.author}>{authorName(board.latest)}</MemberLink>

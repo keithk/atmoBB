@@ -16,5 +16,7 @@ export const GET: RequestHandler = async ({ params, url, locals, isDataRequest, 
   if (page.replyIndex === undefined) error(404, 'That reply is not in this thread.');
   const offset = Math.floor(page.replyIndex / THREAD_PAGE_SIZE) * THREAD_PAGE_SIZE;
   const query = offset ? `?cursor=${offset}` : '';
-  redirect(302, `/t/${params.did}/${params.rkey}${query}#${postAnchor(reply)}`);
+  const postMarker = url.pathname.lastIndexOf('/p/');
+  const threadPath = postMarker >= 0 ? url.pathname.slice(0, postMarker) : `/t/${params.did}/${params.rkey}`;
+  redirect(302, `${threadPath}${query}#${postAnchor(reply)}`);
 };

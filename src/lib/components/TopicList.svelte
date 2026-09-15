@@ -29,6 +29,7 @@
 
   const name = (thread: ThreadSummary) =>
     thread.authorProfile?.displayName ?? handles[thread.author] ?? thread.author.slice(8, 18);
+  const href = (thread: ThreadSummary) => threadPath(thread.uri, thread.boardName, thread.title);
 </script>
 
 <div class="atm-topic-list" class:atm-panel={!embedded}>
@@ -36,7 +37,7 @@
   {#each threads as thread}
     <article class="atm-threadrow">
       <div class="atm-threadrow__main">
-        <div class="atm-threadrow__title"><a href={threadPath(thread.uri)}>{thread.title}</a></div>
+        <div class="atm-threadrow__title"><a href={href(thread)}>{thread.title}</a></div>
         {#if thread.tags?.length}
           <div class="atm-topic-tags" aria-label="Tags">
             {#each thread.tags as tag}
@@ -57,7 +58,7 @@
               {accountDid}
               {forumDid}
               threadUri={thread.uri}
-              canonicalHref={threadPath(thread.uri)}
+              canonicalHref={href(thread)}
               createdAt={thread.createdAt}
               lastActivity={thread.lastActivity}
               replyCount={thread.replyCount}

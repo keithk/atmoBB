@@ -2,7 +2,10 @@
 // notifications prompt. A fixed allowlist of this app's own route shapes, so
 // a crafted `next` can never bounce someone off the forum.
 const SETTINGS = /^\/settings\/notifications(\?reconsented=1)?$/;
-const PUBLIC_THREAD = /^\/t\/did:[a-z0-9:.-]+\/[A-Za-z0-9._~-]+$/;
+const SLUG = String.raw`(?:[A-Za-z0-9-]|%[0-9A-Fa-f]{2})+`;
+const PUBLIC_THREAD = new RegExp(
+  String.raw`^\/t\/(?:did:[a-z0-9:.-]+\/[A-Za-z0-9._~-]+|${SLUG}\/${SLUG}\/did:[a-z0-9:.-]+\/[A-Za-z0-9._~-]+)$`,
+);
 const SPACE_THREAD = /^\/b\/(did:[a-z0-9:.-]+\/)?[A-Za-z0-9._~-]+\/t\/did:[a-z0-9:.-]+\/[A-Za-z0-9._~-]+$/;
 const NOTIFICATIONS = /^\/notifications$/;
 // Entry ids are UUIDs (store.ts); the only query an open link carries is the

@@ -29,7 +29,10 @@ export const GET: RequestHandler = async ({ url }) => {
       ...index.boards
         .filter((board) => !spaceOfBoard(board.value.access))
         .map((board) => ({ path: boardPath(board.uri, FORUM_DID()), lastmod: board.latestActivity })),
-      ...latest.threads.map((thread) => ({ path: threadPath(thread.uri), lastmod: thread.lastActivity })),
+      ...latest.threads.map((thread) => ({
+        path: threadPath(thread.uri, thread.boardName, thread.title),
+        lastmod: thread.lastActivity,
+      })),
     );
   } catch {
     // Core pages still make a valid sitemap while the appview is unavailable.

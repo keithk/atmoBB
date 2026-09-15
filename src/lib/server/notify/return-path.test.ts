@@ -9,6 +9,12 @@ describe('safeReturnPath', () => {
 
   it('accepts public and members-only thread paths', () => {
     expect(safeReturnPath('/t/did:plc:x/abc')).toBe('/t/did:plc:x/abc');
+    expect(safeReturnPath('/t/general-chat/what-is-new/did:plc:x/abc')).toBe(
+      '/t/general-chat/what-is-new/did:plc:x/abc',
+    );
+    expect(safeReturnPath('/t/%E4%BA%A4%E6%B5%81/welcome/did:plc:x/abc')).toBe(
+      '/t/%E4%BA%A4%E6%B5%81/welcome/did:plc:x/abc',
+    );
     expect(safeReturnPath('/b/general/t/did:plc:x/3kabc')).toBe('/b/general/t/did:plc:x/3kabc');
     expect(safeReturnPath('/b/did:web:other.forum/general/t/did:plc:x/3kabc')).toBe(
       '/b/did:web:other.forum/general/t/did:plc:x/3kabc',
