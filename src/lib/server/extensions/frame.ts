@@ -1,6 +1,7 @@
 import { lstat, readFile } from 'node:fs/promises';
 import { join, posix } from 'node:path';
 import { env } from '$env/dynamic/private';
+import { FONTS_DIRECTORY, FONTS_STYLESHEET } from './fonts';
 import { extensionsLockHeld } from './lock';
 import { extensionsEnabled } from './manifest';
 import { bundleDir, getInstall } from './registry';
@@ -11,13 +12,14 @@ import { bundleDir, getInstall } from './registry';
 // as a page, embedding it as an object, or starting a worker from it is
 // refused, and so is any request that doesn't say what loads it. Every
 // response, refusals included, carries a policy that sandboxes the document,
-// allows scripts and styles only from this install's frame directory, and
-// allows no network access. Nothing here reads or sets cookies.
+// allows scripts, styles, images, and fonts only from this install's frame
+// directory, plus the forum's own fonts stylesheet and the font files beside it
+// (fonts.ts), and allows no network access. Nothing here reads or sets cookies.
 
 const INSTALL_ID = /^[A-Za-z0-9_-]{22}$/;
 const SEGMENT = /^[A-Za-z0-9._-]+$/;
 
-/** Whether a request path, encoded or not, is under an install's frame route. */
+/** Whether a request path, encoded or not, is one a panel frame loads: under an install's frame route or the forum's fonts directory. */
 export function isFramePath(pathname: string): boolean {
   let decoded = pathname;
   try {
@@ -25,7 +27,7 @@ export function isFramePath(pathname: string): boolean {
   } catch {
     // Routing decodes the path too; a malformed escape leaves it as sent.
   }
-  return [pathname, decoded].some((path) => /^\/x\/[^/]+\/frame(?:\/|$)/.test(path));
+  return [pathname, decoded].some((path) => /^\/x\/(?:[^/]+\/frame|fonts)(?:\/|$)/.test(path));
 }
 
 interface FileType {
@@ -88,13 +90,14 @@ const appOrigin = (fallback: string) => (env.ATMOBB_APP_URL ? new URL(env.ATMOBB
 function frameHeaders(origin: string, installId: string, subresource: boolean): Headers {
   // A malformed id never reaches a header; its responses allow no scripts at all.
   const own = INSTALL_ID.test(installId) ? `${origin}/x/${installId}/frame/` : "'none'";
+  const withOwn = (source: string) => (own === "'none'" ? source : `${own} ${source}`);
   const policy = [
     'sandbox allow-scripts',
     "default-src 'none'",
     `script-src ${own}`,
-    `style-src ${own}`,
-    `img-src ${own === "'none'" ? 'data:' : `${own} data:`}`,
-    `font-src ${own}`,
+    `style-src ${withOwn(`${origin}${FONTS_STYLESHEET}`)}`,
+    `img-src ${withOwn('data:')}`,
+    `font-src ${withOwn(`${origin}${FONTS_DIRECTORY}`)}`,
     "connect-src 'none'",
     "frame-src 'none'",
     "worker-src 'none'",

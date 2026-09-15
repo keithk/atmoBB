@@ -9,17 +9,26 @@ import {
   actionOutcome,
   clampHeight,
   createPanelBridge,
+  isFontList,
+  isThemeColor,
   namesFromResponse,
   parseFrameMessage,
+  parseTheme,
   type ActionOutcome,
   type NamesAnswer,
   type PanelBridgeOptions,
+  type PanelTheme,
 } from './bridge';
 
 const THREAD = 'at://did:plc:author/app.atmobb.discussion.thread/3kgame';
 const KEITH = 'did:plc:5qartdsce62n2wfyvtocmoob';
 const JACK = 'did:plc:dvh42fok55dox6pzlyevelz6';
 const v = BRIDGE_VERSION;
+const THEME: PanelTheme = {
+  scheme: 'light',
+  colors: { ground: '#eceae7', surface: '#ffffff', accent: '#f79b7a', accentInk: '#4a2a1c', okSoft: 'rgba(224, 239, 228, 0.9)' },
+  fonts: { body: "'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif", mono: '"IBM Plex Mono", ui-monospace, monospace' },
+};
 
 describe('parseFrameMessage', () => {
   it('accepts the frame messages in their exact shapes', () => {
@@ -186,6 +195,70 @@ describe('namesFromResponse', () => {
   });
 });
 
+describe('parseTheme', () => {
+  it('accepts a theme in its exact shape, in either scheme, with any names left out', () => {
+    expect(parseTheme(THEME)).toEqual(THEME);
+    expect(parseTheme({ ...THEME, scheme: 'dark' })).toEqual({ ...THEME, scheme: 'dark' });
+    expect(parseTheme({ scheme: 'dark', colors: {}, fonts: {} })).toEqual({ scheme: 'dark', colors: {}, fonts: {} });
+    expect(parseTheme({ scheme: 'light', colors: { ink: 'light-dark(#2b2a2e, #ecebf3)', line: 'oklch(0.9 0.01 60 / 50%)' }, fonts: {} })).not.toBeNull();
+  });
+
+  it('refuses a theme with an unknown key, a bad scheme, an invalid color, or a bad font list', () => {
+    const bad: unknown[] = [
+      null,
+      [],
+      { scheme: 'light', colors: {} },
+      { ...THEME, css: 'body{}' },
+      { ...THEME, scheme: 'dim' },
+      { ...THEME, scheme: 'light dark' },
+      { ...THEME, scheme: undefined },
+      { ...THEME, colors: [] },
+      { ...THEME, fonts: null },
+      { ...THEME, colors: { background: '#fff' } },
+      { ...THEME, fonts: { serif: 'serif' } },
+      { ...THEME, colors: { ground: 7 } },
+      { ...THEME, colors: { ground: '' } },
+      { ...THEME, colors: { ground: '#fff; background: red' } },
+      { ...THEME, colors: { ground: '#fff}body{color:red' } },
+      { ...THEME, colors: { ground: 'url(/x/other/frame/track.png)' } },
+      { ...THEME, colors: { ground: 'var(--forum-bg)' } },
+      { ...THEME, colors: { ground: '"red"' } },
+      { ...THEME, colors: { ground: 'red\\,blue' } },
+      { ...THEME, colors: { ground: `#${'f'.repeat(300)}` } },
+      { ...THEME, fonts: { body: '' } },
+      { ...THEME, fonts: { body: 'Georgia, serif' } },
+      { ...THEME, fonts: { body: "'IBM Plex Sans', " } },
+      { ...THEME, fonts: { body: "'Plex'; src: url(x)" } },
+      { ...THEME, fonts: { body: "'Plex\\27 ', serif" } },
+      { ...THEME, fonts: { body: `'${'x'.repeat(65)}', serif` } },
+      { ...THEME, fonts: { body: "'Plex\", serif" } },
+    ];
+    for (const theme of bad) expect(parseTheme(theme), JSON.stringify(theme)).toBeNull();
+  });
+
+  it("checks colors with the browser's own parser where there is one", () => {
+    const supports = vi.fn((_property: string, value: string) => value !== 'notacolor');
+    vi.stubGlobal('CSS', { supports });
+    try {
+      expect(isThemeColor('#fff')).toBe(true);
+      expect(isThemeColor('notacolor')).toBe(false);
+      expect(supports).toHaveBeenCalledWith('color', 'notacolor');
+      expect(parseTheme({ ...THEME, colors: { ground: 'notacolor' } })).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('takes font lists of quoted names and generic families only', () => {
+    expect(isFontList("'Trebuchet MS', 'IBM Plex Sans', system-ui, sans-serif")).toBe(true);
+    expect(isFontList('ui-monospace,monospace')).toBe(true);
+    expect(isFontList("'SFMono-Regular'")).toBe(true);
+    expect(isFontList('SFMono-Regular, monospace')).toBe(false);
+    expect(isFontList('inherit')).toBe(false);
+    expect(isFontList("'Plex' sans-serif")).toBe(false);
+  });
+});
+
 describe('clampHeight', () => {
   it('keeps the panel between its minimum and maximum height', () => {
     expect(clampHeight(0)).toBe(PANEL_MIN_HEIGHT);
@@ -206,6 +279,7 @@ function harness(overrides: Partial<PanelBridgeOptions> = {}) {
     frame: () => frame as unknown as Window,
     runAction: vi.fn(async (): Promise<ActionOutcome> => ({ ok: true, value: { count: 1 } })),
     names: vi.fn(async (): Promise<NamesAnswer> => ({ names: { [KEITH]: { handle: 'keith.is', displayName: 'Keith' } }, dids: {} })),
+    theme: vi.fn(() => THEME),
     resize: vi.fn(),
     teardown: vi.fn(),
     ...overrides,
@@ -236,7 +310,37 @@ describe('createPanelBridge', () => {
   it('sends the frame its init on the first load, to any origin since a sandboxed frame has none', () => {
     const { bridge, frame } = harness();
     bridge.load();
-    expect(frame.postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'atmobb:init', v, mode: 'thread', thread: { uri: THREAD }, signedIn: true, path: '', pageBase: '/ext/git.example/jack/diplomacy' }, '*');
+    expect(frame.postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'atmobb:init', v, mode: 'thread', thread: { uri: THREAD }, signedIn: true, path: '', pageBase: '/ext/git.example/jack/diplomacy', theme: THEME }, '*');
+  });
+
+  it("sends the frame the forum's theme when it changes after init, and only then", () => {
+    let current = THEME;
+    const { bridge, frame, posted } = harness({ theme: () => current });
+    current = { ...THEME, scheme: 'dark' };
+    bridge.theme();
+    expect(frame.postMessage).not.toHaveBeenCalled();
+
+    bridge.load();
+    expect(posted()[0]).toMatchObject({ type: 'atmobb:init', theme: { ...THEME, scheme: 'dark' } });
+    bridge.theme();
+    expect(frame.postMessage).toHaveBeenCalledOnce();
+
+    current = { scheme: 'light', colors: { ...THEME.colors, ground: '#12131a' }, fonts: THEME.fonts };
+    bridge.theme();
+    bridge.theme();
+    expect(posted().slice(1)).toEqual([{ type: 'atmobb:theme', v, theme: current }]);
+    expect(frame.postMessage.mock.calls[1][1]).toBe('*');
+  });
+
+  it('never sends a theme outside the schema, and goes quiet once the panel is torn down', () => {
+    let current: PanelTheme = { ...THEME, colors: { ground: '#fff;}' } };
+    const { bridge, frame, posted } = harness({ theme: () => current });
+    bridge.load();
+    expect(posted()[0]).toMatchObject({ theme: { scheme: 'light', colors: {}, fonts: {} } });
+    current = THEME;
+    bridge.close();
+    bridge.theme();
+    expect(frame.postMessage).toHaveBeenCalledOnce();
   });
 
   it('forwards an action from its own frame and answers with the result', async () => {
@@ -331,7 +435,7 @@ describe('createPanelBridge', () => {
   it('tells a standalone page its path and no thread', () => {
     const { bridge, frame } = harness({ mode: 'page', thread: null, signedIn: false, path: 'games/spring-1901' });
     bridge.load();
-    expect(frame.postMessage).toHaveBeenCalledWith({ type: 'atmobb:init', v, mode: 'page', thread: null, signedIn: false, path: 'games/spring-1901', pageBase: '/ext/git.example/jack/diplomacy' }, '*');
+    expect(frame.postMessage).toHaveBeenCalledWith({ type: 'atmobb:init', v, mode: 'page', thread: null, signedIn: false, path: 'games/spring-1901', pageBase: '/ext/git.example/jack/diplomacy', theme: THEME }, '*');
   });
 
   it('hands each valid source on a standalone page to the page, later ones included', () => {

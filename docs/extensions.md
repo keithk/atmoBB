@@ -124,7 +124,7 @@ Under the hood, `action` and `attach` output an envelope, `{ value }` or `{ refu
 
 `ui.entry` is your panel's HTML page, shown in a sandboxed frame: on a thread you're bound to, on your own standalone page at `/ext/<repository host and path>` (optionally with a page inside it after `/-/`, like `/ext/git.example/jack/diplomacy/-/games/spring-1901`), and on the page staff use to attach you. That address follows your repository, not your install, so a link keeps working after a reinstall.
 
-The frame is sandboxed to scripts only: no access to the forum page, its cookies, or its session, no `fetch`, no forms, no popups, no workers, and it loads scripts, styles, images, and fonts only from your own UI directory. Scripts must be classic (`<script src="panel.js" defer>`), not modules. Kept file types: `.html` (the entry only), `.js`, `.css`, `.svg`, `.png`, `.webp`, `.woff2`, `.json`. A panel that navigates itself away from its page is torn down.
+The frame is sandboxed to scripts only: no access to the forum page, its cookies, or its session, no `fetch`, no forms, no popups, no workers, and it loads scripts, styles, images, and fonts only from your own UI directory, plus the forum's fonts stylesheet (see [Matching the forum](#matching-the-forum)). Scripts must be classic (`<script src="panel.js" defer>`), not modules. Kept file types: `.html` (the entry only), `.js`, `.css`, `.svg`, `.png`, `.webp`, `.woff2`, `.json`. A panel that navigates itself away from its page is torn down.
 
 The panel and the page trade `postMessage`s in bridge version 1, every message carrying `v: 1`:
 
@@ -136,7 +136,8 @@ The panel and the page trade `postMessage`s in bridge version 1, every message c
 | panel → page | `{ type: 'atmobb:source', v: 1, did }` (standalone page only) names the repo the records you're showing come from |
 | panel → page | `{ type: 'atmobb:link', v: 1, page, label }` (thread and page modes only) draws a link to one of your standalone pages, outside the frame |
 | panel → page | `{ type: 'atmobb:names', v: 1, id, dids, handles }` (every mode) asks who up to 100 DIDs are and whose up to 20 handles are |
-| page → panel | `{ type: 'atmobb:init', v: 1, mode, thread, signedIn, path, pageBase }` once, on load; `mode` is `thread`, `page`, or `attach`, and `pageBase` is your standalone page's address, like `/ext/git.example/jack/diplomacy` |
+| page → panel | `{ type: 'atmobb:init', v: 1, mode, thread, signedIn, path, pageBase, theme }` once, on load; `mode` is `thread`, `page`, or `attach`, `pageBase` is your standalone page's address, like `/ext/git.example/jack/diplomacy`, and `theme` is how the forum looks |
+| page → panel | `{ type: 'atmobb:theme', v: 1, theme }` when the forum's look changes while the panel is open |
 | page → panel | `{ type: 'atmobb:result', v: 1, id, ok, value }` or `{ ..., ok: false, error: { code, message } }`, answering an action |
 | page → panel | `{ type: 'atmobb:names-result', v: 1, id, names, dids }`, answering a names message |
 
@@ -163,6 +164,51 @@ Your panel only ever sees people as DIDs, and it can't look anyone up itself: yo
 The page asks `GET /x/<install>/names?did=<did>&did=…&handle=<handle>&…` for these. It's limited to 30 requests a minute per install per client address, answers within about eight seconds with null for any lookup still running, and caches names for five minutes (thirty seconds for a null). Ask once per DID per page load, not on every render.
 
 On a thread, only signed-in members can run actions. On your standalone page, signed-out visitors can too, counted per client address (see [self-hosting](self-hosting.md#extensions) for `ADDRESS_HEADER`/`XFF_DEPTH`, which that count depends on behind a proxy). Signed-in actions are capped at `ATMOBB_EXTENSIONS_ACTIONS_PER_VIEWER_PER_MINUTE` (30) per viewer per install and `ATMOBB_EXTENSIONS_ACTIONS_PER_INSTALL_PER_MINUTE` (300) per install; signed-out actions share `ATMOBB_EXTENSIONS_ANONYMOUS_ACTIONS_PER_INSTALL_PER_MINUTE` (60) across every address, one running at a time per install.
+
+#### Matching the forum
+
+`theme` tells your panel how the page around it looks, so it can match instead of following the viewer's system scheme. Apply init's `theme` and every `atmobb:theme` with the same function:
+
+```js
+{
+  scheme: 'light',
+  colors: { ground: '#eceae7', surface: '#ffffff', ink: '#2b2a2e', accent: '#f79b7a', /* … */ },
+  fonts: { body: "'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif", /* … */ },
+}
+```
+
+`scheme` is `light` or `dark`, whichever the forum page is showing: atmoBB judges it by the page's background color, falling back to the page's `color-scheme`. Set your document's `color-scheme` to it, rather than `light dark`, so native controls and any `light-dark()` in your CSS follow the forum and not the viewer's system.
+
+`colors` are CSS colors, read from the forum's own theme tokens (see [theming](theming.md)), so they follow a built-in theme, owner CSS, and a member's personal theme alike:
+
+| name | what it's for | forum token |
+| --- | --- | --- |
+| `ground` | the page background | `--forum-bg` |
+| `surface` | cards and panels; the page draws it behind your frame | `--forum-surface` |
+| `surfaceAlt` | alternate stripes and sunken rows | `--forum-surface-2` |
+| `sunken` | deeper wells | `--forum-sunken` |
+| `line`, `lineStrong` | hairlines, and stronger dividers and edges | `--forum-line`, `--forum-line-strong` |
+| `ink`, `inkSoft`, `inkFaint` | text, secondary text, and tertiary or disabled text | `--forum-ink`, `--forum-ink-soft`, `--forum-ink-faint` |
+| `accent`, `accentHover` | accent fills, such as buttons, and their hover | `--forum-accent`, `--forum-accent-hover` |
+| `accentInk` | text on an accent fill | `--forum-accent-ink` |
+| `accentSoft` | a soft accent tint | `--forum-accent-soft` |
+| `link`, `linkHover` | link text and its hover | `--forum-link`, `--forum-link-hover` |
+| `ok`, `warn`, `danger` | status text | `--ok-1`, `--warn-1`, `--danger-1` |
+| `okSoft`, `warnSoft`, `dangerSoft` | status backgrounds | `--ok-bg`, `--warn-bg`, `--danger-bg` |
+
+`fonts` has `body`, `display`, and `mono`, each a font-family list, from `--font-body`, `--font-display`, and `--font-mono`.
+
+Any name can be missing. atmoBB sends a color only when the browser parses it as one and it's written in a plain character set with no `url()`, `var()`, `env()`, `attr()`, or `image()`, and a font list only when it's made of quoted family names (letters, digits, spaces, `._-`) and generic families like `sans-serif` or `ui-monospace`. A theme token owner CSS sets to anything else, like an unquoted `Georgia`, is left out, so keep a fallback for every value you use. Set the values with the CSSOM, like `document.documentElement.style.setProperty('--forum-ink', theme.colors.ink)`; the frame's CSP allows that, but not a `style` attribute or a `<style>` element. The template's `ui/panel.js` does this, as `--forum-*` custom properties, and `ui/panel.css` uses them.
+
+Themes are chosen on the server, so `atmobb:theme` comes only when the page's look changes in place: when owner CSS follows the viewer's system scheme and the viewer's system switches. atmoBB sends one only when the theme actually changed.
+
+The forum's default faces, IBM Plex Sans and IBM Plex Mono, are served to frames from the forum itself at `/x/fonts/fonts.css`, in the weights the forum uses (Sans 400 to 700 plus italic 400 and 500, Mono 400 to 600). Link it from your entry, before your own stylesheet:
+
+```html
+<link rel="stylesheet" href="/x/fonts/fonts.css" />
+```
+
+The frame's CSP allows exactly that stylesheet in `style-src` and the font files beside it, `/x/fonts/`, in `font-src`, on top of your UI directory; no other stylesheet or font outside your UI directory loads. The forum page gets these faces from Google Fonts, but the frame never contacts a third party. Fonts an owner uploads live on the forum account's PDS, which the frame can't reach, so a font list naming one falls through to its next family. `/x/fonts/fonts.css` answers only a stylesheet load and its files only a font load, each with `Cross-Origin-Resource-Policy: cross-origin` and `Access-Control-Allow-Origin: *`, since your frame's origin is opaque and fonts load in CORS mode.
 
 ### What an extension can see
 

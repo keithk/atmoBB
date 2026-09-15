@@ -55,8 +55,8 @@ async function frame({ path, dest = 'iframe', install = INSTALL, headers = {} }:
 }
 
 const CSP =
-  `sandbox allow-scripts; default-src 'none'; script-src ${APP}/x/${INSTALL}/frame/; style-src ${APP}/x/${INSTALL}/frame/; ` +
-  `img-src ${APP}/x/${INSTALL}/frame/ data:; font-src ${APP}/x/${INSTALL}/frame/; connect-src 'none'; frame-src 'none'; worker-src 'none'; ` +
+  `sandbox allow-scripts; default-src 'none'; script-src ${APP}/x/${INSTALL}/frame/; style-src ${APP}/x/${INSTALL}/frame/ ${APP}/x/fonts/fonts.css; ` +
+  `img-src ${APP}/x/${INSTALL}/frame/ data:; font-src ${APP}/x/${INSTALL}/frame/ ${APP}/x/fonts/; connect-src 'none'; frame-src 'none'; worker-src 'none'; ` +
   `form-action 'none'; base-uri 'none'; object-src 'none'; frame-ancestors 'self'`;
 
 function expectFrameHeaders(response: Response) {
@@ -107,9 +107,9 @@ describe('GET /x/[install]/frame/[...path]', () => {
     expect(trailingSlash).toBe('ignore');
   });
 
-  it('recognizes frame paths, so the session hook can skip them', () => {
-    for (const path of [`/x/${INSTALL}/frame`, `/x/${INSTALL}/frame/`, `/x/${INSTALL}/frame/index.html`, `/x/${INSTALL}/%66rame/panel.js`]) expect(isFramePath(path), path).toBe(true);
-    for (const path of [`/x/${INSTALL}/action`, `/x/${INSTALL}/framework`, `/t/did:plc:x/frame`, '/x/frame']) expect(isFramePath(path), path).toBe(false);
+  it('recognizes frame paths and the fonts frames load, so the session hook can skip them', () => {
+    for (const path of [`/x/${INSTALL}/frame`, `/x/${INSTALL}/frame/`, `/x/${INSTALL}/frame/index.html`, `/x/${INSTALL}/%66rame/panel.js`, '/x/fonts/fonts.css', '/x/%66onts/fonts.css']) expect(isFramePath(path), path).toBe(true);
+    for (const path of [`/x/${INSTALL}/action`, `/x/${INSTALL}/framework`, `/t/did:plc:x/frame`, '/x/frame', '/x/fontsy/fonts.css', '/fonts/fonts.css']) expect(isFramePath(path), path).toBe(false);
   });
 
   it('serves the UI entry to an iframe with the full header set', async () => {
@@ -204,6 +204,8 @@ describe('GET /x/[install]/frame/[...path]', () => {
     const malformed = await frame({ path: 'index.html', install: "x; script-src 'unsafe-inline'" });
     expect(malformed.status).toBe(404);
     expect(malformed.headers.get('content-security-policy')).toContain("script-src 'none'");
+    expect(malformed.headers.get('content-security-policy')).toContain(`style-src ${APP}/x/fonts/fonts.css;`);
+    expect(malformed.headers.get('content-security-policy')).toContain(`font-src ${APP}/x/fonts/;`);
     expect(malformed.headers.get('content-security-policy')).not.toContain('unsafe-inline');
   });
 

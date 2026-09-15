@@ -96,6 +96,46 @@ export type FrameMessage = ActionMessage | ResizeMessage | AttachMessage | Sourc
 
 // Page to frame.
 
+/** The forum's colors a panel can match, each named for what it's for rather than for the forum token it comes from. */
+export const THEME_COLORS = [
+  'ground',
+  'surface',
+  'surfaceAlt',
+  'sunken',
+  'line',
+  'lineStrong',
+  'ink',
+  'inkSoft',
+  'inkFaint',
+  'accent',
+  'accentHover',
+  'accentInk',
+  'accentSoft',
+  'link',
+  'linkHover',
+  'ok',
+  'okSoft',
+  'warn',
+  'warnSoft',
+  'danger',
+  'dangerSoft',
+] as const;
+export type ThemeColor = (typeof THEME_COLORS)[number];
+/** The forum's font roles a panel can match. */
+export const THEME_FONTS = ['body', 'display', 'mono'] as const;
+export type ThemeFont = (typeof THEME_FONTS)[number];
+
+/**
+ * How the forum page looks right now: whether it's showing light or dark, and
+ * whichever of its colors (CSS colors) and fonts (font-family lists) passed
+ * validation. A name the forum couldn't supply a valid value for is left out.
+ */
+export interface PanelTheme {
+  scheme: 'light' | 'dark';
+  colors: Partial<Record<ThemeColor, string>>;
+  fonts: Partial<Record<ThemeFont, string>>;
+}
+
 /** Sent once the frame has loaded. */
 export interface InitMessage {
   type: 'atmobb:init';
@@ -107,6 +147,13 @@ export interface InitMessage {
   path: string;
   /** The extension's standalone page address, `/ext/<repository>`, which outlives a reinstall. */
   pageBase: string;
+  theme: PanelTheme;
+}
+/** Sent when the forum's theme changes while the panel is open, in the same shape as init's. */
+export interface ThemeMessage {
+  type: 'atmobb:theme';
+  v: typeof BRIDGE_VERSION;
+  theme: PanelTheme;
 }
 export interface BridgeError {
   code: string;
@@ -128,9 +175,9 @@ export interface NamesAnswer {
 }
 /** The answer to one names message, matched by its id. */
 export type NamesResultMessage = { type: 'atmobb:names-result'; v: typeof BRIDGE_VERSION; id: MessageId } & NamesAnswer;
-export type HostMessage = InitMessage | ResultMessage | NamesResultMessage;
+export type HostMessage = InitMessage | ThemeMessage | ResultMessage | NamesResultMessage;
 
-const hasOnly = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).every((key) => keys.includes(key));
+const hasOnly = (value: Record<string, unknown>, keys: readonly string[]) => Object.keys(value).every((key) => keys.includes(key));
 
 const validId = (id: unknown): id is MessageId =>
   (typeof id === 'string' && id.length <= MAX_MESSAGE_ID_LENGTH) || Number.isSafeInteger(id);
@@ -181,6 +228,40 @@ const isValidLinkPage = (page: string): boolean =>
   !page.startsWith('/') &&
   !page.includes('//') &&
   !page.split('/').some((segment) => DOT_SEGMENT.test(segment));
+
+export const MAX_THEME_VALUE_LENGTH = 256;
+
+// Only the characters colors are written with, so a value can't end its
+// declaration or open a block, and no function that reaches outside the value.
+const COLOR_SYNTAX = /^[A-Za-z0-9#(),.%\s/+-]+$/;
+const COLOR_REFERENCE = /(?:url|var|env|attr|image)\(/i;
+
+/** Whether `value` is a CSS color: in a safe character set and, where the browser can say, one it parses as a color. */
+export const isThemeColor = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  value.length <= MAX_THEME_VALUE_LENGTH &&
+  COLOR_SYNTAX.test(value) &&
+  !COLOR_REFERENCE.test(value) &&
+  (typeof CSS === 'undefined' || CSS.supports('color', value));
+
+const GENERIC_FAMILIES = ['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'math', 'emoji', 'fangsong', 'system-ui', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded'];
+const QUOTED_FAMILY = /^(?:'[A-Za-z0-9 ._-]{1,64}'|"[A-Za-z0-9 ._-]{1,64}")$/;
+
+/** Whether `value` is a font-family list made only of quoted family names and generic families. */
+export const isFontList = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  value.length <= MAX_THEME_VALUE_LENGTH &&
+  value.split(',').every((family) => QUOTED_FAMILY.test(family.trim()) || GENERIC_FAMILIES.includes(family.trim()));
+
+/** The theme `value` is, or null for anything outside the schema: an unknown key, a scheme other than light or dark, or any invalid color or font list. */
+export function parseTheme(value: unknown): PanelTheme | null {
+  if (!isObject(value) || !hasOnly(value, ['scheme', 'colors', 'fonts'])) return null;
+  const { scheme, colors, fonts } = value;
+  if ((scheme !== 'light' && scheme !== 'dark') || !isObject(colors) || !isObject(fonts)) return null;
+  if (!hasOnly(colors, THEME_COLORS) || !Object.values(colors).every(isThemeColor)) return null;
+  if (!hasOnly(fonts, THEME_FONTS) || !Object.values(fonts).every(isFontList)) return null;
+  return { scheme, colors: { ...colors }, fonts: { ...fonts } };
+}
 
 /** The frame message `data` is, or null for anything outside the schema or not allowed in `mode`. */
 export function parseFrameMessage(data: unknown, mode: PanelMode): FrameMessage | null {
@@ -284,6 +365,8 @@ export interface PanelBridgeOptions {
   link?: (page: string, label: string) => void;
   /** Who the DIDs are and whose the handles are. */
   names: (dids: string[], handles: string[]) => Promise<NamesAnswer>;
+  /** How the forum page looks right now. */
+  theme: () => PanelTheme;
   resize: (height: number) => void;
   /** Remove the frame. Called at most once. */
   teardown: () => void;
@@ -292,6 +375,8 @@ export interface PanelBridgeOptions {
 export interface PanelBridge {
   /** Call on each of the frame's load events. */
   load(): void;
+  /** Call when the forum's theme may have changed. The frame hears of it only when it did. */
+  theme(): void;
   /** Call with each message event the page's window receives. */
   message(event: Pick<MessageEvent, 'source' | 'data'>): void;
   /** Stop answering, for when the panel unmounts. */
@@ -307,6 +392,10 @@ export function createPanelBridge(options: PanelBridgeOptions): PanelBridge {
   let loads = 0;
   let closed = false;
   let pending = 0;
+  let sentTheme = '';
+
+  // A theme that fails the schema is never sent; the panel gets no colors or fonts instead.
+  const currentTheme = (): PanelTheme => parseTheme(options.theme()) ?? { scheme: 'light', colors: {}, fonts: {} };
 
   // A sandboxed frame's origin is opaque, so no target origin but '*' reaches it.
   const post = (message: HostMessage) => {
@@ -323,6 +412,8 @@ export function createPanelBridge(options: PanelBridgeOptions): PanelBridge {
         options.teardown();
         return;
       }
+      const theme = currentTheme();
+      sentTheme = JSON.stringify(theme);
       post({
         type: 'atmobb:init',
         v: BRIDGE_VERSION,
@@ -331,7 +422,18 @@ export function createPanelBridge(options: PanelBridgeOptions): PanelBridge {
         signedIn: options.signedIn,
         path: options.path,
         pageBase: options.pageBase,
+        theme,
       });
+    },
+
+    theme() {
+      // Before the first load, init will carry whatever the theme is by then.
+      if (closed || loads === 0) return;
+      const theme = currentTheme();
+      const text = JSON.stringify(theme);
+      if (text === sentTheme) return;
+      sentTheme = text;
+      post({ type: 'atmobb:theme', v: BRIDGE_VERSION, theme });
     },
 
     message(event) {

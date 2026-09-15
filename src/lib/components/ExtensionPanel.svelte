@@ -10,10 +10,13 @@
   // component builds the href, since a link followed inside the sandboxed
   // frame would just navigate the frame and close the panel. And the panel
   // can't look anyone up itself, so it asks the bridge for names and this
-  // component fetches them from the install's names endpoint.
+  // component fetches them from the install's names endpoint. The panel is
+  // told how the forum looks, read here from the page's own computed tokens, so
+  // it can match the page around it.
   import { onMount } from 'svelte';
   import { actionOutcome, createPanelBridge, namesFromResponse, type ActionOutcome, type NamesAnswer, type PanelMode } from '$lib/extensions/bridge';
   import { extensionLinkHref } from '$lib/extensions/page-path';
+  import { readForumTheme } from '$lib/extensions/theme';
   import { createSourceTracker, sourceFromResponse, sourceLine, type SourceIdentity, type SourceState } from '$lib/extensions/source';
 
   interface Props {
@@ -73,6 +76,15 @@
     frame.title = `${name} panel`;
     frame.className = 'atm-extension__frame';
 
+    // Themes are chosen on the server, so the page changes look in place only
+    // when its styles follow the viewer's system scheme.
+    const darkScheme = matchMedia('(prefers-color-scheme: dark)');
+    const theme = () => readForumTheme({
+      root: getComputedStyle(document.documentElement),
+      background: getComputedStyle(document.body).backgroundColor,
+      prefersDark: darkScheme.matches,
+    });
+
     const sources = createSourceTracker({ lookup: lookupSource, update: (next) => (source = next) });
     const bridge = createPanelBridge({
       mode,
@@ -89,6 +101,7 @@
         link = href ? { href, label } : null;
       },
       names: lookupNames,
+      theme,
       resize: (next) => (height = next),
       teardown: () => {
         frame.remove();
@@ -96,7 +109,9 @@
       },
     });
     const onMessage = (event: MessageEvent) => bridge.message(event);
+    const onScheme = () => bridge.theme();
     window.addEventListener('message', onMessage);
+    darkScheme.addEventListener('change', onScheme);
     frame.addEventListener('load', () => bridge.load());
     frame.src = `/x/${encodeURIComponent(installId)}/frame/${entry.split('/').map(encodeURIComponent).join('/')}`;
     container?.append(frame);
@@ -105,6 +120,7 @@
       bridge.close();
       sources.close();
       window.removeEventListener('message', onMessage);
+      darkScheme.removeEventListener('change', onScheme);
       frame.remove();
     };
   });

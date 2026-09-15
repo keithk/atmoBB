@@ -93,7 +93,8 @@ extension is attached to, on the extension's own page, and on the page where
 staff attach it to a thread. The frame is sandboxed to scripts only: the panel
 can't read the forum page, its cookies, or the session, can't fetch anything,
 submit forms, open windows, or start workers, and can load scripts, styles,
-images, and fonts only from its own UI directory. Scripts must be classic
+images, and fonts only from its own UI directory, plus the forum's fonts
+stylesheet at `/x/fonts/fonts.css`. Scripts must be classic
 scripts (`<script src="panel.js" defer>`), not modules. The files beside the
 entry can be `.js`, `.css`, `.svg`, `.png`, `.webp`, `.woff2`, or `.json`;
 anything else isn't served. A panel that navigates away from its page is
@@ -111,13 +112,28 @@ isn't exactly one of these:
 | panel → page | `{ type: 'atmobb:source', v: 1, did }` names the repo the records you're showing come from (standalone page only) |
 | panel → page | `{ type: 'atmobb:link', v: 1, page, label }` draws a link to one of your standalone pages, outside the frame (thread and page modes only) |
 | panel → page | `{ type: 'atmobb:names', v: 1, id, dids, handles }` asks who up to 100 DIDs are and whose up to 20 handles are (every mode) |
-| page → panel | `{ type: 'atmobb:init', v: 1, mode, thread, signedIn, path, pageBase }` once the panel loads; `mode` is `thread`, `page`, or `attach`; `pageBase` is your standalone page's address |
+| page → panel | `{ type: 'atmobb:init', v: 1, mode, thread, signedIn, path, pageBase, theme }` once the panel loads; `mode` is `thread`, `page`, or `attach`; `pageBase` is your standalone page's address; `theme` is how the forum looks |
+| page → panel | `{ type: 'atmobb:theme', v: 1, theme }` when the forum's look changes while the panel is open |
 | page → panel | `{ type: 'atmobb:result', v: 1, id, ok, value }` or `{ ..., ok: false, error: { code, message } }` answers an action |
 | page → panel | `{ type: 'atmobb:names-result', v: 1, id, names, dids }` answers a names message: `names` maps each DID to `{ handle, displayName? }` or null, `dids` maps each handle, as sent, to its DID or null |
 
 Post to `parent` with target origin `'*'` (the frame has no origin of its own)
 and accept only messages whose `event.source` is `parent`. The template's
 `ui/panel.js` does all of this.
+
+`theme` lets the panel match the forum instead of the viewer's system scheme:
+`{ scheme, colors, fonts }`, where `scheme` is `'light'` or `'dark'`, `colors`
+maps `ground`, `surface`, `surfaceAlt`, `sunken`, `line`, `lineStrong`, `ink`,
+`inkSoft`, `inkFaint`, `accent`, `accentHover`, `accentInk`, `accentSoft`,
+`link`, `linkHover`, `ok`, `okSoft`, `warn`, `warnSoft`, `danger`, and
+`dangerSoft` to CSS colors, and `fonts` maps `body`, `display`, and `mono` to
+font-family lists. Any of them can be missing, so keep fallbacks. The template
+sets them as `--forum-*` custom properties through the CSSOM (the CSP refuses
+style attributes), sets `color-scheme` to `scheme`, and links
+`/x/fonts/fonts.css`, which serves the forum's IBM Plex faces from the forum
+itself. `ui/panel.css` uses the properties with atmoBB's default look as
+fallbacks. atmoBB's extensions guide, under "Matching the forum", says what
+each color is for.
 
 On a thread, only signed-in members can run actions. On the extension's own
 page, at `/ext/<repository host and path>` (for example
