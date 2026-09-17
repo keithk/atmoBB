@@ -232,11 +232,12 @@
           <ul class="posts">
             {#each m.activity.recentThreads as t}
               {@const site = t.forum.did === data.forumDid ? null : data.forumSites[t.forum.did]}
+              {@const href = threadPath(t.uri, t.boardName, t.title)}
               <li>
                 <span class="atm-eyebrow">
                   {t.forum.name ?? t.forum.did.slice(8, 24)}{#if t.boardName}<span aria-hidden="true"> · </span>{t.boardName}{/if}
                 </span>
-                <a class="posts__title" href={site ? `${site}${threadPath(t.uri)}` : threadPath(t.uri)}>{t.title}</a>
+                <a class="posts__title" href={site ? `${site}${href}` : href}>{t.title}</a>
                 <span class="posts__meta">
                   {relTime(t.createdAt)} · {t.replyCount} {t.replyCount === 1 ? 'reply' : 'replies'}
                 </span>

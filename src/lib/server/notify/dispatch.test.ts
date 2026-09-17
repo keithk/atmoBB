@@ -124,7 +124,9 @@ describe('relay outcomes', () => {
     const sent = vi.mocked(deps.send!).mock.calls.map((c) => c[0]);
     const toAlice = sent.find((s) => s.recipient === alice)!;
     expect(toAlice.title).toBe('bob.test replied in "Hello"');
-    expect(toAlice.uri).toBe(`https://forum.test/t/${alice}/t1/p/${bob}/r1?via=notify`);
+    expect(toAlice.uri).toBe(
+      `https://forum.test/t/general/hello/${alice}/t1/p/${bob}/r1?via=notify`,
+    );
     expect(toAlice.threadKey).toBe(thread);
     expect(toAlice.actors).toEqual([{ did: bob, handle: 'bob.test' }]);
   });

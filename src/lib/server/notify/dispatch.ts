@@ -1,6 +1,6 @@
 import { FORUM_DID, getWatchers, spaceUriOf } from '$lib/server/appview';
 import { boardMembers } from '$lib/server/space-access';
-import { postPath } from '$lib/appview-paths';
+import { postPath, threadPath } from '$lib/appview-paths';
 import { composeNotification, ownPlainText } from '$lib/notify/compose';
 import { resolveRecipients, type PostRecord, type Recipient } from '$lib/notify/recipients';
 import { send, type SendInput, type SendResult } from './relay';
@@ -140,7 +140,11 @@ async function dispatch(input: NotifyForPostInput, deps: DispatchDeps) {
     boardName: input.boardName ?? '',
     threadUri: input.threadUri,
     ownText: ownPlainText(input.record.body),
-    permalink: `${appUrl}${postPath(input.threadUri, input.uri)}`,
+    permalink: `${appUrl}${postPath(
+      input.threadUri,
+      input.uri,
+      threadPath(input.threadUri, input.boardName, input.threadTitle),
+    )}`,
   };
   const at = new Date(deps.now()).toISOString();
   let written = 0;

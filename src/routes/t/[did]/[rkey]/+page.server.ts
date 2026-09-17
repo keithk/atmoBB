@@ -7,7 +7,7 @@ import { banMessage, bannedFrom } from '$lib/server/standing';
 import { refuseUnlessMember } from '$lib/server/membership';
 import { blocksToDoc } from '$lib/richtext/blocks-tiptap';
 import { blocksToPlainText } from '$lib/richtext/plain';
-import { boardPath, postAnchor, postAuthor } from '$lib/appview-paths';
+import { boardPath, postAnchor, postAuthor, threadPath } from '$lib/appview-paths';
 import type { RichTextBlock } from '$lib/richtext/bbcode';
 
 const QUOTE = 'app.atmobb.richtext.block#quote';
@@ -95,11 +95,11 @@ export const load: PageServerLoad = async ({ params, url, parent, locals, isData
     }
     error(404, 'This thread lives on another forum.');
   }
-  const [{ staffRole, sidebarBoards }, boardName] = await Promise.all([
+  const [{ staffRole, sidebarBoards }, board] = await Promise.all([
     parent(),
     page.thread
       ? getBoardThreads(page.thread.value.board, undefined, 1)
-          .then((boardPage) => boardPage.board?.name)
+          .then((boardPage) => boardPage.board)
           .catch(() => undefined)
       : undefined,
   ]);
@@ -107,6 +107,14 @@ export const load: PageServerLoad = async ({ params, url, parent, locals, isData
   // it, flagged, so the hide can be reviewed and undone.
   if (page.thread?.hidden && !staffRole) {
     error(404, 'Thread not found.');
+  }
+  const canonicalPath = page.thread
+    ? threadPath(uri, board?.name, page.thread.value.title)
+    : threadPath(uri);
+  // Old links and stale title slugs remain resolvable, then converge on the
+  // current readable URL. Keep query state and post fragments intact.
+  if (page.thread && board?.name && url.pathname !== canonicalPath) {
+    redirect(308, `${canonicalPath}${url.search}${url.hash}`);
   }
   await resolveBodyImages([
     ...(page.thread ? [{ author: page.thread.author, body: page.thread.value.body }] : []),
@@ -150,7 +158,7 @@ export const load: PageServerLoad = async ({ params, url, parent, locals, isData
         const replySummary = page.replyCount === 1
           ? '1 reply'
           : `${page.replyCount.toLocaleString('en-US')} replies`;
-        const image = `${url.origin}/t/${params.did}/${params.rkey}/og.png`;
+        const image = `${url.origin}${canonicalPath}/og.png`;
         const authorUrl = `${url.origin}/members/${encodeURIComponent(authorHandle)}`;
         return {
           title,
@@ -159,6 +167,7 @@ export const load: PageServerLoad = async ({ params, url, parent, locals, isData
           imageAlt: `${title} — a discussion started by ${authorName}`,
           type: 'article' as const,
           noindex: false,
+          canonical: canonicalPath,
           publishedTime: page.thread.value.createdAt,
           modifiedTime: page.thread.value.editedAt,
           authorUrl,
@@ -201,7 +210,8 @@ export const load: PageServerLoad = async ({ params, url, parent, locals, isData
     // KTD11: the first-post prompt keys on "no notification state file yet".
     // A store error just means no prompt; it never breaks the page.
     offerNotifications: locals.user ? await neverAskedAboutNotifications(locals.user.did) : false,
-    boardName,
+    boardName: board?.name,
+    threadPath: canonicalPath,
     canModerate: page.thread ? await canModerate(locals.user?.did, page.thread.value.board) : false,
     // The extension panel for a bound thread; staff on an unbound public thread get attach links instead.
     extension: page.thread

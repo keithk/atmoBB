@@ -19,6 +19,12 @@ means. Every entry names the Happyview release it was tested against.
   - [ ] Run the manual scope check on a real PDS (a `repo:` scope outside `app.atmobb`) and the browser smoke checks for frame isolation.
   - [ ] Pick the game's final name and publish its lexicons. Working name seven-powers, placeholder NSID authority `is.keith.sevenpowers`.
 
+## 0.4.0
+
+Tested against Happyview 2.14.0. No backfill is required.
+
+- Thread links now include readable board and title slugs while retaining the immutable AT Protocol identity used to resolve them. Old links and links with stale slugs redirect to the current canonical URL, so existing bookmarks keep working when a thread title changes.
+
 ## 0.3.1
 
 Tested against Happyview 2.14.0. No backfill is required.

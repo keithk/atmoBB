@@ -8,11 +8,14 @@
   let {
     body = [],
     threadUri,
+    threadHref,
     handles = {},
   }: {
     body?: RichTextBlock[];
     /** The thread this body is shown in, so attributed quotes can link to the quoted post. */
     threadUri?: string;
+    /** Readable path for that thread, when its board and title are known. */
+    threadHref?: string;
     /** DID → handle, for naming quoted authors. */
     handles?: Record<string, string>;
   } = $props();
@@ -95,7 +98,7 @@
       <blockquote class="rt-quote">
         {#if block.subject}
           <cite class="rt-cite">
-            {#if threadUri}<a href={postPath(threadUri, block.subject.uri)}>↩</a>{/if}
+            {#if threadUri}<a href={postPath(threadUri, block.subject.uri, threadHref)}>↩</a>{/if}
             <MemberLink did={postAuthor(block.subject.uri)}>@{nameOf(postAuthor(block.subject.uri))}</MemberLink> wrote:
           </cite>
         {/if}

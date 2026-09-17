@@ -163,6 +163,7 @@ export const actions: Actions = {
 
     const form = await request.formData();
     const title = String(form.get('title') ?? '').trim();
+    const boardName = String(form.get('boardName') ?? '').trim();
     const body = String(form.get('body') ?? '').trim();
     const images = String(form.get('body__images') ?? '');
     const parsedTags = parseThreadTags(String(form.get('tags') ?? ''));
@@ -222,7 +223,7 @@ export const actions: Actions = {
       return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t post your thread. Try again.' });
     }
     void notifyThread({ board, title, body: blocks }, uri, params.rkey, locals.user);
-    redirect(303, `${threadPath(uri)}?fresh=1`);
+    redirect(303, `${threadPath(uri, boardName, title)}?fresh=1`);
   },
 
   watch: async ({ params, locals }) => toggleWatch(locals, boardUri(params.rkey, params.did), watchBoard),

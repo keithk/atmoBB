@@ -3,7 +3,15 @@ export function parseAtUri(uri: string): { did: string; collection: string; rkey
   return m ? { did: m[1], collection: m[2], rkey: m[3] } : null;
 }
 
-export const threadPath = (uri: string) => {
+export const pathSlug = (value: string, fallback: string) =>
+  value
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/\p{Mark}/gu, '')
+    .replace(/[^\p{Letter}\p{Number}]+/gu, '-')
+    .replace(/^-+|-+$/g, '') || fallback;
+
+export const threadPath = (uri: string, boardName?: string, title?: string) => {
   // Space thread: at://<forum>/space/<type>/<boardRkey>/<author>/<collection>/<rkey>.
   // These live under their private board at /b/<forum>/<boardRkey>/t/<author>/<rkey>.
   const parts = uri.split('/');
@@ -11,7 +19,11 @@ export const threadPath = (uri: string) => {
     return `/b/${parts[2]}/${parts[5]}/t/${parts[6]}/${parts[8]}`;
   }
   const p = parseAtUri(uri);
-  return p ? `/t/${p.did}/${p.rkey}` : '/';
+  if (!p) return '/';
+  if (!boardName || !title) return `/t/${p.did}/${p.rkey}`;
+  const board = encodeURIComponent(pathSlug(boardName, 'board'));
+  const thread = encodeURIComponent(pathSlug(title, 'thread'));
+  return `/t/${board}/${thread}/${p.did}/${p.rkey}`;
 };
 
 export const boardPath = (uri: string, localDid: string) => {
@@ -40,14 +52,14 @@ export const postAuthor = (uri: string) => {
 
 /** Link to a post within its thread: a fragment for the thread itself, the
  *  permalink for a reply. */
-export const postPath = (threadUri: string, uri: string) =>
-  uri === threadUri ? `${threadPath(threadUri)}#${postAnchor(uri)}` : replyPath(threadUri, uri);
+export const postPath = (threadUri: string, uri: string, threadHref = threadPath(threadUri)) =>
+  uri === threadUri ? `${threadHref}#${postAnchor(uri)}` : replyPath(threadUri, uri, threadHref);
 
 /** Link that lands on one reply: resolved to its page for public threads,
  *  a plain fragment for space threads, which don't paginate. */
-export const replyPath = (threadUri: string, replyUri: string) => {
+export const replyPath = (threadUri: string, replyUri: string, threadHref = threadPath(threadUri)) => {
   const t = parseAtUri(threadUri);
   const r = parseAtUri(replyUri);
-  if (t && r) return `/t/${t.did}/${t.rkey}/p/${r.did}/${r.rkey}`;
+  if (t && r) return `${threadHref}/p/${r.did}/${r.rkey}`;
   return `${threadPath(threadUri)}#${postAnchor(replyUri)}`;
 };

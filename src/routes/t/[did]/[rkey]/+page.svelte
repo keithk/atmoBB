@@ -225,7 +225,7 @@
       {#if data.editing?.uri === data.thread.uri}
         <PostEditor uri={data.thread.uri} title={data.thread.value.title} tags={data.editing.tags} doc={data.editing.doc} cancelHref="{basePath}#{postAnchor(data.thread.uri)}" message={form?.message} />
       {:else}
-        <RichText body={data.thread.value.body} threadUri={data.threadUri} handles={data.handles} />
+        <RichText body={data.thread.value.body} threadUri={data.threadUri} threadHref={data.threadPath} handles={data.handles} />
       {/if}
       {#if data.thread.value.poll}
         <div class="atm-post__poll">
@@ -264,11 +264,11 @@
       />
       <div class="atm-post__body">
         <div class="atm-post__meta">
-          <a class="atm-post__permalink" href={replyPath(data.threadUri, reply.uri)}>{when(reply.value.createdAt ?? reply.indexedAt)}</a>
+          <a class="atm-post__permalink" href={replyPath(data.threadUri, reply.uri, data.threadPath)}>{when(reply.value.createdAt ?? reply.indexedAt)}</a>
           {@render edited(reply.value.editedAt)}
           {#if reply.value.parent}
             <span class="atm-post__replyto">
-              · <a href={postPath(data.threadUri, reply.value.parent.uri)}>↩ replying to @{shortName(postAuthor(reply.value.parent.uri))}</a>
+              · <a href={postPath(data.threadUri, reply.value.parent.uri, data.threadPath)}>↩ replying to @{shortName(postAuthor(reply.value.parent.uri))}</a>
             </span>
           {/if}
           {@render own(reply.uri, reply.author)}
@@ -277,7 +277,7 @@
         {#if data.editing?.uri === reply.uri}
           <PostEditor uri={reply.uri} doc={data.editing.doc} cancelHref="{basePath}{page.url.search.replace(/[?&]edit=[^&]*/, '')}#{postAnchor(reply.uri)}" message={form?.message} />
         {:else}
-          <RichText body={reply.value.body} threadUri={data.threadUri} handles={data.handles} />
+          <RichText body={reply.value.body} threadUri={data.threadUri} threadHref={data.threadPath} handles={data.handles} />
         {/if}
         {#if reply.authorProfile?.signature}
           <div class="atm-sig">
@@ -306,7 +306,7 @@
         {/if}
         {#if replyingTo}
           <p class="atm-composer__replyto">
-            <span>↩ replying to <a href={postPath(data.threadUri, replyingTo.uri)}>@{shortName(replyingTo.author)}</a></span>
+            <span>↩ replying to <a href={postPath(data.threadUri, replyingTo.uri, data.threadPath)}>@{shortName(replyingTo.author)}</a></span>
             <button type="button" class="atm-post__action" onclick={clearReplyTo} title="Reply to the thread instead" aria-label="Reply to the thread instead">×</button>
           </p>
         {/if}
