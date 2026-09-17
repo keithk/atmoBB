@@ -18,7 +18,7 @@ const { metafile } = await build({
   // esbuild runs from the kit's own install at build time.
   external: ['esbuild'],
   alias: {
-    $lib: '../src/lib',
+    $lib: '../../../src/lib',
     '$env/dynamic/private': './src/cli/sveltekit-env.ts',
   },
   // The repo root's packages when they're installed, the kit's otherwise.

@@ -2,7 +2,7 @@ import { cp, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { extensionRuntime } from '../../src/lib/server/extensions/runtime';
+import { extensionRuntime } from '../../../../src/lib/server/extensions/runtime';
 import { build } from '../src/cli/build';
 import { stubHost } from './stub-host';
 

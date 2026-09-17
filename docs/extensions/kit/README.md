@@ -1,7 +1,7 @@
 # atmoBB extension kit
 
 > [!WARNING]
-> Extensions are alpha. The host API, the manifest rules, and this kit can still change between atmoBB releases. Report what breaks on the [Bugs board](https://atmobb.app/b/3mqdahz5y4m2f) on atmobb.app. The [extensions guide](../docs/extensions.md) explains how extensions work and walks through the first one.
+> Extensions are alpha. The host API, the manifest rules, and this kit can still change between atmoBB releases. Report what breaks on the [Bugs board](https://atmobb.app/b/3mqdahz5y4m2f) on atmobb.app. The [extensions guide](../README.md) explains how extensions work and walks through the first one.
 
 Write an atmoBB extension in TypeScript and build it into a release a forum
 can install. You don't touch WebAssembly: the kit bundles your code, compiles
@@ -15,7 +15,7 @@ Needs Node 22.19 or newer on macOS (arm64, x64) or Linux (x64, arm64).
 The kit isn't on npm yet, so use it from this repository:
 
 ```sh
-cd extension-kit
+cd docs/extensions/kit
 bun install                     # or npm install; also builds the CLI into lib/
 node bin/atmobb-extension.mjs new ~/code/my-counter
 cd ~/code/my-counter
@@ -36,7 +36,7 @@ API an extension usually needs:
 Change `com.example.counter` to an NSID authority you control (a domain you
 own, reversed) in the manifest, the lexicon, and `src/index.ts`.
 
-When the counter is too small to learn from, read `examples/dice` in the
+When the counter is too small to learn from, read `docs/extensions/examples/dice` in the
 atmoBB repository: a dice roller that writes every roll as a record.
 
 ## The author API
@@ -138,7 +138,7 @@ sets them as `--forum-*` custom properties through the CSSOM (the CSP refuses
 style attributes), sets `color-scheme` to `scheme`, and links
 `/x/fonts/fonts.css`, which serves the forum's IBM Plex faces from the forum
 itself. `ui/panel.css` uses the properties with atmoBB's default look as
-fallbacks. The [extensions guide](../docs/extensions.md#matching-the-forum), under
+fallbacks. The [extensions guide](../README.md#matching-the-forum), under
 "Matching the forum", says what each color is for.
 
 On a thread, only signed-in members can run actions. On the extension's own
@@ -205,7 +205,7 @@ can only be installed by typing its name. Admins install from the repository's
 
 The tests load atmoBB's own runtime, release reader, and manifest admission
 rules from `src/lib`, so set up the repository root first
-(`bun install && bunx svelte-kit sync` there). Then, in `extension-kit/`:
+(`bun install && bunx svelte-kit sync` there). Then, in `docs/extensions/kit/`:
 
 ```sh
 bun install

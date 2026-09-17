@@ -13,5 +13,3 @@ private
 docs
 infra/release
 .env
-extension-kit
-examples

@@ -9,7 +9,7 @@
     "check": "tsc"
   },
   "devDependencies": {
-    "atmobb-extension-kit": "file:../../extension-kit",
+    "atmobb-extension-kit": "file:../../kit",
     "typescript": "^7.0.2"
   }
 }

@@ -14,7 +14,7 @@ export default defineConfig({
   },
   test: {
     // Vitest's default excludes, plus the extension kit, a separate package with its own test run.
-    exclude: ['**/node_modules/**', '**/.git/**', 'extension-kit/**'],
+    exclude: ['**/node_modules/**', '**/.git/**', 'docs/extensions/kit/**'],
   },
   server: {
     // The OAuth client registers http://127.0.0.1:5173/oauth/callback, so the

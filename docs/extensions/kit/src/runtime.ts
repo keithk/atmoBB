@@ -1,4 +1,4 @@
-import { REFUSAL_CODE, REFUSAL_MESSAGE_MAX } from '../../src/lib/extensions/contract';
+import { REFUSAL_CODE, REFUSAL_MESSAGE_MAX } from '../../../../src/lib/extensions/contract';
 import type {
   ActionInput,
   AttachInput,
@@ -21,7 +21,7 @@ import type {
   StoredRecord,
   TimerInput,
   TimerSet,
-} from '../../src/lib/extensions/contract';
+} from '../../../../src/lib/extensions/contract';
 
 // The API extension authors write against. Inside the sandbox every host
 // function takes and returns a pointer to JSON; these wrappers hide that, and
@@ -50,7 +50,7 @@ export type {
   TimerInput,
   TimerSet,
   ViewerContext,
-} from '../../src/lib/extensions/contract';
+} from '../../../../src/lib/extensions/contract';
 
 // Globals the Extism JS PDK provides inside the sandbox.
 interface MemoryHandle {

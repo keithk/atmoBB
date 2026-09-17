@@ -90,7 +90,7 @@ A public reply takes a lap before anyone else sees it: app to the author's PDS, 
 - [Members-only boards](docs/private-boards.md): privacy boundaries and permissioned spaces
 - [Forum theming](docs/theming.md): the custom CSS cascade, theme tokens, stable class hooks, and fonts
 - [Lexicons](docs/lexicons.md): record schemas and publishing a forked namespace
-- [Extensions](docs/extensions.md): sandboxed extensions, alpha: how they work, writing one with the [extension kit](extension-kit/README.md), and what admins review at install
+- [Extensions](docs/extensions/README.md): sandboxed extensions, alpha: how they work, writing one with the [extension kit](docs/extensions/kit/README.md), and what admins review at install
 
 ## Fonts and avatars
 

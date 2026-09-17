@@ -9,7 +9,7 @@ An extension is a small program a forum admin installs from a git URL. It runs i
 
 ## How an extension works
 
-You write `src/index.ts` in TypeScript against the [extension kit](../extension-kit/README.md). `npm run build` bundles it, compiles it with the pinned [Extism](https://extism.org) JS compiler, and writes `dist/`. atmoBB runs that WebAssembly as an Extism plug-in, one sandboxed instance per install. You never touch WebAssembly yourself.
+You write `src/index.ts` in TypeScript against the [extension kit](kit/README.md). `npm run build` bundles it, compiles it with the pinned [Extism](https://extism.org) JS compiler, and writes `dist/`. atmoBB runs that WebAssembly as an Extism plug-in, one sandboxed instance per install. You never touch WebAssembly yourself.
 
 An extension does nothing on its own. Your module exports handlers, and atmoBB calls them:
 
@@ -35,9 +35,9 @@ An admin installs you by pointing **Admin → Extensions** at your repository an
 
 - Node 22.19 or newer on macOS (arm64 or x64) or Linux (x64 or arm64). There's no Windows build of the compiler.
 - Bun or npm, to build the kit.
-- A clone of atmoBB. The kit isn't on npm yet, so you build it from `extension-kit/` in this repository.
+- A clone of atmoBB. The kit isn't on npm yet, so you build it from `docs/extensions/kit/` in this repository.
 - The network, once. The first build downloads the pinned `extism-js` and binaryen into `~/.cache/atmobb-extension-kit` (or `ATMOBB_EXTENSION_KIT_CACHE`).
-- A forum to install on. Follow [Local development](development.md) to run atmoBB at `http://127.0.0.1:5173` with an admin account connected. You'll start it with one extra environment variable, below.
+- A forum to install on. Follow [Local development](../development.md) to run atmoBB at `http://127.0.0.1:5173` with an admin account connected. You'll start it with one extra environment variable, below.
 
 ### Quick start
 
@@ -45,7 +45,7 @@ Build the kit once, then scaffold a project anywhere:
 
 ```sh
 git clone https://github.com/keithk/atmoBB.git
-cd atmoBB/extension-kit
+cd atmoBB/docs/extensions/kit
 bun install                     # or npm install; also builds the CLI into lib/
 node bin/atmobb-extension.mjs new ~/code/my-extension
 cd ~/code/my-extension
@@ -59,7 +59,7 @@ npm run build
 | --- | --- |
 | `manifest.json` | What you declare to the forum and what an admin reviews: name, version, collections, capabilities, panel entry, lexicon files. See [The manifest](#the-manifest). |
 | `src/index.ts` | The extension itself: `export default defineExtension({ ... })`. See [Handlers](#handlers). |
-| `lexicons/` | One record schema per collection you declare. See [Lexicons](lexicons.md) for the format. |
+| `lexicons/` | One record schema per collection you declare. See [Lexicons](../lexicons.md) for the format. |
 | `ui/` | The panel: `index.html`, `panel.js`, `panel.css`. See [Panels](#panels). |
 | `dist/` | What `npm run build` writes: `manifest.json`, `extension.wasm`, your lexicons, and the files beside `ui.entry`. This is what a forum installs, so it gets committed. |
 
@@ -83,7 +83,7 @@ npm run dev            # atmobb-extension dev [--forum http://127.0.0.1:5173]
 
 ### A complete extension
 
-The whole extension is one module. This is the shape the template uses; the [kit README](../extension-kit/README.md#the-author-api) has the full author API. For a real one to read next, [examples/dice](../examples/dice/README.md) is a dice roller for play-by-post threads: one lexicon, one capability, two actions, and a panel that is a text field and a list.
+The whole extension is one module. This is the shape the template uses; the [kit README](kit/README.md#the-author-api) has the full author API. For a real one to read next, [examples/dice](examples/dice/README.md) is a dice roller for play-by-post threads: one lexicon, one capability, two actions, and a panel that is a text field and a list.
 
 ```ts
 import { defineExtension, kv, records, timers, refuse } from 'atmobb-extension-kit';
@@ -156,7 +156,7 @@ At install and every update, atmoBB checks the manifest and lexicons before fetc
 - The `repo:<collection>` scope text your collections add to the forum's login tops out at 1024 characters.
 - The first repository to declare a collection claims it permanently. A different repository declaring the same collection later is refused. See [Claims](#claims).
 
-When your authority publishes its lexicons (see [Lexicons](lexicons.md)), review also compares what you shipped against what's published, and refuses a release whose schema differs from the published one. Publishing nothing isn't a refusal by itself, just a note at review that the shapes couldn't be checked.
+When your authority publishes its lexicons (see [Lexicons](../lexicons.md)), review also compares what you shipped against what's published, and refuses a release whose schema differs from the published one. Publishing nothing isn't a refusal by itself, just a note at review that the shapes couldn't be checked.
 
 ### Capabilities and their limits
 
@@ -271,7 +271,7 @@ Your panel only ever sees people as DIDs, and it can't look anyone up itself: yo
 
 The page asks `GET /x/<install>/names?did=<did>&did=…&handle=<handle>&…` for these. It's limited to 30 requests a minute per install per client address, answers within about eight seconds with null for any lookup still running, and caches names for five minutes (thirty seconds for a null). Ask once per DID per page load, not on every render.
 
-On a thread, only signed-in members can run actions. On your standalone page, signed-out visitors can too, counted per client address (see [self-hosting](self-hosting.md#configuration-and-secrets) for `ADDRESS_HEADER`/`XFF_DEPTH`, which that count depends on behind a proxy). Signed-in actions are capped at `ATMOBB_EXTENSIONS_ACTIONS_PER_VIEWER_PER_MINUTE` (30) per viewer per install and `ATMOBB_EXTENSIONS_ACTIONS_PER_INSTALL_PER_MINUTE` (300) per install; signed-out actions get the same 30 a minute per client address per install, share `ATMOBB_EXTENSIONS_ANONYMOUS_ACTIONS_PER_INSTALL_PER_MINUTE` (60) across every address, and run one at a time per install.
+On a thread, only signed-in members can run actions. On your standalone page, signed-out visitors can too, counted per client address (see [self-hosting](../self-hosting.md#configuration-and-secrets) for `ADDRESS_HEADER`/`XFF_DEPTH`, which that count depends on behind a proxy). Signed-in actions are capped at `ATMOBB_EXTENSIONS_ACTIONS_PER_VIEWER_PER_MINUTE` (30) per viewer per install and `ATMOBB_EXTENSIONS_ACTIONS_PER_INSTALL_PER_MINUTE` (300) per install; signed-out actions get the same 30 a minute per client address per install, share `ATMOBB_EXTENSIONS_ANONYMOUS_ACTIONS_PER_INSTALL_PER_MINUTE` (60) across every address, and run one at a time per install.
 
 #### Matching the forum
 
@@ -287,7 +287,7 @@ On a thread, only signed-in members can run actions. On your standalone page, si
 
 `scheme` is `light` or `dark`, whichever the forum page is showing: atmoBB judges it by the page's background color, falling back to the page's `color-scheme`. Set your document's `color-scheme` to it, rather than `light dark`, so native controls and any `light-dark()` in your CSS follow the forum and not the viewer's system.
 
-`colors` are CSS colors, read from the forum's own theme tokens (see [theming](theming.md)), so they follow a built-in theme, owner CSS, and a member's personal theme alike:
+`colors` are CSS colors, read from the forum's own theme tokens (see [theming](../theming.md)), so they follow a built-in theme, owner CSS, and a member's personal theme alike:
 
 | name | what it's for | forum token |
 | --- | --- | --- |
@@ -346,9 +346,9 @@ Every install of your extension that declares collections needs its admin to rec
 ## Installing and running extensions
 
 > [!WARNING]
-> Extensions are experimental. The platform is new, the host API can still change under an installed extension, and installing one lets code you didn't write publish records as the forum account, in collections of its own. Install only what you'd vouch for, keep [backups](self-hosting.md#backups) current, and report anything that goes wrong on the [Bugs board](https://atmobb.app/b/3mqdahz5y4m2f) on atmobb.app.
+> Extensions are experimental. The platform is new, the host API can still change under an installed extension, and installing one lets code you didn't write publish records as the forum account, in collections of its own. Install only what you'd vouch for, keep [backups](../self-hosting.md#backups) current, and report anything that goes wrong on the [Bugs board](https://atmobb.app/b/3mqdahz5y4m2f) on atmobb.app.
 
-**Admin → Extensions** installs, updates, and manages extensions. It needs `ATMOBB_EXTENSIONS` unset (or anything but `off`) and this process holding the extensions lock (see [self-hosting](self-hosting.md#extensions)); otherwise the page says so and refuses changes.
+**Admin → Extensions** installs, updates, and manages extensions. It needs `ATMOBB_EXTENSIONS` unset (or anything but `off`) and this process holding the extensions lock (see [self-hosting](../self-hosting.md#extensions)); otherwise the page says so and refuses changes.
 
 ### Install review
 

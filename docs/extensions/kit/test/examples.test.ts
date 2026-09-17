@@ -3,11 +3,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { parse, roll } from '../../examples/dice/src/notation';
-import { extensionRuntime } from '../../src/lib/server/extensions/runtime';
+import { extensionRuntime } from '../../../../src/lib/server/extensions/runtime';
 import { build } from '../src/cli/build';
 import { stubHost } from './stub-host';
 
-// examples/dice is the extension the guide points authors at, so it has to
+// docs/extensions/examples/dice is the extension the guide points authors at, so it has to
 // build with the kit and behave in atmoBB's runtime.
 
 const EXAMPLE = new URL('../../examples/dice', import.meta.url);

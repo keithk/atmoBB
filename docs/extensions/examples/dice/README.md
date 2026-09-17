@@ -10,13 +10,13 @@ rolls.
 It is about as small as a useful extension gets: one lexicon, one capability
 (`records`), two actions (`roll` and `history`), and a panel that is a text
 field and a list. `src/notation.ts` parses and rolls; `src/index.ts` is the
-extension. The [extensions guide](../../docs/extensions.md) explains every
+extension. The [extensions guide](../../README.md) explains every
 piece.
 
 ## Run it on a dev forum
 
-The kit isn't on npm yet, so this example depends on `../../extension-kit` by
-path; build the kit once (`bun install` in `extension-kit/`) first.
+The kit isn't on npm yet, so this example depends on `../../kit` by
+path; build the kit once (`bun install` in `docs/extensions/kit/`) first.
 
 ```sh
 npm install

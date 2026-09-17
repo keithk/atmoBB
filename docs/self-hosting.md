@@ -380,7 +380,7 @@ An install's `kv.json` is plain JSON, not encrypted: whoever operates this host,
 | `ATMOBB_EXTENSION_DIRECTORY` | `1` makes this forum the atmobb.app extension directory: it gets the endorsement admin page, and its login requests the scope to publish endorsements. Set it on exactly one forum. |
 | `ATMOBB_EXTENSION_DIRECTORY_DID` | The directory forum's DID. Every install, including the directory's own, reads this to look up whether a repository is endorsed; unset, nothing ever shows as endorsed. |
 
-The rest tune the sandbox's resource and rate limits, each with a code default that's usually fine to leave alone. [Extensions](extensions.md#capabilities-and-their-limits) explains what each one governs; only the name and default are repeated here.
+The rest tune the sandbox's resource and rate limits, each with a code default that's usually fine to leave alone. [Extensions](extensions/README.md#capabilities-and-their-limits) explains what each one governs; only the name and default are repeated here.
 
 | variable | default |
 |---|---|

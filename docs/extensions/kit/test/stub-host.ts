@@ -1,6 +1,6 @@
 import type { CallContext } from '@extism/extism';
-import { HOST_FUNCTIONS, type HostFunctionName, type HostResult } from '../../src/lib/extensions/contract';
-import type { HostFunction } from '../../src/lib/server/extensions/runtime';
+import { HOST_FUNCTIONS, type HostFunctionName, type HostResult } from '../../../../src/lib/extensions/contract';
+import type { HostFunction } from '../../../../src/lib/server/extensions/runtime';
 
 type Answer = (payload: Record<string, unknown>) => HostResult<unknown>;
 

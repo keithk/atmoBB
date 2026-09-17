@@ -111,7 +111,7 @@ Admin saves wait until the change is visible in the index before redirecting, so
 - **Panels, records, timers, notifications.** An extension can show a panel on a thread staff attached it to or on its own page, keep private state, publish records to the forum's own repo, run on a schedule, and send notifications through atmo.pub.
 - **A trust signal, not a gate.** The atmobb.app directory can endorse a repository and the exact release its staff reviewed. Install review shows that mark, but installing an unendorsed extension is still an admin's call.
 
-See [extensions](extensions.md) for the full picture: authoring, capabilities, limits, and what admins review.
+See [extensions](extensions/README.md) for the full picture: authoring, capabilities, limits, and what admins review.
 
 ## Protocol plumbing
 

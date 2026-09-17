@@ -27,8 +27,8 @@ exports-only module inlined in `host.test.ts` instead of a third QuickJS build.
 
 | Tool | Pinned in |
 | --- | --- |
-| `extism-js` (Extism JS PDK compiler) | `extension-kit/compiler-version.json`, shared with the extension kit's builds |
-| binaryen (`wasm-merge`, `wasm-opt`) | `extension-kit/compiler-version.json` |
+| `extism-js` (Extism JS PDK compiler) | `docs/extensions/kit/compiler-version.json`, shared with the extension kit's builds |
+| binaryen (`wasm-merge`, `wasm-opt`) | `docs/extensions/kit/compiler-version.json` |
 | `@extism/extism` (host SDK) | package.json |
 
 `extism-js` needs `wasm-merge` and `wasm-opt` on `PATH`.
@@ -40,10 +40,10 @@ These fixtures call the host ABI directly (`host.test.ts` checks the raw
 functions), so they're compiled with `extism-js` itself rather than through the
 kit's `build`. The kit's `toolchain` command downloads the pinned tools and
 prints the `PATH` line for them. From this directory, after `bun install` in
-`extension-kit/`:
+`docs/extensions/kit/`:
 
 ```sh
-eval "$(node ../../../../../extension-kit/bin/atmobb-extension.mjs toolchain)"
+eval "$(node ../../../../../docs/extensions/kit/bin/atmobb-extension.mjs toolchain)"
 extism-js probe.js -i probe.interface.txt -o probe.wasm
 extism-js host-probe.js -i host-probe.interface.txt -o host-probe.wasm
 ```
