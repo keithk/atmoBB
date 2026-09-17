@@ -1,5 +1,8 @@
 # atmoBB extension kit
 
+> [!WARNING]
+> Extensions are alpha. The host API, the manifest rules, and this kit can still change between atmoBB releases. Report what breaks at [github.com/keithk/atmoBB/issues](https://github.com/keithk/atmoBB/issues). The [extensions guide](../docs/extensions.md) explains how extensions work and walks through the first one.
+
 Write an atmoBB extension in TypeScript and build it into a release a forum
 can install. You don't touch WebAssembly: the kit bundles your code, compiles
 it with the pinned Extism JS compiler, checks your manifest against the rules
@@ -132,8 +135,8 @@ sets them as `--forum-*` custom properties through the CSSOM (the CSP refuses
 style attributes), sets `color-scheme` to `scheme`, and links
 `/x/fonts/fonts.css`, which serves the forum's IBM Plex faces from the forum
 itself. `ui/panel.css` uses the properties with atmoBB's default look as
-fallbacks. atmoBB's extensions guide, under "Matching the forum", says what
-each color is for.
+fallbacks. The [extensions guide](../docs/extensions.md#matching-the-forum), under
+"Matching the forum", says what each color is for.
 
 On a thread, only signed-in members can run actions. On the extension's own
 page, at `/ext/<repository host and path>` (for example
@@ -188,7 +191,12 @@ npm run dev            # atmobb-extension dev [--forum http://127.0.0.1:5173]
 ## Release
 
 atmoBB installs a git tag whose tree has a built `dist/`. Build, commit `dist/`,
-tag the commit (like `v0.1.0`), and push. Admins install from the repository URL.
+tag the commit with a semantic version, with or without a leading `v` (like
+`v0.1.0`), and push. atmoBB reads tag names as versions: it installs the newest
+non-prerelease tag when an admin leaves the tag blank, and offers only version
+tags newer than the running one as updates, so a tag it can't read as a version
+can only be installed by typing its name. Admins install from the repository's
+`https://` URL.
 
 ## Working on the kit
 
