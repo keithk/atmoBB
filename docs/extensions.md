@@ -83,7 +83,7 @@ npm run dev            # atmobb-extension dev [--forum http://127.0.0.1:5173]
 
 ### A complete extension
 
-The whole extension is one module. This is the shape the template uses; the [kit README](../extension-kit/README.md#the-author-api) has the full author API.
+The whole extension is one module. This is the shape the template uses; the [kit README](../extension-kit/README.md#the-author-api) has the full author API. For a real one to read next, [examples/dice](../examples/dice/README.md) is a dice roller for play-by-post threads: one lexicon, one capability, two actions, and a panel that is a text field and a list.
 
 ```ts
 import { defineExtension, kv, records, timers, refuse } from 'atmobb-extension-kit';

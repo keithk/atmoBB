@@ -1,0 +1,105 @@
+/* The forum's colors and fonts arrive with init (see panel.js). Until then,
+   and for anything the forum leaves out, these fallbacks are atmoBB's own
+   default look. The body stays transparent: the forum draws its surface
+   behind the frame. */
+body {
+  margin: 0;
+  padding: 1rem;
+  color: var(--forum-ink, #2b2a2e);
+  font: 1rem var(--forum-font-body, 'IBM Plex Sans', system-ui, sans-serif);
+}
+
+form:not([hidden]),
+section:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+section p {
+  margin: 0;
+  flex-basis: 100%;
+  color: var(--forum-ink-soft, #6c6a70);
+}
+
+h2 {
+  margin: 0 0 0.5rem;
+  font: 600 1rem var(--forum-font-body, 'IBM Plex Sans', system-ui, sans-serif);
+}
+
+input {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--forum-line-strong, #c9c3bc);
+  border-radius: 4px;
+  background: var(--forum-surface, #ffffff);
+  color: inherit;
+  font: inherit;
+  font-family: var(--forum-font-mono, 'IBM Plex Mono', ui-monospace, monospace);
+}
+
+button {
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--forum-line-strong, #c9c3bc);
+  border-radius: 4px;
+  background: var(--forum-accent, #f79b7a);
+  color: var(--forum-accent-ink, #4a2a1c);
+  font: 600 0.9rem var(--forum-font-body, 'IBM Plex Sans', system-ui, sans-serif);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--forum-accent-hover, #f2895f);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.35rem;
+}
+
+li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--forum-line, #e3dfd9);
+}
+
+li .who {
+  color: var(--forum-ink-soft, #6c6a70);
+  overflow-wrap: anywhere;
+}
+
+li .dice {
+  font-family: var(--forum-font-mono, 'IBM Plex Mono', ui-monospace, monospace);
+  font-size: 0.9rem;
+  color: var(--forum-ink-soft, #6c6a70);
+}
+
+li .total {
+  font: 600 1.25rem var(--forum-font-display, 'IBM Plex Sans', system-ui, sans-serif);
+  font-variant-numeric: tabular-nums;
+}
+
+li.fresh .total {
+  color: var(--forum-accent-hover, #f2895f);
+}
+
+#status {
+  margin: 0.75rem 0 0;
+  color: var(--forum-ink-soft, #6c6a70);
+}
+
+#status:empty {
+  display: none;
+}

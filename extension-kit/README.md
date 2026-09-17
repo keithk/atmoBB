@@ -36,6 +36,9 @@ API an extension usually needs:
 Change `com.example.counter` to an NSID authority you control (a domain you
 own, reversed) in the manifest, the lexicon, and `src/index.ts`.
 
+When the counter is too small to learn from, read `examples/dice` in the
+atmoBB repository: a dice roller that writes every roll as a record.
+
 ## The author API
 
 ```ts

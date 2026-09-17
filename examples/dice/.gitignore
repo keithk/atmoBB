@@ -1,0 +1,4 @@
+node_modules/
+# dist/ is built locally and installed from this directory with ATMOBB_EXTENSIONS_DEV=1.
+# A real extension commits dist/ so a git tag carries it; see the extensions guide.
+dist/

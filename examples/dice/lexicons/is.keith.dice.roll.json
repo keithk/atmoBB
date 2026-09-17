@@ -1,0 +1,24 @@
+{
+  "lexicon": 1,
+  "id": "is.keith.dice.roll",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "One dice roll in a thread, written by the forum account so nobody can forge one.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["thread", "by", "notation", "rolls", "modifier", "total", "createdAt"],
+        "properties": {
+          "thread": { "type": "string", "format": "at-uri", "description": "The thread the roll was made in." },
+          "by": { "type": "string", "format": "did", "description": "The member who rolled." },
+          "notation": { "type": "string", "maxLength": 16, "description": "What was rolled, normalized, like 2d6+3." },
+          "rolls": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minLength": 1, "maxLength": 20, "description": "Each die's result, in order." },
+          "modifier": { "type": "integer", "minimum": -99, "maximum": 99 },
+          "total": { "type": "integer", "description": "The dice added up, plus the modifier." },
+          "createdAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    }
+  }
+}

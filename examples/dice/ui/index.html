@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dice</title>
+    <!-- The forum's own IBM Plex faces, the one stylesheet outside ui/ a panel may load. -->
+    <link rel="stylesheet" href="/x/fonts/fonts.css" />
+    <link rel="stylesheet" href="panel.css" />
+    <script src="panel.js" defer></script>
+  </head>
+  <body>
+    <form id="roller" hidden>
+      <label for="notation">Roll</label>
+      <input id="notation" type="text" value="d20" size="10" autocomplete="off" spellcheck="false" pattern="\s*\d*[dD]\d+\s*([+-]\s*\d+)?\s*" title="Dice like 2d6, d20, or 3d8+2" />
+      <button id="roll" type="submit">Roll</button>
+    </form>
+    <section id="attach" hidden>
+      <p>Members will be able to roll dice in this thread. Every roll is published as a record.</p>
+      <button id="attach-button" type="button">Attach the dice roller</button>
+    </section>
+    <h2 id="heading" hidden></h2>
+    <ol id="history" reversed></ol>
+    <p id="status" role="status"></p>
+  </body>
+</html>
