@@ -1,0 +1,184 @@
+<script lang="ts">
+  // An extension's panel: its UI in a frame sandboxed to scripts only, so it
+  // runs in an opaque origin with no view of this page, its cookies, or the
+  // session. It reaches the extension only through the bridge, which forwards
+  // its actions to the action endpoint as whoever is signed in. The name and
+  // endorsement label are drawn here, outside the frame, so an extension can't
+  // dress itself up as the forum. So is the source line on a standalone page:
+  // the panel only names a DID, and atmoBB checks who that is. Same for a link
+  // to the extension's own pages: the panel only names a page path, and this
+  // component builds the href, since a link followed inside the sandboxed
+  // frame would just navigate the frame and close the panel. And the panel
+  // can't look anyone up itself, so it asks the bridge for names and this
+  // component fetches them from the install's names endpoint. The panel is
+  // told how the forum looks, read here from the page's own computed tokens, so
+  // it can match the page around it.
+  import { onMount } from 'svelte';
+  import { actionOutcome, createPanelBridge, namesFromResponse, type ActionOutcome, type NamesAnswer, type PanelMode } from '$lib/extensions/bridge';
+  import { extensionLinkHref } from '$lib/extensions/page-path';
+  import { readForumTheme } from '$lib/extensions/theme';
+  import { createSourceTracker, sourceFromResponse, sourceLine, type SourceIdentity, type SourceState } from '$lib/extensions/source';
+
+  interface Props {
+    installId: string;
+    name: string;
+    /** The UI entry's path below the install's frame route. */
+    entry: string;
+    mode: PanelMode;
+    /** The thread's at-uri, on a bound thread or the attach page. */
+    thread?: string | null;
+    signedIn: boolean;
+    /** On the extension's own page, the path after its page address. */
+    path?: string;
+    /** The extension's standalone page address. */
+    pageBase: string;
+    endorsement?: 'endorsed' | 'unverified';
+    /** Attach mode: the setup the extension's attach form collected. */
+    onattach?: (params: unknown) => void;
+  }
+
+  let { installId, name, entry, mode, thread = null, signedIn, path = '', pageBase, endorsement = 'unverified', onattach }: Props = $props();
+
+  let container = $state<HTMLDivElement>();
+  let height = $state(240);
+  let closed = $state(false);
+  let source = $state<SourceState | null>(null);
+  const line = $derived(source?.status === 'checked' ? sourceLine(source.identity) : null);
+  let link = $state<{ href: string; label: string } | null>(null);
+
+  async function runAction(action: string, input: unknown): Promise<ActionOutcome> {
+    const response = await fetch(`/x/${installId}/action`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      // Only a bound thread's panel acts for its thread; the attach form acts before there is a binding.
+      body: JSON.stringify({ thread: mode === 'thread' ? thread : null, action, input }),
+    });
+    return actionOutcome(response.status, await response.json().catch(() => null));
+  }
+
+  async function lookupSource(did: string): Promise<SourceIdentity> {
+    const response = await fetch(`/x/${encodeURIComponent(installId)}/source?${new URLSearchParams({ did })}`, { headers: { accept: 'application/json' } });
+    return sourceFromResponse(did, response.status, await response.json().catch(() => null));
+  }
+
+  async function lookupNames(dids: string[], handles: string[]): Promise<NamesAnswer> {
+    const query = new URLSearchParams([...dids.map((did) => ['did', did]), ...handles.map((handle) => ['handle', handle])]);
+    const response = await fetch(`/x/${encodeURIComponent(installId)}/names?${query}`, { headers: { accept: 'application/json' } });
+    return namesFromResponse(dids, handles, response.status, await response.json().catch(() => null));
+  }
+
+  onMount(() => {
+    // Built by hand rather than in markup so the sandbox is in place before
+    // the frame's first navigation and the load listener sees its first load.
+    const frame = document.createElement('iframe');
+    frame.setAttribute('sandbox', 'allow-scripts');
+    frame.setAttribute('referrerpolicy', 'no-referrer');
+    frame.title = `${name} panel`;
+    frame.className = 'atm-extension__frame';
+
+    // Themes are chosen on the server, so the page changes look in place only
+    // when its styles follow the viewer's system scheme.
+    const darkScheme = matchMedia('(prefers-color-scheme: dark)');
+    const theme = () => readForumTheme({
+      root: getComputedStyle(document.documentElement),
+      background: getComputedStyle(document.body).backgroundColor,
+      prefersDark: darkScheme.matches,
+    });
+
+    const sources = createSourceTracker({ lookup: lookupSource, update: (next) => (source = next) });
+    const bridge = createPanelBridge({
+      mode,
+      thread,
+      signedIn,
+      path,
+      pageBase,
+      frame: () => frame.contentWindow,
+      runAction,
+      attach: onattach,
+      source: (did) => sources.set(did),
+      link: (page, label) => {
+        const href = page ? extensionLinkHref(pageBase, page) : null;
+        link = href ? { href, label } : null;
+      },
+      names: lookupNames,
+      theme,
+      resize: (next) => (height = next),
+      teardown: () => {
+        frame.remove();
+        closed = true;
+      },
+    });
+    const onMessage = (event: MessageEvent) => bridge.message(event);
+    const onScheme = () => bridge.theme();
+    window.addEventListener('message', onMessage);
+    darkScheme.addEventListener('change', onScheme);
+    frame.addEventListener('load', () => bridge.load());
+    frame.src = `/x/${encodeURIComponent(installId)}/frame/${entry.split('/').map(encodeURIComponent).join('/')}`;
+    container?.append(frame);
+
+    return () => {
+      bridge.close();
+      sources.close();
+      window.removeEventListener('message', onMessage);
+      darkScheme.removeEventListener('change', onScheme);
+      frame.remove();
+    };
+  });
+</script>
+
+<section class="atm-card atm-card--edge atm-extension" aria-label="{name} extension">
+  <div class="atm-card__header atm-extension__header">
+    <span class="atm-extension__header-start">
+      <span class="atm-extension__name">{name}</span>
+      {#if link}
+        <a class="atm-extension__link" href={link.href} aria-label="Open {link.label} on {name}'s page">{link.label}</a>
+      {/if}
+    </span>
+    {#if endorsement === 'endorsed'}
+      <span class="atm-chip atm-chip--ok">endorsed extension</span>
+    {:else}
+      <span class="atm-chip atm-chip--warn" title="The atmoBB directory hasn't reviewed this release. It runs sandboxed: it sees who you are when you use it, but never your login.">unverified extension</span>
+    {/if}
+  </div>
+  {#if mode === 'page'}
+    <div aria-live="polite">
+      {#if source?.status === 'checking'}
+        <p class="atm-extension__source atm-hint"><span class="atm-spinner" aria-hidden="true"></span> Checking source…</p>
+      {:else if line}
+        <p class="atm-extension__source">
+          <span>
+            Records from
+            {#if line.name !== line.did}<strong>{line.name}</strong>{/if}
+            <code class="atm-extension__did" title="The account's DID">{line.did}</code>
+            {#if line.forumName}<span class="atm-hint">({line.forumName})</span>{/if}
+          </span>
+          {#if line.forum}
+            <span class="atm-chip atm-chip--ok">atmoBB forum</span>
+          {:else}
+            <span class="atm-chip atm-chip--warn">not an atmoBB forum</span>
+            {#if !line.checked}<span class="atm-hint">Couldn't reach this account's records to check.</span>{/if}
+          {/if}
+        </p>
+      {/if}
+    </div>
+  {/if}
+  {#if closed}
+    <p class="atm-card__body atm-hint">This panel tried to leave its frame, so it was closed. Reload the page to open it again.</p>
+  {:else}
+    <div class="atm-extension__body" style:height="{height}px" bind:this={container}>
+      <noscript><p class="atm-card__body atm-hint">This extension's panel needs JavaScript.</p></noscript>
+    </div>
+  {/if}
+</section>
+
+<style>
+  @layer atmobb {
+  .atm-extension__header-start { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-3); min-width: 0; }
+  .atm-extension__name { font: var(--type-section); color: var(--forum-ink); }
+  .atm-extension__link { font: var(--type-ui); }
+  .atm-extension__body { background: var(--forum-surface); }
+  .atm-extension__source { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0; padding: var(--space-2) var(--space-4); border-bottom: var(--border-hair) solid var(--forum-line); font: var(--type-ui); color: var(--forum-ink); overflow-wrap: anywhere; }
+  .atm-extension__did { font: var(--type-handle); user-select: all; }
+  .atm-extension__body :global(.atm-extension__frame) { display: block; width: 100%; height: 100%; border: 0; }
+  }
+</style>

@@ -12,6 +12,7 @@
   import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
   import ThreadReadingTracker from '$lib/components/ThreadReadingTracker.svelte';
   import JoinNotice from '$lib/components/JoinNotice.svelte';
+  import ExtensionPanel from '$lib/components/ExtensionPanel.svelte';
   import { blocksToDoc } from '$lib/richtext/blocks-tiptap';
   import type { RichTextBlock } from '$lib/richtext/bbcode';
   import { blocksToPlainText } from '$lib/richtext/plain';
@@ -189,6 +190,13 @@
     </div>
   {/if}
 
+  {#if data.extension?.attach.length}
+    <p class="atm-hint">
+      Attach extension:
+      {#each data.extension.attach as link, i}{#if i > 0}, {/if}<a href={link.href}>{link.name}</a>{/each}
+    </p>
+  {/if}
+
   {#if totalPages > 1}
     <div class="atm-pager-row">{@render pager()}</div>
   {/if}
@@ -231,6 +239,13 @@
       {/if}
     </div>
   </article>
+
+  {#if data.extension?.panel}
+    <!-- Keyed so reloading the page's data never remounts the frame. -->
+    {#key `${data.extension.panel.installId}:${data.threadUri}`}
+      <ExtensionPanel {...data.extension.panel} mode="thread" thread={data.threadUri} signedIn={!!user} />
+    {/key}
+  {/if}
 
   {#each data.replies as reply, i}
     <article

@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { oauthClient, SYSOP_SCOPE } from '$lib/server/atproto-oauth';
+import { oauthClient, sysopScope } from '$lib/server/atproto-oauth';
+import { refreshExtensionScopes } from '$lib/server/extensions/scopes';
 import { FORUM_DID, resolveHandle } from '$lib/server/appview';
 
 export const load: PageServerLoad = async ({ url }) => {
@@ -18,8 +19,10 @@ export const actions: Actions = {
     if (!handle) return fail(400, { message: "Enter the forum account's handle." });
     let authorizeUrl: URL;
     try {
+      // Ask for the collections extensions are approved for right now.
+      await refreshExtensionScopes();
       authorizeUrl = await oauthClient().authorize(handle, {
-        scope: SYSOP_SCOPE,
+        scope: sysopScope(),
         state: `forum-connect:${locals.user.did}`,
       });
     } catch (e) {

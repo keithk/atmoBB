@@ -1,0 +1,15 @@
+{
+  "name": "dice",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "atmobb-extension build",
+    "dev": "atmobb-extension dev",
+    "check": "tsc"
+  },
+  "devDependencies": {
+    "atmobb-extension-kit": "file:../../extension-kit",
+    "typescript": "^7.0.2"
+  }
+}

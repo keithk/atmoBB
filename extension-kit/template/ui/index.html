@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Counter</title>
+    <!-- The forum's own IBM Plex faces, the one stylesheet outside ui/ a panel may load. -->
+    <link rel="stylesheet" href="/x/fonts/fonts.css" />
+    <link rel="stylesheet" href="panel.css" />
+    <script src="panel.js" defer></script>
+  </head>
+  <body>
+    <section id="counter" hidden>
+      <output id="count" aria-live="polite">–</output>
+      <button id="increment" type="button">+1</button>
+    </section>
+    <section id="setup" hidden>
+      <label>Start counting at <input id="start" type="number" min="0" step="1" value="0" /></label>
+      <button id="attach" type="button">Attach counter</button>
+    </section>
+    <p id="status" role="status"></p>
+  </body>
+</html>

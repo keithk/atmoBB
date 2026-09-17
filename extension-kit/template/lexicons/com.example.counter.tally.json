@@ -1,0 +1,20 @@
+{
+  "lexicon": 1,
+  "id": "com.example.counter.tally",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A thread's latest count, one record per thread the counter is attached to.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["thread", "count", "updatedAt"],
+        "properties": {
+          "thread": { "type": "string", "format": "at-uri", "description": "The thread the counter belongs to." },
+          "count": { "type": "integer", "minimum": 0 },
+          "updatedAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    }
+  }
+}

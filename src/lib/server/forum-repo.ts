@@ -19,12 +19,19 @@ export interface ForumRecordValue {
   [k: string]: unknown;
 }
 
+export const FORUM_RECONNECT_MESSAGE =
+  'The forum account needs updated permissions. Reconnect it in Admin → Connection, then try again.';
+
+/** Whether a forum write failed because the forum account's OAuth grant lacks a scope. */
+export function isForumScopeError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : '';
+  return /scope|permission|not authorized/i.test(message);
+}
+
 /** Turn a stale forum-account OAuth grant into an actionable admin message. */
 export function forumWriteErrorMessage(error: unknown, fallback: string): string {
+  if (isForumScopeError(error)) return FORUM_RECONNECT_MESSAGE;
   const message = error instanceof Error ? error.message : '';
-  if (/scope|permission|not authorized/i.test(message)) {
-    return 'The forum account needs updated permissions. Reconnect it in Admin → Connection, then try again.';
-  }
   return message || fallback;
 }
 
@@ -41,6 +48,27 @@ export async function createForumRecord(
     record,
   });
   return { uri: res.data.uri };
+}
+
+/** Create a record exactly as given, with no createdAt added, at `rkey` when
+ *  one is chosen. Fails when a record already sits at that key. */
+export async function createForumRecordAsGiven(
+  collection: string,
+  record: ForumRecordValue,
+  rkey?: string,
+): Promise<{ uri: string; cid: string }> {
+  if (forumWriteMode() === 'index') {
+    if (rkey && (await getForumRecord(collection, rkey))) throw new Error('Record already exists');
+    return indexPut(collection, rkey ?? tid(), record);
+  }
+  const agent = await agentFor(FORUM_DID());
+  const res = await agent.com.atproto.repo.createRecord({
+    repo: FORUM_DID(),
+    collection,
+    rkey,
+    record,
+  });
+  return { uri: res.data.uri, cid: res.data.cid };
 }
 
 /** Create many records in one collection: applyWrites in chunks of 200 (the
@@ -72,7 +100,7 @@ export async function putForumRecord(
   collection: string,
   rkey: string,
   value: ForumRecordValue,
-): Promise<{ uri: string }> {
+): Promise<{ uri: string; cid: string }> {
   const record = { $type: collection, ...value };
   if (forumWriteMode() === 'index') return indexPut(collection, rkey, record);
   const agent = await agentFor(FORUM_DID());
@@ -82,7 +110,7 @@ export async function putForumRecord(
     rkey,
     record,
   });
-  return { uri: res.data.uri };
+  return { uri: res.data.uri, cid: res.data.cid };
 }
 
 /** Upload a blob owned by the forum account for use in one of its records. */
@@ -120,6 +148,28 @@ export async function listForumRecords(
     cursor = res.data.cursor;
   } while (cursor);
   return records;
+}
+
+/** One record of the forum's, straight from the repo (or the dev index), or
+ *  null when there is none at that key. */
+export async function getForumRecord(
+  collection: string,
+  rkey: string,
+): Promise<{ uri: string; cid: string; value: ForumRecordValue } | null> {
+  if (forumWriteMode() === 'index') {
+    const uri = `at://${FORUM_DID()}/${collection}/${rkey}`;
+    const [row] = await pg()`SELECT uri, cid, record FROM happyview_records WHERE uri = ${uri}`;
+    if (!row) return null;
+    return { uri: row.uri, cid: row.cid, value: typeof row.record === 'string' ? JSON.parse(row.record) : row.record };
+  }
+  const agent = await agentFor(FORUM_DID());
+  try {
+    const res = await agent.com.atproto.repo.getRecord({ repo: FORUM_DID(), collection, rkey });
+    return { uri: res.data.uri, cid: res.data.cid ?? '', value: res.data.value as ForumRecordValue };
+  } catch (error) {
+    if ((error as { error?: string }).error === 'RecordNotFound') return null;
+    throw error;
+  }
 }
 
 export async function deleteForumRecord(uri: string): Promise<void> {
@@ -164,10 +214,11 @@ async function indexPut(
   collection: string,
   rkey: string,
   record: ForumRecordValue,
-): Promise<{ uri: string }> {
+): Promise<{ uri: string; cid: string }> {
   const did = FORUM_DID();
   const uri = `at://${did}/${collection}/${rkey}`;
   const json = JSON.stringify(record);
+  const cid = 'bafydev' + rkey;
   const now = new Date().toISOString();
   const refs = new Set<string>();
   const walk = (v: unknown) => {
@@ -179,7 +230,7 @@ async function indexPut(
   const sql = pg();
   await sql`
     INSERT INTO happyview_records (uri, did, collection, rkey, record, cid, indexed_at, created_at)
-    VALUES (${uri}, ${did}, ${collection}, ${rkey}, ${json}, ${'bafydev' + rkey}, ${now}, ${now})
+    VALUES (${uri}, ${did}, ${collection}, ${rkey}, ${json}, ${cid}, ${now}, ${now})
     ON CONFLICT (uri) DO UPDATE SET record = EXCLUDED.record, indexed_at = EXCLUDED.indexed_at`;
   // Mimic the onModerationAction trigger (jetstream never sees index writes):
   // origin hide/lock/pin flip the stats flags when the signer owns the board;
@@ -302,5 +353,5 @@ async function indexPut(
       VALUES (${uri}, ${target}, ${collection})
       ON CONFLICT DO NOTHING`;
   }
-  return { uri };
+  return { uri, cid };
 }

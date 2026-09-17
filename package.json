@@ -10,7 +10,7 @@
     "cookie": "0.7.2"
   },
   "scripts": {
-    "lex": "yes | lex gen-api ./src/lexicon lexicons/com/atproto/repo/*.json lexicons/app/atmobb/richtext/*.json lexicons/app/atmobb/actor/*.json lexicons/app/atmobb/forum/*.json lexicons/app/atmobb/moderation/*.json lexicons/app/atmobb/discussion/*.json lexicons/app/atmobb/poll/*.json",
+    "lex": "yes | lex gen-api ./src/lexicon lexicons/com/atproto/repo/*.json lexicons/app/atmobb/richtext/*.json lexicons/app/atmobb/actor/*.json lexicons/app/atmobb/forum/*.json lexicons/app/atmobb/moderation/*.json lexicons/app/atmobb/discussion/*.json lexicons/app/atmobb/poll/*.json lexicons/app/atmobb/extension/*.json",
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
@@ -37,12 +37,15 @@
     "@atproto/crypto": "^0.5.5",
     "@atproto/lexicon": "^0.7.12",
     "@atproto/oauth-client-node": "^0.5.4",
+    "@atproto/syntax": "^0.7.5",
     "@atproto/xrpc": "^0.8.11",
+    "@extism/extism": "2.0.0-rc13",
     "@resvg/resvg-js": "^2.6.2",
     "@tiptap/core": "^3.30.5",
     "@tiptap/extensions": "^3.30.5",
     "@tiptap/pm": "^3.30.5",
     "@tiptap/starter-kit": "^3.30.5",
+    "isomorphic-git": "1.42.2",
     "postgres": "^3.4.9",
     "satori": "^0.26.0"
   },

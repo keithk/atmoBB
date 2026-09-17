@@ -1,0 +1,2 @@
+node_modules/
+# dist/ is committed: atmoBB installs a release from the dist/ directory of a git tag.

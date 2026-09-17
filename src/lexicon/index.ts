@@ -18,6 +18,8 @@ import * as AppAtmobbDiscussionGetLatestThreads from './types/app/atmobb/discuss
 import * as AppAtmobbDiscussionGetThreadPage from './types/app/atmobb/discussion/getThreadPage.js'
 import * as AppAtmobbDiscussionReply from './types/app/atmobb/discussion/reply.js'
 import * as AppAtmobbDiscussionThread from './types/app/atmobb/discussion/thread.js'
+import * as AppAtmobbExtensionBinding from './types/app/atmobb/extension/binding.js'
+import * as AppAtmobbExtensionEndorsement from './types/app/atmobb/extension/endorsement.js'
 import * as AppAtmobbForumAccessRequest from './types/app/atmobb/forum/accessRequest.js'
 import * as AppAtmobbForumBoard from './types/app/atmobb/forum/board.js'
 import * as AppAtmobbForumCategory from './types/app/atmobb/forum/category.js'
@@ -59,6 +61,8 @@ export * as AppAtmobbDiscussionGetLatestThreads from './types/app/atmobb/discuss
 export * as AppAtmobbDiscussionGetThreadPage from './types/app/atmobb/discussion/getThreadPage.js'
 export * as AppAtmobbDiscussionReply from './types/app/atmobb/discussion/reply.js'
 export * as AppAtmobbDiscussionThread from './types/app/atmobb/discussion/thread.js'
+export * as AppAtmobbExtensionBinding from './types/app/atmobb/extension/binding.js'
+export * as AppAtmobbExtensionEndorsement from './types/app/atmobb/extension/endorsement.js'
 export * as AppAtmobbForumAccessRequest from './types/app/atmobb/forum/accessRequest.js'
 export * as AppAtmobbForumBoard from './types/app/atmobb/forum/board.js'
 export * as AppAtmobbForumCategory from './types/app/atmobb/forum/category.js'
@@ -121,6 +125,7 @@ export class AppAtmobbNS {
   _client: XrpcClient
   actor: AppAtmobbActorNS
   discussion: AppAtmobbDiscussionNS
+  extension: AppAtmobbExtensionNS
   forum: AppAtmobbForumNS
   moderation: AppAtmobbModerationNS
   poll: AppAtmobbPollNS
@@ -130,6 +135,7 @@ export class AppAtmobbNS {
     this._client = client
     this.actor = new AppAtmobbActorNS(client)
     this.discussion = new AppAtmobbDiscussionNS(client)
+    this.extension = new AppAtmobbExtensionNS(client)
     this.forum = new AppAtmobbForumNS(client)
     this.moderation = new AppAtmobbModerationNS(client)
     this.poll = new AppAtmobbPollNS(client)
@@ -480,6 +486,184 @@ export class AppAtmobbDiscussionThreadRecord {
       'com.atproto.repo.deleteRecord',
       undefined,
       { collection: 'app.atmobb.discussion.thread', ...params },
+      { headers },
+    )
+  }
+}
+
+export class AppAtmobbExtensionNS {
+  _client: XrpcClient
+  binding: AppAtmobbExtensionBindingRecord
+  endorsement: AppAtmobbExtensionEndorsementRecord
+
+  constructor(client: XrpcClient) {
+    this._client = client
+    this.binding = new AppAtmobbExtensionBindingRecord(client)
+    this.endorsement = new AppAtmobbExtensionEndorsementRecord(client)
+  }
+}
+
+export class AppAtmobbExtensionBindingRecord {
+  _client: XrpcClient
+
+  constructor(client: XrpcClient) {
+    this._client = client
+  }
+
+  async list(
+    params: OmitKey<ComAtprotoRepoListRecords.QueryParams, 'collection'>,
+  ): Promise<{
+    cursor?: string
+    records: { uri: string; value: AppAtmobbExtensionBinding.Record }[]
+  }> {
+    const res = await this._client.call('com.atproto.repo.listRecords', {
+      collection: 'app.atmobb.extension.binding',
+      ...params,
+    })
+    return res.data
+  }
+
+  async get(
+    params: OmitKey<ComAtprotoRepoGetRecord.QueryParams, 'collection'>,
+  ): Promise<{
+    uri: string
+    cid: string
+    value: AppAtmobbExtensionBinding.Record
+  }> {
+    const res = await this._client.call('com.atproto.repo.getRecord', {
+      collection: 'app.atmobb.extension.binding',
+      ...params,
+    })
+    return res.data
+  }
+
+  async create(
+    params: OmitKey<
+      ComAtprotoRepoCreateRecord.InputSchema,
+      'collection' | 'record'
+    >,
+    record: Un$Typed<AppAtmobbExtensionBinding.Record>,
+    headers?: Record<string, string>,
+  ): Promise<{ uri: string; cid: string }> {
+    const collection = 'app.atmobb.extension.binding'
+    const res = await this._client.call(
+      'com.atproto.repo.createRecord',
+      undefined,
+      { collection, ...params, record: { ...record, $type: collection } },
+      { encoding: 'application/json', headers },
+    )
+    return res.data
+  }
+
+  async put(
+    params: OmitKey<
+      ComAtprotoRepoPutRecord.InputSchema,
+      'collection' | 'record'
+    >,
+    record: Un$Typed<AppAtmobbExtensionBinding.Record>,
+    headers?: Record<string, string>,
+  ): Promise<{ uri: string; cid: string }> {
+    const collection = 'app.atmobb.extension.binding'
+    const res = await this._client.call(
+      'com.atproto.repo.putRecord',
+      undefined,
+      { collection, ...params, record: { ...record, $type: collection } },
+      { encoding: 'application/json', headers },
+    )
+    return res.data
+  }
+
+  async delete(
+    params: OmitKey<ComAtprotoRepoDeleteRecord.InputSchema, 'collection'>,
+    headers?: Record<string, string>,
+  ): Promise<void> {
+    await this._client.call(
+      'com.atproto.repo.deleteRecord',
+      undefined,
+      { collection: 'app.atmobb.extension.binding', ...params },
+      { headers },
+    )
+  }
+}
+
+export class AppAtmobbExtensionEndorsementRecord {
+  _client: XrpcClient
+
+  constructor(client: XrpcClient) {
+    this._client = client
+  }
+
+  async list(
+    params: OmitKey<ComAtprotoRepoListRecords.QueryParams, 'collection'>,
+  ): Promise<{
+    cursor?: string
+    records: { uri: string; value: AppAtmobbExtensionEndorsement.Record }[]
+  }> {
+    const res = await this._client.call('com.atproto.repo.listRecords', {
+      collection: 'app.atmobb.extension.endorsement',
+      ...params,
+    })
+    return res.data
+  }
+
+  async get(
+    params: OmitKey<ComAtprotoRepoGetRecord.QueryParams, 'collection'>,
+  ): Promise<{
+    uri: string
+    cid: string
+    value: AppAtmobbExtensionEndorsement.Record
+  }> {
+    const res = await this._client.call('com.atproto.repo.getRecord', {
+      collection: 'app.atmobb.extension.endorsement',
+      ...params,
+    })
+    return res.data
+  }
+
+  async create(
+    params: OmitKey<
+      ComAtprotoRepoCreateRecord.InputSchema,
+      'collection' | 'record'
+    >,
+    record: Un$Typed<AppAtmobbExtensionEndorsement.Record>,
+    headers?: Record<string, string>,
+  ): Promise<{ uri: string; cid: string }> {
+    const collection = 'app.atmobb.extension.endorsement'
+    const res = await this._client.call(
+      'com.atproto.repo.createRecord',
+      undefined,
+      { collection, ...params, record: { ...record, $type: collection } },
+      { encoding: 'application/json', headers },
+    )
+    return res.data
+  }
+
+  async put(
+    params: OmitKey<
+      ComAtprotoRepoPutRecord.InputSchema,
+      'collection' | 'record'
+    >,
+    record: Un$Typed<AppAtmobbExtensionEndorsement.Record>,
+    headers?: Record<string, string>,
+  ): Promise<{ uri: string; cid: string }> {
+    const collection = 'app.atmobb.extension.endorsement'
+    const res = await this._client.call(
+      'com.atproto.repo.putRecord',
+      undefined,
+      { collection, ...params, record: { ...record, $type: collection } },
+      { encoding: 'application/json', headers },
+    )
+    return res.data
+  }
+
+  async delete(
+    params: OmitKey<ComAtprotoRepoDeleteRecord.InputSchema, 'collection'>,
+    headers?: Record<string, string>,
+  ): Promise<void> {
+    await this._client.call(
+      'com.atproto.repo.deleteRecord',
+      undefined,
+      { collection: 'app.atmobb.extension.endorsement', ...params },
       { headers },
     )
   }

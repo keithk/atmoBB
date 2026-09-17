@@ -98,11 +98,20 @@ Custom CSS never applies to `/admin`, so a broken theme is always repairable.
 - **Boards.** Create, edit, delete, categorize, nest, reorder with up/down arrows, toggle members-only, with destructive-action confirmations where they're needed.
 - **Staff.** Grant and revoke admin and moderator roles.
 - **Members.** Join mode, application prompt, invite cap and lifetime, the application queue, staff invites, the members-only board request queue, and the roster with removal.
+- **Extensions.** Install a sandboxed extension from a git URL, review and confirm its release, update it, roll it back, disable or uninstall it, and attach one to a thread.
 - **Stamps.** Author, preview, and retire the forum's stamps, and hide the default board and arrival stamps.
 - **Topics.** Set a board's topic slug, choose open or allowlist federation, preview what a topic would merge with before committing, and browse every topic in the atmosphere.
 - **Connection.** OAuth-connect the forum's own account. Whoever connects it first gets bootstrapped as admin; connecting the wrong account is detected and revoked.
 
 Admin saves wait until the change is visible in the index before redirecting, so the panel never shows you stale state.
+
+## Extensions
+
+- **Install from a git URL.** Any admin can add a sandboxed extension by pointing atmoBB at a repository, no server access needed. It runs as compiled WebAssembly in its own worker, with no filesystem or network of its own; what it can do and which record collections it can write are whatever the admin approves on review.
+- **Panels, records, timers, notifications.** An extension can show a panel on a thread staff attached it to or on its own page, keep private state, publish records to the forum's own repo, run on a schedule, and send notifications through atmo.pub.
+- **A trust signal, not a gate.** The atmobb.app directory can endorse a repository and the exact release its staff reviewed. Install review shows that mark, but installing an unendorsed extension is still an admin's call.
+
+See [extensions](extensions.md) for the full picture: authoring, capabilities, limits, and what admins review.
 
 ## Protocol plumbing
 

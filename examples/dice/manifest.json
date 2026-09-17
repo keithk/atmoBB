@@ -1,0 +1,11 @@
+{
+  "id": "is.keith.dice",
+  "name": "Dice",
+  "version": "0.1.0",
+  "hostApi": "1.0",
+  "dataVersion": 1,
+  "collections": ["is.keith.dice.roll"],
+  "capabilities": ["records"],
+  "ui": { "entry": "ui/index.html" },
+  "lexicons": ["lexicons/is.keith.dice.roll.json"]
+}

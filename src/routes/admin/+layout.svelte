@@ -11,12 +11,19 @@
     { label: 'Staff', href: '/admin/staff' },
     { label: 'Members', href: '/admin/members' },
     { label: 'Topics', href: '/admin/topics' },
+    { label: 'Extensions', href: '/admin/extensions' },
+    ...(data.directoryEnabled ? [{ label: 'Endorse', href: '/admin/extensions/endorse' }] : []),
     ...(data.hostingEnabled ? [{ label: 'Hosting', href: '/admin/hosting' }] : []),
     { label: 'Updates', href: '/admin/updates' },
     { label: 'Connection', href: '/admin/connect' },
   ]);
-  const isActive = (href: string) =>
-    href === '/admin' ? page.url.pathname === '/admin' : page.url.pathname.startsWith(href);
+  // The longest matching tab wins, so a nested page like /admin/extensions/endorse
+  // highlights only Endorse, not Extensions too.
+  const isActive = (href: string) => {
+    if (href === '/admin') return page.url.pathname === '/admin';
+    if (!page.url.pathname.startsWith(href)) return false;
+    return !tabs.some((tab) => tab.href !== href && tab.href.startsWith(href) && page.url.pathname.startsWith(tab.href));
+  };
 
   const needsConnection = $derived(data.writeMode === 'pds' && !data.connected);
 </script>

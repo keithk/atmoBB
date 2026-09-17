@@ -1,0 +1,17 @@
+declare module 'main' {
+  export function echo(): I32;
+  export function spin(): I32;
+  export function busy(): I32;
+  export function hog(): I32;
+  export function waitForHost(): I32;
+  export function tally(): I32;
+  export function request(): I32;
+}
+
+declare module 'extism:host' {
+  interface user {
+    wait(ptr: I64): I64;
+    load(ptr: I64): I64;
+    save(ptr: I64): I64;
+  }
+}
