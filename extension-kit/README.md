@@ -1,7 +1,7 @@
 # atmoBB extension kit
 
 > [!WARNING]
-> Extensions are alpha. The host API, the manifest rules, and this kit can still change between atmoBB releases. Report what breaks at [github.com/keithk/atmoBB/issues](https://github.com/keithk/atmoBB/issues). The [extensions guide](../docs/extensions.md) explains how extensions work and walks through the first one.
+> Extensions are alpha. The host API, the manifest rules, and this kit can still change between atmoBB releases. Report what breaks on the [Bugs board](https://atmobb.app/b/3mqdahz5y4m2f) on atmobb.app. The [extensions guide](../docs/extensions.md) explains how extensions work and walks through the first one.
 
 Write an atmoBB extension in TypeScript and build it into a release a forum
 can install. You don't touch WebAssembly: the kit bundles your code, compiles

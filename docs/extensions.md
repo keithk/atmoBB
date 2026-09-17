@@ -1,7 +1,7 @@
 # Extensions
 
 > [!WARNING]
-> Extensions are alpha. The host API, the manifest rules, the panel bridge, and the authoring kit can all still change between atmoBB releases, and an extension you ship today may need edits to keep installing. It hasn't run on a production forum yet. If something breaks, reads wrong, or stops you from building what you're trying to build, say so at [github.com/keithk/atmoBB/issues](https://github.com/keithk/atmoBB/issues). See [Reporting problems](#reporting-problems) for what to include.
+> Extensions are alpha. The host API, the manifest rules, the panel bridge, and the authoring kit can all still change between atmoBB releases, and an extension you ship today may need edits to keep installing. It hasn't run on a production forum yet. If something breaks, reads wrong, or stops you from building what you're trying to build, post it on the [Bugs board](https://atmobb.app/b/3mqdahz5y4m2f) on atmobb.app. See [Reporting problems](#reporting-problems) for what to include.
 
 An extension is a small program a forum admin installs from a git URL. It runs inside atmoBB in a sandbox, with no filesystem, no network, and no access to the forum's session or credentials. It can keep private state, publish public records to the forum's repo, run on a schedule, send notifications, and show a panel on threads staff attach it to or on a page of its own. That's enough for something like a multiplayer game to live on a forum, with its own board and its own records, without becoming part of atmoBB itself.
 
@@ -346,7 +346,7 @@ Every install of your extension that declares collections needs its admin to rec
 ## Installing and running extensions
 
 > [!WARNING]
-> Extensions are experimental. The platform is new, the host API can still change under an installed extension, and installing one lets code you didn't write publish records as the forum account, in collections of its own. Install only what you'd vouch for, keep [backups](self-hosting.md#backups) current, and report anything that goes wrong at [github.com/keithk/atmoBB/issues](https://github.com/keithk/atmoBB/issues).
+> Extensions are experimental. The platform is new, the host API can still change under an installed extension, and installing one lets code you didn't write publish records as the forum account, in collections of its own. Install only what you'd vouch for, keep [backups](self-hosting.md#backups) current, and report anything that goes wrong on the [Bugs board](https://atmobb.app/b/3mqdahz5y4m2f) on atmobb.app.
 
 **Admin → Extensions** installs, updates, and manages extensions. It needs `ATMOBB_EXTENSIONS` unset (or anything but `off`) and this process holding the extensions lock (see [self-hosting](self-hosting.md#extensions)); otherwise the page says so and refuses changes.
 
@@ -392,4 +392,4 @@ Set `ATMOBB_EXTENSIONS=off` to turn every extension off, forum-wide: no calls, n
 
 ## Reporting problems
 
-Open an issue at [github.com/keithk/atmoBB/issues](https://github.com/keithk/atmoBB/issues). For a problem with an extension you're writing, include the atmoBB version or commit, the kit's `compiler-version.json`, your `manifest.json`, the lines from the extension log on the install's page, and what you expected instead. For a problem installing or running one, include the review page's refusal text and the extension's repository URL and tag. Questions about what the platform should do next go in the same place. The first real extensions will decide what changes.
+Post on the [Bugs board](https://atmobb.app/b/3mqdahz5y4m2f) on atmobb.app. If you'd rather not sign in there, [GitHub issues](https://github.com/keithk/atmoBB/issues) works too. For a problem with an extension you're writing, include the atmoBB version or commit, the kit's `compiler-version.json`, your `manifest.json`, the lines from the extension log on the install's page, and what you expected instead. For a problem installing or running one, include the review page's refusal text and the extension's repository URL and tag. Questions about what the platform should do next go in the same place. The first real extensions will decide what changes.
