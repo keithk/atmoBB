@@ -49,7 +49,7 @@
       </form>
       <p class="atm-hint">Downloads the verified release bundle, pulls its pinned images, backs up the forum, applies Happyview migrations and setup, then checks health.</p>
     {:else if !data.enabled}
-      <p class="atm-hint update__status">Automatic updates are unavailable. Compose installations can enable the narrow host updater by rerunning <code>./atmobb install</code>.</p>
+      <p class="atm-hint update__status">Updates from this page need a release-bundle installation with the host updater. A bundle installed before Admin → Updates existed gets it by rerunning <code>./atmobb install</code> in its bundle directory. Source installs and other deployments update the way they were set up; see <a href="https://github.com/keithk/atmoBB/blob/main/docs/self-hosting.md#upgrades">Upgrades</a>.</p>
     {/if}
   </div>
 </div>
