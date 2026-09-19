@@ -8,7 +8,7 @@ export const actions: Actions = {
   login: async ({ request }) => {
     const form = await request.formData();
     const handle = String(form.get('handle') ?? '').trim().replace(/^@/, '');
-    if (!handle) return fail(400, { message: 'Enter your handle.' });
+    if (!handle) return fail(400, { message: 'Enter your handle.', handle });
     // Where to land after the callback; only the app's own allowlisted paths.
     const next = safeReturnPath(form.get('next'));
     let authorizeUrl: URL;

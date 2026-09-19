@@ -14,10 +14,21 @@
     contrastRatio,
     isLowContrast,
     parseLook,
+    type StampFormFields,
     type StampLook,
   } from '$lib/stamps';
+  import type { PageData } from './$types';
 
-  let { data, form } = $props();
+  // The action union doesn't expose fields/uri/warning on every branch, so type
+  // the page's form directly instead of narrowing member by member.
+  interface StampForm {
+    message?: string;
+    warning?: string;
+    uri?: string;
+    fields?: Record<keyof StampFormFields, string>;
+  }
+
+  let { data, form }: { data: PageData; form: StampForm | null } = $props();
 
   type StampData = (typeof data.stamps)[number];
 

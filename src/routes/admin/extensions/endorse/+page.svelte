@@ -1,7 +1,17 @@
 <script lang="ts">
   import { relTime } from '$lib/reltime';
+  import type { PageData } from './$types';
 
-  let { data, form } = $props();
+  // SvelteKit's action union doesn't expose `fields` on every branch, so type
+  // the page's form directly instead of narrowing member by member.
+  interface EndorseForm {
+    message?: string;
+    saved?: string;
+    removed?: { gitUrl: string; sha: string };
+    fields?: { gitUrl?: string; sha?: string; listing?: string };
+  }
+
+  let { data, form }: { data: PageData; form: EndorseForm | null } = $props();
 </script>
 
 <p class="atm-hint endorse__intro">
