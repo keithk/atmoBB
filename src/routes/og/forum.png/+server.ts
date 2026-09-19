@@ -4,6 +4,7 @@ import { forumCard, genericCard } from '$lib/server/og/cards';
 import { getBoardIndex, FORUM_DID } from '$lib/server/appview';
 import { presenceSnapshot } from '$lib/server/presence';
 import { blobCid, blobUrl } from '$lib/server/profiles';
+import { outboundFetch } from '$lib/server/extensions/outbound';
 import { ogSkin } from '$lib/server/og/palette';
 
 async function customImage(image: unknown): Promise<Uint8Array<ArrayBuffer> | null> {
@@ -12,10 +13,9 @@ async function customImage(image: unknown): Promise<Uint8Array<ArrayBuffer> | nu
   try {
     const source = await blobUrl(FORUM_DID(), cid);
     if (!source) return null;
-    const response = await fetch(source, { signal: AbortSignal.timeout(5000) });
-    if (!response.ok || response.headers.get('content-type')?.split(';')[0] !== 'image/png') return null;
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    return bytes.length <= 2_000_000 ? bytes : null;
+    const response = await outboundFetch(source, { maxBytes: 2_000_000, timeoutMs: 5000 });
+    if (response.status !== 200 || response.headers['content-type']?.split(';')[0] !== 'image/png') return null;
+    return new Uint8Array(response.body);
   } catch {
     return null;
   }

@@ -1,20 +1,23 @@
 import { blobCid } from '$lib/avatar/profile-image';
 import type { ActorProfile } from '$lib/server/appview';
 import { blobUrl } from '$lib/server/profiles';
+import { outboundFetch } from '$lib/server/extensions/outbound';
 import { box, img, text, type VNode } from './render';
 import { skin, type OgSkin } from './palette';
 
-type Fetch = typeof fetch;
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+const AVATAR_TIMEOUT_MS = 5000;
 
 /** Fetch an image into the self-contained form Satori needs while rendering. */
-export async function imageDataUri(fetchFn: Fetch, src: string): Promise<string | null> {
+export async function imageDataUri(src: string): Promise<string | null> {
   try {
-    const res = await fetchFn(src);
-    if (!res.ok) return null;
-    const contentType = res.headers.get('content-type')?.split(';')[0] ?? 'image/png';
+    // Avatar and inline-image URLs come from member records, so they go through
+    // the hardened fetcher: no private/link-local hosts, no redirect escapes.
+    const res = await outboundFetch(src, { maxBytes: AVATAR_MAX_BYTES, timeoutMs: AVATAR_TIMEOUT_MS });
+    if (res.status !== 200) return null;
+    const contentType = res.headers['content-type']?.split(';')[0] ?? 'image/png';
     if (!contentType.startsWith('image/')) return null;
-    const bytes = await res.arrayBuffer();
-    return `data:${contentType};base64,${Buffer.from(bytes).toString('base64')}`;
+    return `data:${contentType};base64,${Buffer.from(res.body).toString('base64')}`;
   } catch {
     return null;
   }
@@ -49,13 +52,12 @@ function presenceDot(options: AvatarOptions): VNode | null {
 export async function profileAvatarNode(
   profile: ActorProfile | null | undefined,
   did: string,
-  fetchFn: Fetch,
   options: AvatarOptions,
   label = '',
 ): Promise<VNode> {
   const cid = blobCid(profile?.avatar);
   const source = cid ? await blobUrl(did, cid) : undefined;
-  const dataUri = source ? await imageDataUri(fetchFn, source) : null;
+  const dataUri = source ? await imageDataUri(source) : null;
   if (dataUri) {
     const { size, ring = false, radius = size * 0.16 } = options;
     const colors = options.skin ?? skin;

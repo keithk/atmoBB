@@ -6,6 +6,8 @@ means. Every entry names the Happyview release it was tested against.
 
 ## Unreleased
 
+- Fixed a server-side request forgery in profile and image resolution. DID documents, PDS endpoints, handles, and member avatars and images now go through the same hardened, address-vetted fetcher the extension system already used, so a crafted DID document or handle can no longer make the server read from the shard's own network through member pages or Open Graph images.
+
 ## 0.5.0
 
 Tested against Happyview 2.14.0. No backfill is required.

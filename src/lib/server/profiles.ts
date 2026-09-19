@@ -9,10 +9,17 @@ import {
 import { presenceSnapshot } from './presence';
 import { blobCid } from '$lib/avatar/profile-image';
 import { profileForForum } from '$lib/profile-overrides';
+import { isValidHandle } from '@atproto/syntax';
+import {
+  outboundFetch,
+  pdsServiceEndpoint,
+  resolveDidDocument,
+  type OutboundFetchOptions,
+  type OutboundFetchResult,
+} from './extensions/outbound';
 
 export { blobCid } from '$lib/avatar/profile-image';
 
-const PLC = 'https://plc.directory';
 const BSKY_API = 'https://public.api.bsky.app';
 const NS = 'app.atmobb';
 const ACTOR_PROFILE = `${NS}.actor.profile`;
@@ -70,6 +77,31 @@ function fresh<T>(hit: { at: number } | undefined): hit is T & { at: number } {
   return !!hit && Date.now() - hit.at < TTL;
 }
 
+// Every network read of a DID document, PDS endpoint, or member-supplied host
+// goes through the extension system's hardened fetcher (HTTPS only, no user
+// info, each hop's address vetted against the private/link-local blocklist).
+// The seam lets tests stub it without standing up a PDS.
+type OutboundFetch = (url: string, opts?: OutboundFetchOptions) => Promise<OutboundFetchResult>;
+
+let outbound: OutboundFetch = outboundFetch;
+
+/** Test-only: replace the hardened fetcher. Pass null to restore the real one. */
+export function setOutboundForTests(fn: OutboundFetch | null): void {
+  outbound = fn ?? outboundFetch;
+}
+
+/** Return the endpoint only when it is a well-formed https URL with no credentials. */
+function httpsEndpoint(endpoint: string | undefined): string | undefined {
+  if (!endpoint) return undefined;
+  try {
+    const url = new URL(endpoint);
+    if (url.protocol !== 'https:' || url.username || url.password) return undefined;
+    return endpoint;
+  } catch {
+    return undefined;
+  }
+}
+
 // --- identity ---------------------------------------------------------------
 
 /** Read the DID document once: handle (alsoKnownAs) + PDS service endpoint. */
@@ -79,19 +111,14 @@ async function resolveDidDoc(did: string): Promise<{ handle: string; pds?: strin
   let handle = did;
   let pds: string | undefined;
   try {
-    const res = await fetch(`${PLC}/${did}`, { signal: AbortSignal.timeout(5000) });
-    if (res.ok) {
-      const doc = (await res.json()) as {
-        alsoKnownAs?: string[];
-        service?: { id?: string; type?: string; serviceEndpoint?: string }[];
-      };
-      const aka = doc.alsoKnownAs?.find((a) => a.startsWith('at://'));
-      if (aka) handle = aka.slice('at://'.length);
-      const svc = doc.service?.find(
-        (s) => s.id?.endsWith('#atproto_pds') || s.type === 'AtprotoPersonalDataServer',
-      );
-      pds = svc?.serviceEndpoint;
-    }
+    // Hardened: plc.directory/did:web only, address-vetted, cached upstream.
+    const doc = await resolveDidDocument(did);
+    const aka = doc.alsoKnownAs?.find((a) => a.startsWith('at://'));
+    if (aka) handle = aka.slice('at://'.length);
+    // The document's PDS endpoint is attacker-controlled. Reject anything but
+    // a clean https URL so blob URLs and redirects can never point at http or
+    // a credential-bearing URL; outboundFetch vets the address again per read.
+    pds = httpsEndpoint(pdsServiceEndpoint(doc, did));
   } catch {
     // leave defaults; the profile still renders with the DID as its handle
   }
@@ -114,23 +141,26 @@ export async function blobUrl(did: string, cid: string): Promise<string | undefi
 
 async function handleToDid(handle: string): Promise<string | null> {
   const h = handle.replace(/^@/, '');
+  // A handle is a hostname. Reject anything that isn't syntactically a handle
+  // before it becomes a URL, so a route segment can't name an arbitrary host.
+  if (!isValidHandle(h)) return null;
   // The handle's own server is authoritative; fall back to the public appview.
   try {
-    const res = await fetch(`https://${h}/.well-known/atproto-did`, { signal: AbortSignal.timeout(4000) });
-    if (res.ok) {
-      const did = (await res.text()).trim();
+    const res = await outbound(`https://${h}/.well-known/atproto-did`, { maxBytes: 4096, timeoutMs: 4000 });
+    if (res.status === 200) {
+      const did = new TextDecoder().decode(res.body).trim();
       if (did.startsWith('did:')) return did;
     }
   } catch {
     // custom domains without the well-known — try the appview resolver
   }
   try {
-    const res = await fetch(
+    const res = await outbound(
       `${BSKY_API}/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(h)}`,
-      { signal: AbortSignal.timeout(4000) },
+      { maxBytes: 16 * 1024, timeoutMs: 4000 },
     );
-    if (res.ok) {
-      const j = (await res.json()) as { did?: string };
+    if (res.status === 200) {
+      const j = JSON.parse(new TextDecoder().decode(res.body)) as { did?: string };
       if (j.did) return j.did;
     }
   } catch {
@@ -168,7 +198,7 @@ export async function resolveActor(actor: string): Promise<Identity | null> {
 export async function getPublicProfile(did: string, pds?: string, requireAvailable = false): Promise<ActorProfile | null> {
   const hit = profileCache.get(did);
   if (fresh(hit) && (!requireAvailable || hit.profile !== null)) return profileForForum(hit.profile, FORUM_DID());
-  const endpoint = pds ?? (await resolveDidDoc(did)).pds;
+  const endpoint = httpsEndpoint(pds ?? (await resolveDidDoc(did)).pds);
   let profile: ActorProfile | null = null;
   if (endpoint) {
     try {
@@ -176,12 +206,12 @@ export async function getPublicProfile(did: string, pds?: string, requireAvailab
       url.searchParams.set('repo', did);
       url.searchParams.set('collection', ACTOR_PROFILE);
       url.searchParams.set('rkey', 'self');
-      const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-      if (res.ok) {
-        const j = (await res.json()) as { value?: ActorProfile };
+      const res = await outbound(url.toString(), { timeoutMs: 5000 });
+      if (res.status === 200) {
+        const j = JSON.parse(new TextDecoder().decode(res.body)) as { value?: ActorProfile };
         profile = j.value ?? null;
       } else if (res.status === 400 || res.status === 404) {
-        const body = await res.json();
+        const body = JSON.parse(new TextDecoder().decode(res.body)) as { error?: string };
         if (body.error === 'RecordNotFound') profile = {};
       }
     } catch {
@@ -305,15 +335,17 @@ export async function getBskyPosts(did: string, handle: string, limit = 3): Prom
 }
 
 async function getKnownApps(did: string, pds?: string, handle?: string): Promise<AtmosphereApp[]> {
-  const endpoint = pds ?? (await resolveDidDoc(did)).pds;
+  const endpoint = httpsEndpoint(pds ?? (await resolveDidDoc(did)).pds);
   if (!endpoint) return [];
   let collections: string[] = [];
   try {
-    const res = await fetch(
+    const res = await outbound(
       `${endpoint}/xrpc/com.atproto.repo.describeRepo?repo=${encodeURIComponent(did)}`,
-      { signal: AbortSignal.timeout(5000) },
+      { timeoutMs: 5000 },
     );
-    if (res.ok) collections = ((await res.json()) as { collections?: string[] }).collections ?? [];
+    if (res.status === 200) {
+      collections = (JSON.parse(new TextDecoder().decode(res.body)) as { collections?: string[] }).collections ?? [];
+    }
   } catch {
     return [];
   }
