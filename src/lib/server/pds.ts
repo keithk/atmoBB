@@ -326,6 +326,8 @@ export interface ActorProfileRecord {
   pronouns?: string;
   website?: string;
   createdAt?: string;
+  theme?: string;
+  forumThemes?: { forum?: string; theme?: string }[];
   [k: string]: unknown;
 }
 
