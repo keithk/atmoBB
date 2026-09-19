@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   OutboundFetchError,
   didDocumentCacheSizeForTests,
+  isPublicHostname,
   outboundFetch,
   resetOutboundForTests,
   resolveDidDocument,
@@ -86,6 +87,25 @@ describe('outboundFetch address checks', () => {
 
   it('refuses URLs with user info', async () => {
     await expect(outboundFetch('https://user:pass@public.example.test/')).rejects.toThrow(OutboundFetchError);
+  });
+});
+
+describe('isPublicHostname', () => {
+  it('accepts a host that resolves to a public address', async () => {
+    setResolverForTests(async () => [{ address: PUBLIC_TEST_ADDRESS, family: 4 }]);
+    expect(await isPublicHostname('public.example.test')).toBe(true);
+  });
+
+  it('rejects a host that resolves to a private address', async () => {
+    setResolverForTests(async () => [{ address: '10.0.0.1', family: 4 }]);
+    expect(await isPublicHostname('internal.example.test')).toBe(false);
+  });
+
+  it('rejects a host that does not resolve', async () => {
+    setResolverForTests(async () => {
+      throw new Error('unresolvable');
+    });
+    expect(await isPublicHostname('missing.example.test')).toBe(false);
   });
 });
 

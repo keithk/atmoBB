@@ -1,3 +1,4 @@
+import { isValidHandle } from '@atproto/syntax';
 import { getDirectory, FORUM_DID, resolveHandle } from './appview';
 
 interface RingForum {
@@ -34,6 +35,8 @@ export async function ringNeighbor(dir: 'next' | 'prev' | 'random'): Promise<str
     target = ring[(self + step + ring.length) % ring.length];
   }
   const handle = await resolveHandle(target);
-  // A handle that didn't resolve is a ring stop with no door; skip out
-  return handle === target ? null : `https://${handle}`;
+  // A handle that didn't resolve, or isn't a real handle, is a ring stop with
+  // no door; skip out rather than redirect to an arbitrary host.
+  if (!isValidHandle(handle) || handle === target) return null;
+  return `https://${handle}`;
 }
