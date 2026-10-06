@@ -4,7 +4,9 @@ Versions follow [Semantic Versioning](https://semver.org) with the operator's
 workload in mind; [Releasing](docs/releasing.md) spells out what each level
 means. Every entry names the Happyview release it was tested against.
 
-## Unreleased
+## 0.5.2
+
+Happyview remains pinned to 2.14.0. No backfill is required.
 
 - Fixed Markdown copied from raw-text browser pages, such as raw Gists, bypassing conversion when the clipboard also includes a plain `<pre>` HTML wrapper. Formatted HTML, code blocks, and internal editor copies keep their existing paste behavior.
 
