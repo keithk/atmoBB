@@ -12,8 +12,16 @@ import {
   type TrayEntry,
   FORUM_DID,
   getStamps,
+  AppviewError,
 } from './appview';
 import { getPublicProfile } from './profiles';
+
+function missingRecord(error: unknown): boolean {
+  return error instanceof AppviewError && (
+    error.error === 'RecordNotFound' ||
+    (error.status === 404 && error.error === 'Record not found')
+  );
+}
 import { wornFromTray } from '$lib/stamps';
 import type { ThreadFilters } from '$lib/thread-filters';
 
@@ -81,14 +89,19 @@ async function gatherSpace(
     collection: string,
     into: Gathered<V>[],
   ): Promise<void> {
-    const refs = await listSpaceRecords(viewer, space, author, collection);
+    const refs = await listSpaceRecords<V>(viewer, space, author, collection, 100, true);
     await Promise.all(
       refs.map(async (ref) => {
+        if (Object.hasOwn(ref, 'value')) {
+          into.push({ uri: `${space}/${author}/${collection}/${ref.rkey}`, cid: ref.cid, author, value: ref.value as V });
+          return;
+        }
         try {
           const rec = await getSpaceRecord<V>(viewer, space, author, collection, ref.rkey);
           into.push({ uri: rec.uri, cid: rec.cid, author, value: rec.value });
-        } catch {
-          /* a record vanished between list and get — skip it */
+        } catch (e) {
+          // The pinned engine uses "Record not found"; unrelated 404s still fail.
+          if (!missingRecord(e)) throw e;
         }
       }),
     );
@@ -195,8 +208,9 @@ export async function readSpaceThreadPage(viewer: string, threadUri: string): Pr
   try {
     const rec = await getSpaceRecord<ThreadValue>(viewer, p.space, p.author, THREAD_NSID, p.rkey);
     head = { uri: rec.uri, cid: rec.cid, author: p.author, value: rec.value };
-  } catch {
-    return { replies: [], replyCount: 0 };
+  } catch (e) {
+    if (missingRecord(e)) return { replies: [], replyCount: 0 };
+    throw e;
   }
 
   const { replies } = await gatherSpace(viewer, p.space);

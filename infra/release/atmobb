@@ -25,6 +25,8 @@ Usage: ./atmobb <command> [options]
   upgrade-happyview  Back up, then move Happyview to the version this bundle
                      pins, wait for its migrations, and reapply setup.
   backfill           Index history from the network and rebuild counts.
+  configure-oauth    Create/recover the public OAuth client, or explicitly
+                     synchronize its ceiling, callback URL, and allowed Origin.
   backup [DIR]       pg_dump, OAuth state, and .env into DIR
                      (default ./backups/<timestamp>).
   status             Container state and the running atmobb version.
@@ -355,6 +357,8 @@ EOF
   fi
 
   echo "== configuring Happyview and starting atmobb"
+  cmd_configure_oauth
+  run_setup
   compose up -d
   cmd_status
 
@@ -404,8 +408,7 @@ cmd_upgrade_happyview() {
   pinned=$(pinned_image happyview)
   running=$(running_image happyview)
   if [ "$running" = "$pinned" ]; then
-    echo "Happyview already runs $pinned; nothing to do."
-    exit 0
+    echo "Happyview already runs $pinned; rechecking setup before restarting."
   fi
   cat <<EOF
 
@@ -415,14 +418,17 @@ Startup runs forward-only migrations. Once they finish you cannot go back down
 a version. A backup is taken first.
 EOF
   confirm "Upgrade Happyview?"
+  echo "== pulling $pinned and this bundle's app/setup image"
+  compose pull happyview atmobb setup
+  echo "== stopping atmobb writes before the final backup"
+  compose stop atmobb
   backup_dir=$(cmd_backup)
   echo "== backup written to $backup_dir"
-  echo "== pulling $pinned"
-  compose pull happyview
   echo "== recreating Happyview (migrations run now; watch: docker compose logs -f happyview)"
   compose up -d --no-deps happyview
   wait_for_happyview
   echo "== reapplying atmobb setup and restarting the app"
+  run_setup
   compose up -d
   cmd_status
   cat <<EOF
@@ -435,6 +441,16 @@ EOF
 cmd_backfill() {
   [ -f "$ENV_FILE" ] || die "no .env here; run ./atmobb install first"
   compose run --rm --no-deps setup sh appview/backfill.sh
+}
+
+cmd_configure_oauth() {
+  [ -f "$ENV_FILE" ] || die "no .env here; run ./atmobb install first"
+  output=$(compose run --rm --no-deps setup node appview/oauth-client.mjs configure) ||
+    die "OAuth client configuration failed; app credentials were not changed"
+  key=$(printf '%s\n' "$output" | sed -n 's/^HAPPYVIEW_CLIENT_KEY=//p')
+  case "$key" in hvc_*) ;; *) die "OAuth setup did not return a public client key" ;; esac
+  set_env HAPPYVIEW_CLIENT_KEY "$key"
+  echo "== public OAuth client configured; HAPPYVIEW_CLIENT_KEY saved"
 }
 
 cmd_backup() {
@@ -463,6 +479,16 @@ cmd_status() {
     printf 'atmobb %s (expects Happyview %s)\n' \
       "$(printf '%s' "$version" | jq -r .version)" "$(printf '%s' "$version" | jq -r .happyview)" ||
     echo "atmobb is not answering on 127.0.0.1:$APP_PORT yet"
+}
+
+run_setup() {
+  # Compose up can return success even when a one-shot container exits nonzero.
+  # Inspect it before starting any application writes. On failure leave the app
+  # stopped: the migrated database cannot safely be served by the old image.
+  compose up --no-deps --force-recreate setup
+  setup_id=$(compose ps -a -q setup)
+  [ -n "$setup_id" ] && [ "$($DOCKER inspect --format '{{.State.ExitCode}}' "$setup_id")" = 0 ] ||
+    die "the Happyview setup container did not finish successfully; inspect docker compose logs setup"
 }
 
 # Called only by the root-owned updater daemon. Preparation (downloads, pulls,
@@ -560,6 +586,8 @@ cmd_internal_update() {
   echo "ATMOBB_TARGET_VERSION=$version"
   echo "ATMOBB_TARGET_COMMIT=$commit"
 
+  echo "== stopping atmobb writes before the final backup"
+  compose stop atmobb
   echo "== backing up before any migration or container replacement"
   backup=$(cmd_backup)
   echo "ATMOBB_BACKUP=$backup"
@@ -581,7 +609,7 @@ cmd_internal_update() {
   # Force this release's one-shot setup even when two locally built image tags
   # happen to resolve to the same image ID. This applies Lua, lexicons, and
   # derived-table setup before the app can move to the prepared image.
-  compose up --no-deps --force-recreate setup
+  run_setup
   echo "== starting atmobb"
   compose up -d --remove-orphans
   attempt=0
@@ -596,9 +624,6 @@ cmd_internal_update() {
     die "one or more required containers are not running; run ./atmobb status"
   [ "$(running_image atmobb)" = "$(pinned_image atmobb)" ] || die "atmobb is healthy but still runs the previous image"
   [ "$(running_image happyview)" = "$(pinned_image happyview)" ] || die "Happyview is healthy but still runs the previous image"
-  setup_id=$(compose ps -a -q setup | head -n 1)
-  [ -n "$setup_id" ] && [ "$($DOCKER inspect --format '{{.State.ExitCode}}' "$setup_id")" = 0 ] ||
-    die "the Happyview setup container did not finish successfully; inspect docker compose logs setup"
   tmp_result=$result.$$
   jq -n --arg version "$version" --arg commit "$commit" --arg backup "$backup" \
     '{installedVersion:$version, backup:$backup} + (if $commit == "" then {installedCommit:null} else {installedCommit:$commit} end)' > "$tmp_result"
@@ -613,6 +638,7 @@ case "$command" in
   upgrade) cmd_upgrade "$@" ;;
   upgrade-happyview) cmd_upgrade_happyview "$@" ;;
   backfill) cmd_backfill "$@" ;;
+  configure-oauth) cmd_configure_oauth "$@" ;;
   backup) cmd_backup "$@" >/dev/null ;;
   status) cmd_status ;;
   logs) compose logs "$@" ;;

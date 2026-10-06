@@ -24,6 +24,22 @@ HV=${HV:-http://127.0.0.1:3000}
 PG_EXEC=${PG_EXEC-"docker compose exec -T postgres"}
 NS=app.atmobb
 
+echo "== Happyview spaces and authenticated PDS proxy"
+# These are server feature gates, not an SDK migration trigger. Never change
+# the service DID or signing keys while configuring an existing installation.
+for setting in feature.spaces_enabled feature.spaces_pds_migration; do
+  curl --fail --silent --show-error -X PUT "$HV/admin/settings/$setting" \
+    -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+    -d '{"value":"true"}' >/dev/null
+done
+# Keep the operator's allow/block policy; only change the routing destination.
+proxy=$(curl --fail --silent --show-error "$HV/admin/settings/xrpc-proxy" \
+  -H "Authorization: Bearer $TOKEN")
+proxy=$(printf '%s' "$proxy" | jq -e '.routing = "serviceproxy"')
+curl --fail --silent --show-error -X PUT "$HV/admin/settings/xrpc-proxy" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "$proxy" >/dev/null
+
 echo "== stats tables"
 $PG_EXEC psql -v ON_ERROR_STOP=1 -q -U happyview -d happyview -c "
 BEGIN;
@@ -176,6 +192,8 @@ upload_lex() {
     -d "$body")
   printf '%.120s\n' "$response"
 }
+upload_lex lexicons/app/atmobb/authForum.json '{}'
+upload_lex lexicons/app/atmobb/authSysop.json '{}'
 upload_lex lexicons/app/atmobb/actor/getActivity.json "{target_collection: \"$NS.actor.profile\"}"
 upload_lex lexicons/app/atmobb/forum/getBoardIndex.json "{target_collection: \"$NS.forum.board\"}"
 upload_lex lexicons/app/atmobb/discussion/getBoardThreads.json "{target_collection: \"$NS.discussion.thread\"}"

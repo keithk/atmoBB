@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { oauthClient, sysopScope } from '$lib/server/atproto-oauth';
+import { OAuthConfigurationError } from '$lib/server/happyview-oauth';
 import { refreshExtensionScopes } from '$lib/server/extensions/scopes';
 import { FORUM_DID, resolveHandle } from '$lib/server/appview';
 
@@ -12,7 +13,7 @@ export const load: PageServerLoad = async ({ url }) => {
 };
 
 export const actions: Actions = {
-  connect: async ({ request, locals }) => {
+  connect: async ({ request, locals, cookies }) => {
     if (!locals.user) redirect(303, '/login');
     const form = await request.formData();
     const handle = String(form.get('handle') ?? '').trim().replace(/^@/, '');
@@ -23,10 +24,11 @@ export const actions: Actions = {
       await refreshExtensionScopes();
       authorizeUrl = await oauthClient().authorize(handle, {
         scope: sysopScope(),
-        state: `forum-connect:${locals.user.did}`,
+        cookies,
+        context: { purpose: 'forum', connector: locals.user.did, forumDid: FORUM_DID() },
       });
     } catch (e) {
-      return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t connect the forum account. Try again.', handle });
+      return fail(502, { message: e instanceof OAuthConfigurationError ? e.message : 'We couldn\'t connect the forum account. Check its handle and try again.', handle });
     }
     redirect(303, authorizeUrl.toString());
   },

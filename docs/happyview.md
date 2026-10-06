@@ -4,14 +4,18 @@
 
 ## The pinned upstream image
 
-The Compose files pin `ghcr.io/gamesgamesgamesgamesgames/happyview:2.14.0`, the upstream release I've actually tested against. The image supports amd64 and arm64.
+The Compose files pin `ghcr.io/gamesgamesgamesgamesgames/happyview:2.16.0`. The image supports amd64 and arm64. The [disposable-service checks](../appview/tests/README.md) describe its API contracts and read-permission failures.
 
-atmobb ignores Happyview's OAuth client and its PDS-proxy write paths. It handles login itself and writes public records straight to users' PDSes. `HAPPYVIEW_CLIENT_KEY`, if you set it, just identifies read requests for rate limiting.
+atmoBB uses HappyView's Node OAuth SDK and authenticated PDS service proxy. `HAPPYVIEW_CLIENT_KEY` is required for login and must name a configured public API client, not an administrator key. The application supplies browser binding and callback validation around the unmodified SDK.
+
+Credentials live in `DATA_DIR/happyview-oauth-v1`, with separate member and forum stores. Member login establishes the personal session; **Admin → Connection** establishes the forum session without changing the browser's identity. The app authenticates browser requests with `atmobb_hv_session`. It does not read other credential stores or convert their contents. `./atmobb configure-oauth` provisions or explicitly repairs the public client before setup verifies it.
+
+The registered client's `repo:*` ceiling allows plugin collections without putting admin credentials in the web app. It is not a consent request: atmoBB's OAuth metadata and each login still name only the member permissions or approved active forum/plugin permissions. A plugin's host calls remain restricted to its own approved collections.
 
 > [!WARNING]
 > Startup can run forward-only migrations, so back up Postgres before moving Happyview. Once those have run, you cannot go back down a version.
 
-A Happyview bump is always its own atmobb release ([Releasing](releasing.md)). The release image bakes the version it was tested against as `HAPPYVIEW_EXPECTED_VERSION`, and `appview/container-setup.sh` compares it with the running instance's `GET /config` before the app starts. Operators on the release bundle move both together with `./atmobb upgrade-happyview`, which backs up first. Maintainers change `ARG HAPPYVIEW_VERSION` in the `Dockerfile` and the tag in every Compose file; `infra/release/check-pins.sh` fails if any disagree.
+A Happyview bump is always its own atmobb release ([Releasing](releasing.md)). The release image declares its required version as `HAPPYVIEW_EXPECTED_VERSION`, and `appview/container-setup.sh` compares it with the running instance's `GET /config` before the app starts. `./atmobb upgrade-happyview` pulls the required image, stops app writes, takes a backup, applies HappyView migrations, and verifies setup before restarting the app. Failed setup leaves the app stopped. `ARG HAPPYVIEW_VERSION` in the `Dockerfile` and the tag in every Compose file must agree; `infra/release/check-pins.sh` checks them.
 
 ## What setup.sh installs
 
@@ -19,16 +23,19 @@ A Happyview bump is always its own atmobb release ([Releasing](releasing.md)). T
 
 - **Derived tables:** `atmobb_thread_stats` holds each thread's board, title, reply count, and last activity. `atmobb_post_counts` holds post totals by forum and DID; the appview still maintains it, but the app no longer reads it. `atmobb_firsts` holds each member's first served post per forum and board, plus one forum-level row, written when the post arrives and never removed by a trigger. `atmobb_stamp_awards` holds by-hand stamp awards from `awardStamp` actions, with the staffer who gave one and the time a `revokeStamp` closed it.
 - **Record lexicons:** setup registers each record collection through `POST /admin/network-lexicons`. Happyview then resolves the published schema and starts indexing that collection off Jetstream. [Lexicons](lexicons.md) covers the resolution chain.
-- **Query and procedure lexicons:** setup uploads the instance's XRPC schemas directly from `lexicons/`, including the read API and the `createThread` and `createReply` procedures. atmobb never calls those procedures itself, since its writes go through its own OAuth client.
+- **Permission sets and settings:** setup registers `authForum` and `authSysop`, enables spaces and the upstream PDS-migration flag, and selects `serviceproxy` routing without replacing the operator's proxy allow/block policy.
+- **Query and procedure lexicons:** setup uploads the instance's XRPC schemas directly from `lexicons/`, including the read API and the `createThread` and `createReply` procedures. atmoBB uses repo operations through the PDS service proxy rather than those custom write procedures.
 - **Lua scripts:** every query has a Lua implementation. Record triggers keep thread and post statistics current as threads and replies are created, edited, and deleted, and apply moderation actions as they arrive.
 
 ## Data paths
 
-**Writes:** the app writes records directly to the author's PDS with its own OAuth client. The PDS announces the commit on the firehose, Jetstream delivers it to Happyview, and Happyview indexes it and updates stats. Usually a few seconds end to end.
+**Public writes:** the app restores the author's HappyView SDK session and sends authenticated repo operations through HappyView to the author's PDS. Forum-owned records use the separately connected forum session. The PDS announces the commit on the firehose, Jetstream delivers it to HappyView, and the index updates asynchronously.
 
-**Reads:** the app sends XRPC queries to `HAPPYVIEW_URL`, where Lua scripts query Postgres. Reads can be anonymous. `HAPPYVIEW_CLIENT_KEY` identifies the app for rate limiting if you want that.
+**Reads:** indexed XRPC queries use HappyView's Lua/Postgres views and can be anonymous. Authoritative repo reads use the authenticated PDS proxy, or bounded public PDS reads for mounted forums.
 
 Members-only board content uses Happyview permissioned spaces instead of public repos and the index. See [Members-only boards](private-boards.md).
+
+**Native-migration limitation:** SDK-driven native PDS migration is unsupported. The SDK registers credentials in `happyview_dpop_sessions`; the 2.16 migration worker and native sync use `happyview_oauth_sessions`. Enabling `feature.spaces_pds_migration` does not connect those stores or enqueue migrations for SDK sessions.
 
 The synthetic development forum has no PDS either, so its forum-side writes go straight into Happyview's tables. See [Forum writes in development](development.md#forum-writes-in-development).
 
@@ -46,7 +53,7 @@ HV=http://127.0.0.1:3000 \
 
 The script reads `HAPPYVIEW_API_KEY` from the environment or `.env`, starts an asynchronous job covering every registered collection, and polls it to completion.
 
-The annoying part is that Happyview runs `record.create` scripts during backfill too, which will happily double-count your derived stats. So `backfill.sh` rebuilds the derived tables from indexed records after each job finishes. Run it as many times as you like and the counts and moderation state come out the same.
+HappyView runs `record.create` scripts during backfill, which can double-count derived stats. `backfill.sh` rebuilds the derived tables from indexed records after each job finishes, keeping counts and moderation state consistent across repeated runs.
 
 ## Membership windows and gating periods
 
@@ -59,10 +66,10 @@ Both tables apply actions in the order of their `createdAt`, then URI, whatever 
 
 ### Taking membership to production
 
-Moving an instance that predates membership takes three steps, in this order:
+Membership indexing requires these steps, in order:
 
-1. **Publish the changed record schemas** from the authority account. Three of them changed, all additively: `goat lex publish --update lexicons/app/atmobb/moderation/action.json lexicons/app/atmobb/forum/profile.json lexicons/app/atmobb/forum/accessRequest.json`. Self-hosters skip this; the schemas are already on the network. [Lexicons](lexicons.md) has the details.
-2. **Rerun `appview/setup.sh`.** It creates the two tables, re-resolves the record schemas, uploads the `getMembership` query and the updated `getAccessRequests` and `getLog` schemas, and installs the Lua that maintains the tables from here on.
+1. **Publish the record schemas** from the authority account: `goat lex publish --update lexicons/app/atmobb/moderation/action.json lexicons/app/atmobb/forum/profile.json lexicons/app/atmobb/forum/accessRequest.json`. Self-hosters skip this; the schemas are available on the network. [Lexicons](lexicons.md) has the details.
+2. **Run `appview/setup.sh`.** It creates the two tables, resolves the record schemas, uploads the `getMembership`, `getAccessRequests`, and `getLog` query schemas, and installs the Lua that maintains the tables.
 3. **Backfill and rebuild.** The trigger only sees actions that arrive after it's installed. With both tables empty the index knows no gating period and no acceptance, so it enforces nothing and every post is served, whatever the forum's profile says. Run `appview/backfill.sh` (see [Backfill](#backfill)); it ends by running `infra/rebuild-stats.sql`, which fills both tables from every indexed action. On an instance where no forum has gated yet the rebuild finds nothing to insert, but it's cheap, so run it anyway.
 
 Until step 2 runs, the app has no membership query to ask, and the gated modes stay hidden on Admin → Members. That's deliberate: a forum can't gate itself on an index that wouldn't enforce it.
@@ -80,7 +87,7 @@ The "early days" cutoff and the "first light" test live in the Lua, so each appv
 Same shape as membership, in this order:
 
 1. **Publish the schemas** from the authority account: `goat lex publish` for `lexicons/app/atmobb/forum/stamp.json` and `lexicons/app/atmobb/forum/getStamps.json`, and `goat lex publish --update` for `membership.json`, `profile.json`, and `moderation/action.json`. Self-hosters skip this.
-2. **Rerun `appview/setup.sh`.** It creates `atmobb_firsts` and `atmobb_stamp_awards`, registers the stamp collection, uploads the `getStamps` query and the updated `getMembers`, `getMembership`, `getThreadPage`, and `getLog` schemas, and installs the Lua.
+2. **Run `appview/setup.sh`.** It creates `atmobb_firsts` and `atmobb_stamp_awards`, registers the stamp collection, uploads the `getStamps`, `getMembers`, `getMembership`, `getThreadPage`, and `getLog` query schemas, and installs the Lua.
 3. **Backfill and rebuild.** The triggers only see posts and actions that arrive after they're installed, and both tables start empty, so nobody holds a first-post or by-hand stamp until `appview/backfill.sh` runs and `infra/rebuild-stats.sql` fills them from history.
 
 ## Delisting a forum
@@ -94,6 +101,6 @@ docker compose exec -T postgres psql -U happyview -d happyview \
 
 Delete the row to relist. Nothing leaves the index, and the delisted forum's own app keeps working. Stopping that app is a separate decision.
 
-## What atmobb doesn't use
+## What atmoBB doesn't use
 
-I don't use Happyview's OAuth write delegation or its web dashboard. Writes go through atmobb's own OAuth client, and I configure the instance through the admin API.
+Ordinary member login does not use HappyView's dashboard callback or grant dashboard access. Configuration stays on the admin API. The supported Node SDK is unmodified; atmoBB adds browser-transaction validation, secure local storage, and a bounded network adapter.

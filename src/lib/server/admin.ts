@@ -75,7 +75,7 @@ export async function forumConnected(): Promise<boolean> {
   if (sessionCache && Date.now() - sessionCache.at < TTL) return sessionCache.connected;
   let connected = false;
   try {
-    await oauthClient().restore(FORUM_DID());
+    await oauthClient().restore(FORUM_DID(), false, 'forum');
     connected = true;
   } catch {
     // no session (or refresh failed) — the connect screen handles it

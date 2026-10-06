@@ -67,13 +67,13 @@ It verifies the latest release bundle, installs its pinned prebuilt atmobb and H
 
 Admins update from **Admin → Updates**. The normal action downloads and verifies the latest stable release and pulls its pinned images. **Advanced options → main** is deliberately dangerous: it resolves `main` to an exact commit and builds that unreleased code on the forum host. The page requires explicit confirmation, records the installed commit, and warns that a build can take substantial time, memory, and disk, fail, or degrade a small VPS.
 
-Both paths finish downloads, pulls, or builds before replacing containers. Before migrations or activation they back up Postgres, OAuth state, secrets, and Compose/Caddy configuration; then they move the whole pinned stack together, reapply Happyview setup, and report progress, failure logs, and health results in the admin page. Happyview migrations may be forward-only, so keep the reported local backup, copy backups off-host, and follow the recovery guidance rather than assuming an automatic rollback.
+Both paths finish downloads, pulls, or builds before stopping application writes. They back up Postgres, OAuth state, secrets, and Compose/Caddy configuration, then apply the pinned stack and verify HappyView setup before restarting the app. The admin page reports progress, failure logs, and health results. Failed setup leaves the app stopped. HappyView migrations may be forward-only, so keep the reported backup, copy backups off-host, and follow the recovery guidance rather than assuming an automatic rollback.
 
 See [Self-hosting](docs/self-hosting.md) for DNS and account prerequisites, manual installation, backups, update recovery, and source installs.
 
 ## Architecture
 
-- **App** (`src/`): SvelteKit with adapter-node. It reads from the appview over XRPC and writes to members' PDSes and the forum account's PDS with its own OAuth client.
+- **App** (`src/`): SvelteKit with adapter-node. It reads indexed views over XRPC and uses HappyView's Node OAuth SDK and authenticated service proxy for member and forum-account PDS operations. The two account purposes have separate credential stores.
 - **Appview**: [Happyview](https://github.com/gamesgamesgamesgamesgames/happyview), a Rust and Postgres atproto appview engine. It eats Jetstream, indexes registered `app.atmobb.*` collections, and serves queries written in Lua. atmobb runs a pinned upstream image with no patches.
 - **Postgres**: Happyview's record storage, plus atmobb's derived thread, membership, and stamp tables.
 

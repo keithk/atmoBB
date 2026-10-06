@@ -13,8 +13,8 @@ export default defineConfig({
     __ATMOBB_VERSION__: JSON.stringify(version),
   },
   test: {
-    // Vitest's default excludes, plus the extension kit, a separate package with its own test run.
-    exclude: ['**/node_modules/**', '**/.git/**', 'docs/extensions/kit/**'],
+    // The extension kit and Node-native setup tests have separate test runners.
+    exclude: ['**/node_modules/**', '**/.git/**', 'docs/extensions/kit/**', 'appview/**/*.test.mjs'],
   },
   server: {
     // The OAuth client registers http://127.0.0.1:5173/oauth/callback, so the

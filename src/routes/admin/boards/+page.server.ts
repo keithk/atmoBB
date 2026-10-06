@@ -1,4 +1,5 @@
 import { fail } from '@sveltejs/kit';
+import { randomUUID } from 'node:crypto';
 import type { Actions, PageServerLoad } from './$types';
 import {
   getBoardIndex,
@@ -10,7 +11,8 @@ import {
 import type { BoardIndex } from '$lib/server/appview';
 import { adminActor } from '$lib/server/admin';
 import { privateBoardsEnabled } from '$lib/server/happyview-session';
-import { createForumRecord, deleteForumRecord, putForumRecord } from '$lib/server/forum-repo';
+import { createForumRecord, createForumRecordAsGiven, deleteForumRecord, getForumRecord, putForumRecord } from '$lib/server/forum-repo';
+import { withBoardWrite } from '$lib/server/board-write-lock';
 import { savedRedirect } from '$lib/server/saved-redirect';
 import { parseAtUri } from '$lib/appview-paths';
 import { boardOrderPeers, parseBoardColor, parseBoardEmoji, withBoardColor } from '$lib/board-presentation';
@@ -29,8 +31,10 @@ export const load: PageServerLoad = async () => {
 };
 
 async function currentBoard(uri: string) {
-  const index = await getBoardIndex(FORUM_DID());
-  return index.boards.find((b) => b.uri === uri);
+  const p = parseAtUri(uri);
+  if (!p || p.did !== FORUM_DID() || p.collection !== `${NS}.forum.board`) return null;
+  const board = await getForumRecord(p.collection, p.rkey);
+  return board ? { ...board, value: board.value as BoardIndex['boards'][number]['value'] } : null;
 }
 
 const optional = (v: FormDataEntryValue | null) => {
@@ -97,39 +101,34 @@ export const actions: Actions = {
       createdAt: new Date().toISOString(),
     }, parsedColor.color);
     let created: { uri: string };
-    try {
-      created = await createForumRecord(`${NS}.forum.board`, value);
-    } catch (e) {
-      return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t create the board. Try again.' });
-    }
-    // Members-only: back the board with a permissioned space and record the ref.
-    // Reuse the value we just wrote — with PDS-first writes the new board isn't
-    // in the index yet (it lands via Jetstream a few seconds later), so we can't
-    // read it back here.
     const wantPrivate = form.get('private') === 'on';
     if (wantPrivate) {
-      const p = parseAtUri(created.uri)!;
+      const rkey = randomUUID();
       let space: string;
       try {
-        space = await createSpace(p.rkey, { displayName: name });
+        space = await createSpace(rkey, { displayName: name });
       } catch (e) {
         return fail(502, {
-          message: `The board "${name}" was created, but we couldn't make it private: ${e instanceof Error ? e.message : 'space error'}. Edit the board to try again.`,
+          message: `No board was published. Private space creation could not be confirmed for board key ${rkey}. Check the space inventory before retrying: ${e instanceof Error ? e.message : 'space error'}.`,
         });
       }
       try {
-        await putForumRecord(`${NS}.forum.board`, p.rkey, {
+        created = await createForumRecordAsGiven(`${NS}.forum.board`, {
+          $type: `${NS}.forum.board`,
           ...value,
           access: { $type: SPACE_ACCESS, space },
-        });
+        }, rkey);
       } catch (e) {
-        // A space with no board pointing at it would still catch every new
-        // thread on the board (the write path checks the space, not the
-        // record) and nobody could list them. Take it down again.
-        await deleteSpace(space).catch(() => {});
+        // A timeout may mean the private record was committed. Keep its space.
         return fail(502, {
-          message: `The board "${name}" was created, but we couldn't make it private: ${e instanceof Error ? e.message : 'record error'}. Edit the board to try again.`,
+          message: `Creation of "${name}" could not be confirmed. Its private space ${space} was retained. Check board key ${rkey} in the forum repository before retrying; do not delete the space while a board may use it: ${e instanceof Error ? e.message : 'record error'}.`,
         });
+      }
+    } else {
+      try {
+        created = await createForumRecord(`${NS}.forum.board`, value);
+      } catch (e) {
+        return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t create the board. Try again.' });
       }
     }
     await saveRedirect((i) =>
@@ -141,92 +140,89 @@ export const actions: Actions = {
     if (!(await adminActor(locals))) return fail(403, { message: 'Only admins can make this change.' });
     const form = await request.formData();
     const uri = String(form.get('uri') ?? '');
-    const p = parseAtUri(uri);
-    const board = p ? await currentBoard(uri) : undefined;
-    if (!p || !board) return fail(404, { message: 'Board not found.' });
-    const name = String(form.get('name') ?? '').trim();
-    if (!name) return fail(400, { message: 'Enter a name for the board.' });
-    const parsedColor = parseBoardColor(form.get('color'));
-    if (!parsedColor.valid) return fail(400, { message: 'Board color must be a full hex color such as #1a73e8.' });
-    const parsedEmoji = parseBoardEmoji(form.get('emoji'));
-    if (!parsedEmoji.valid) return fail(400, { message: 'Choose one emoji, or leave it blank for no icon.' });
-    const record = withBoardColor({
-      ...board.value,
-      name,
-      emoji: parsedEmoji.emoji,
-      description: optional(form.get('description')),
-      category: optional(form.get('category')),
-    }, parsedColor.color);
-    if (!record.description) delete record.description;
-    if (!record.category) delete record.category;
-    if (!record.emoji) delete record.emoji;
+    return withBoardWrite(uri, async () => {
+      const p = parseAtUri(uri);
+      const board = p ? await currentBoard(uri) : undefined;
+      if (!p || !board) return fail(404, { message: 'Board not found.' });
+      const name = String(form.get('name') ?? '').trim();
+      if (!name) return fail(400, { message: 'Enter a name for the board.' });
+      const parsedColor = parseBoardColor(form.get('color'));
+      if (!parsedColor.valid) return fail(400, { message: 'Board color must be a full hex color such as #1a73e8.' });
+      const parsedEmoji = parseBoardEmoji(form.get('emoji'));
+      if (!parsedEmoji.valid) return fail(400, { message: 'Choose one emoji, or leave it blank for no icon.' });
+      const record = withBoardColor({
+        ...board.value,
+        name,
+        emoji: parsedEmoji.emoji,
+        description: optional(form.get('description')),
+        category: optional(form.get('category')),
+      }, parsedColor.color);
+      if (!record.description) delete record.description;
+      if (!record.category) delete record.category;
+      if (!record.emoji) delete record.emoji;
 
-    // Privacy toggle: create the space on public→private, or (with an explicit
-    // confirm) tear it down on private→public — deleting a space cascades to
-    // every thread and reply inside it.
-    // The write path decides where a thread lands by whether the space
-    // exists, while readers go by the record's `access`. If those disagree,
-    // a space without a record pointing at it swallows every new thread on
-    // the board and nobody can list them. So the two must move together:
-    // never leave a space standing behind a board whose record says public.
-    const currentSpace = spaceOfBoard(board.value.access);
-    const wantPrivate = form.get('private') === 'on';
-    let createdSpace: string | null = null;
-    let spaceToDelete: string | null = null;
-    if (wantPrivate && !currentSpace) {
-      if (!privateBoardsEnabled()) {
-        return fail(400, { message: 'Members-only boards aren\'t available on this deployment.' });
+      // Privacy toggle: create the space on public→private, or (with an explicit
+      // confirm) tear it down on private→public — deleting a space cascades to
+      // every thread and reply inside it.
+      // Posting rejects mismatches between authoritative access and owned spaces.
+      // Keep spaces on uncertain writes rather than risking private content.
+      const currentSpace = spaceOfBoard(board.value.access);
+      const wantPrivate = form.get('private') === 'on';
+      let spaceToDelete: string | null = null;
+      if (wantPrivate && !currentSpace) {
+        if (!privateBoardsEnabled()) {
+          return fail(400, { message: 'Members-only boards aren\'t available on this deployment.' });
+        }
+        try {
+          const space = await createSpace(p.rkey, { displayName: name });
+          record.access = { $type: SPACE_ACCESS, space };
+        } catch (e) {
+          return fail(502, { message: `Private space creation could not be confirmed. The board record was not changed. Check its space inventory before retrying; posting stays blocked if access and spaces disagree: ${e instanceof Error ? e.message : 'space error'}.` });
+        }
+      } else if (!wantPrivate && currentSpace) {
+        if (form.get('really') !== 'on') {
+          return fail(400, {
+            message: `Making "${name}" public will delete its private space and every thread and reply inside it. Check the confirmation box to continue.`,
+          });
+        }
+        delete record.access;
+        spaceToDelete = currentSpace;
       }
-      try {
-        createdSpace = await createSpace(p.rkey, { displayName: name });
-        record.access = { $type: SPACE_ACCESS, space: createdSpace };
-      } catch (e) {
-        return fail(502, { message: `We couldn't make this board private: ${e instanceof Error ? e.message : 'space error'}` });
-      }
-    } else if (!wantPrivate && currentSpace) {
-      if (form.get('really') !== 'on') {
-        return fail(400, {
-          message: `Making "${name}" public will delete its private space and every thread and reply inside it. Check the confirmation box to continue.`,
-        });
-      }
-      delete record.access;
-      spaceToDelete = currentSpace;
-    }
 
-    try {
-      await putForumRecord(`${NS}.forum.board`, p.rkey, record);
-    } catch (e) {
-      if (createdSpace) await deleteSpace(createdSpace).catch(() => {});
-      return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t save the board. Try again.' });
-    }
-    if (spaceToDelete) {
       try {
-        await deleteSpace(spaceToDelete);
+        await putForumRecord(`${NS}.forum.board`, p.rkey, record);
       } catch (e) {
-        // Put the record back to private so the board keeps matching the
-        // space that still exists. If even that fails, say so loudly.
-        const restored = await putForumRecord(`${NS}.forum.board`, p.rkey, {
-          ...record,
-          access: { $type: SPACE_ACCESS, space: spaceToDelete },
-        }).then(() => true, () => false);
-        return fail(502, {
-          message: restored
-            ? `We couldn't delete the private space, so "${name}" is still members-only: ${e instanceof Error ? e.message : 'space error'}. Try again.`
-            : `"${name}" now reads as public but its private space could not be deleted: ${e instanceof Error ? e.message : 'space error'}. New threads will be lost until this is fixed. Set the board back to members-only, then try again.`,
-        });
+        return fail(502, { message: `The board write could not be confirmed. No private space was deleted. Check the authoritative board record and its space before retrying; posting stays blocked if they disagree: ${e instanceof Error ? e.message : 'record error'}.` });
       }
-    }
-    await saveRedirect((i) => {
-      const b = i.boards.find((x) => x.uri === uri);
-      return (
-        !!b &&
-        b.value.name === record.name &&
-        (b.value.description ?? undefined) === record.description &&
-        (b.value.category ?? undefined) === record.category &&
-        (b.value.color ?? undefined) === record.color &&
-        (b.value.emoji ?? undefined) === record.emoji &&
-        spaceOfBoard(b.value.access) === spaceOfBoard(record.access)
-      );
+      if (spaceToDelete) {
+        try {
+          await deleteSpace(spaceToDelete);
+        } catch (e) {
+          // Restore private access even when deletion's outcome is uncertain.
+          // A missing space then blocks posting rather than falling back to public.
+          const restored = await putForumRecord(`${NS}.forum.board`, p.rkey, {
+            ...record,
+            access: { $type: SPACE_ACCESS, space: spaceToDelete },
+          }).then(() => true, () => false);
+          return fail(502, {
+            message: restored
+              ? `Private space deletion could not be confirmed. "${name}" was restored to members-only. Check its space before retrying; posting stays blocked if the space is missing: ${e instanceof Error ? e.message : 'space error'}.`
+              : `Neither private space deletion nor restoration of "${name}" could be confirmed. Check the authoritative board record and space inventory before retrying. Posting stays blocked while they disagree: ${e instanceof Error ? e.message : 'space error'}.`,
+          });
+        }
+      }
+      await saveRedirect((i) => {
+        const b = i.boards.find((x) => x.uri === uri);
+        return (
+          !!b &&
+          b.value.name === record.name &&
+          (b.value.description ?? undefined) === record.description &&
+          (b.value.category ?? undefined) === record.category &&
+          (b.value.color ?? undefined) === record.color &&
+          (b.value.emoji ?? undefined) === record.emoji &&
+          spaceOfBoard(b.value.access) === spaceOfBoard(record.access)
+        );
+      });
     });
   },
 
@@ -234,27 +230,36 @@ export const actions: Actions = {
     if (!(await adminActor(locals))) return fail(403, { message: 'Only admins can make this change.' });
     const form = await request.formData();
     const uri = String(form.get('uri') ?? '');
-    const board = await currentBoard(uri);
-    if (!board) return fail(404, { message: 'Board not found.' });
-    if (board.threadCount > 0 && form.get('really') !== 'on') {
-      return fail(400, {
-        message: `"${board.value.name}" has ${board.threadCount} threads. Check the confirmation box to delete the board. Its threads will remain in their authors' accounts but will no longer have a board.`,
-      });
-    }
-    const space = spaceOfBoard(board.value.access);
-    try {
-      await deleteForumRecord(uri);
-    } catch (e) {
-      return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t delete the board. Try again.' });
-    }
-    if (space) {
-      try {
-        await deleteSpace(space);
-      } catch {
-        /* board record is gone; a leftover empty space is harmless */
+    return withBoardWrite(uri, async () => {
+      const board = await currentBoard(uri);
+      if (!board) return fail(404, { message: 'Board not found.' });
+      const space = spaceOfBoard(board.value.access);
+      const threadCount = (await readIndex()).boards.find((b) => b.uri === uri)?.threadCount ?? 0;
+      if ((space || threadCount > 0) && form.get('really') !== 'on') {
+        return fail(400, {
+          message: space
+            ? `Deleting "${board.value.name}" deletes its private space and every thread and reply inside it. Check the confirmation box to continue.`
+            : `"${board.value.name}" has ${threadCount} threads. Check the confirmation box to delete the board. Its threads will remain in their authors' accounts but will no longer have a board.`,
+        });
       }
-    }
-    await saveRedirect((i) => !i.boards.some((b) => b.uri === uri));
+      try {
+        await deleteForumRecord(uri);
+      } catch (e) {
+        return fail(502, { message: `Board deletion could not be confirmed. No private space was deleted. Check the board record before retrying: ${e instanceof Error ? e.message : 'record error'}.` });
+      }
+      if (space) {
+        try {
+          await deleteSpace(space);
+        } catch (e) {
+          const p = parseAtUri(uri)!;
+          const restored = await putForumRecord(p.collection, p.rkey, board.value).then(() => true, () => false);
+          return fail(502, {
+            message: `Private space deletion could not be confirmed. ${restored ? 'The members-only board record was restored.' : 'The members-only board record could not be restored.'} Check the authoritative board record and space inventory before retrying; posting stays blocked if they disagree: ${e instanceof Error ? e.message : 'space error'}.`,
+          });
+        }
+      }
+      await saveRedirect((i) => !i.boards.some((b) => b.uri === uri));
+    });
   },
 
   // Move a board one step within its visible category, or among sibling
@@ -270,8 +275,12 @@ export const actions: Actions = {
     if (!writes) return fail(404, { message: 'Board not found.' });
     try {
       for (const { row, order } of writes) {
-        const p = parseAtUri(row.uri)!;
-        await putForumRecord(`${NS}.forum.board`, p.rkey, { ...row.value, order });
+        await withBoardWrite(row.uri, async () => {
+          const board = await currentBoard(row.uri);
+          if (!board) throw new Error('Board not found.');
+          const p = parseAtUri(row.uri)!;
+          await putForumRecord(`${NS}.forum.board`, p.rkey, { ...board.value, order });
+        });
       }
     } catch (e) {
       return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t reorder the boards. Try again.' });

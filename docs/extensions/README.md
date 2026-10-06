@@ -144,7 +144,7 @@ Every field but `ui` is required. An extension that writes no records still need
 
 ### Host API version
 
-atmoBB currently offers host API `1.0`. Your `hostApi` must share its major version exactly, and its minor version can't be higher than what atmoBB offers: a `1.2` extension refuses to install against a `1.0` host, but a `1.0` extension installs fine against a `1.2` host. A major bump means a host function was removed or renamed; a minor bump means one was added. While extensions are alpha, expect bumps.
+atmoBB offers host API `1.0`. Your `hostApi` must share its major version exactly, and its minor version can't be higher than what atmoBB offers: a `1.2` extension refuses to install against a `1.0` host, but a `1.0` extension installs fine against a `1.2` host. Removing or renaming a host function requires a major bump; adding one requires a minor bump. Extensions are alpha, so version bumps are expected.
 
 ### Admission
 
@@ -366,6 +366,8 @@ Confirming claims the collections, moves the bundle into place, and installs it 
 
 Installing or updating an extension that declares new collections widens the OAuth scope the forum account's login needs. **Admin → Extensions** then lists the collections the login is missing and links to **Admin → Connection**; reconnect from there. Until you do, the extension's record writes fail. The forum account's PDS can cache the old permission set for about 10 minutes, so if the consent screen doesn't list the new collections yet, wait a few minutes and reconnect again.
 
+Forum writes use the forum-purpose HappyView session and service proxy. The HappyView public client's registered `repo:*` ceiling permits extension collections, while the consent request names only active approved collections. Each install's host-call allowlist restricts it to its own approved collections. Ordinary members receive no extension scopes. Extensions only run on public boards because their records are public.
+
 ### Updates, rollback, and migrate
 
 **Admin → Extensions → an install** lists version tags newer than the one running, and any tag already run whose commit has since changed underneath it. Staging and applying an update works like install: review, then confirm. If the new release's `dataVersion` is higher, its `migrate` handler runs against the install's stored data before it switches over. `migrate` waits its turn behind calls the running release already has queued, and the install's k/v store is snapshotted when that turn starts, so their writes are kept. If `migrate` throws or goes past its limits, or the update gives up waiting on it after 60 seconds, the previous release stays active. From then on the migration's k/v, record, and timer writes are refused, and the k/v store is put back as the snapshot found it before any other call to the install runs. A migration the update gave up on before its turn came never runs. Records it already wrote to the forum's repo, and timers it already set, aren't undone. A migration's k/v writes don't count against the per-minute write rate, and it may only write records in collections both releases declare.
@@ -384,7 +386,7 @@ The first repository to declare a collection owns it permanently, across reinsta
 
 Staff who moderate the whole forum can attach an extension to a thread from the thread page, if the extension exports `attach` and the thread sits on a public board. Members-only boards are out, since everything an extension publishes is public. atmoBB writes the binding record itself, an `app.atmobb.extension.binding` in the forum's own repo, a collection extensions can never write to themselves, then calls the extension's `attach` handler with the setup its form collected. A refusal or failure there removes the binding again, and the attach page shows staff the extension's refusal message. One extension per thread; a thread already bound refuses another attach.
 
-Attaching is one-way for now. There's no detach in the forum: the binding record stays in the forum's repo, so the thread keeps that extension, and after the extension is uninstalled the thread takes no other one until the record is removed by hand from the forum account's repo. Reinstalling the same repository picks the thread's binding back up.
+Attaching is one-way. There's no detach in the forum: the binding record stays in the forum's repo, so the thread keeps that extension, and after the extension is uninstalled the thread takes no other one until the record is removed by hand from the forum account's repo. Reinstalling the same repository picks the thread's binding back up.
 
 ### The kill switch
 
@@ -392,4 +394,4 @@ Set `ATMOBB_EXTENSIONS=off` to turn every extension off, forum-wide: no calls, n
 
 ## Reporting problems
 
-Post on the [Bugs board](https://atmobb.app/b/3mqdahz5y4m2f) on atmobb.app. If you'd rather not sign in there, [GitHub issues](https://github.com/keithk/atmoBB/issues) works too. For a problem with an extension you're writing, include the atmoBB version or commit, the kit's `compiler-version.json`, your `manifest.json`, the lines from the extension log on the install's page, and what you expected instead. For a problem installing or running one, include the review page's refusal text and the extension's repository URL and tag. Questions about what the platform should do next go in the same place. The first real extensions will decide what changes.
+Post on the [Bugs board](https://atmobb.app/b/3mqdahz5y4m2f) on atmobb.app. If you'd rather not sign in there, [GitHub issues](https://github.com/keithk/atmoBB/issues) works too. For a problem with an extension you're writing, include the atmoBB version or commit, the kit's `compiler-version.json`, your `manifest.json`, the lines from the extension log on the install's page, and what you expected instead. For a problem installing or running one, include the review page's refusal text and the extension's repository URL and tag. Feature requests use the same channels.

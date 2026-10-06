@@ -30,7 +30,7 @@ services:
       retries: 10
 
   happyview:
-    image: ghcr.io/gamesgamesgamesgamesgames/happyview:2.14.0
+    image: ghcr.io/gamesgamesgamesgamesgames/happyview:2.16.0
     restart: unless-stopped
     ports:
       - "127.0.0.1:${ATMOBB_HAPPYVIEW_PORT:-3000}:3000"
@@ -57,6 +57,9 @@ services:
       # Happyview checks the Host header on /config against PUBLIC_URL.
       HAPPYVIEW_HOST: ${HAPPYVIEW_HOST}
       HAPPYVIEW_API_KEY: ${HAPPYVIEW_API_KEY:-}
+      HAPPYVIEW_CLIENT_KEY: ${HAPPYVIEW_CLIENT_KEY:-}
+      ATMOBB_APP_URL: https://${APP_HOST}
+      HAPPYVIEW_OAUTH_CLIENT_ID: ${HAPPYVIEW_OAUTH_CLIENT_ID:-}
       PG_EXEC: ""
       PGHOST: postgres
       PGUSER: happyview
@@ -81,6 +84,7 @@ services:
       ATMOBB_COOKIE_SECRET: ${ATMOBB_COOKIE_SECRET:?run ./atmobb install}
       HAPPYVIEW_SESSION_SECRET: ${SESSION_SECRET}
       HAPPYVIEW_CLIENT_KEY: ${HAPPYVIEW_CLIENT_KEY:-}
+      HAPPYVIEW_OAUTH_CLIENT_ID: ${HAPPYVIEW_OAUTH_CLIENT_ID:-}
       ATMOBB_AVATAR_BUILDER_URL: ${ATMOBB_AVATAR_BUILDER_URL:-}
       ATMOBB_UPDATER_TOKEN: ${ATMOBB_UPDATER_TOKEN:-}
     volumes:

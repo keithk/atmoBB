@@ -5,7 +5,7 @@
 #
 # Keep HAPPYVIEW_VERSION aligned with the image tag in every Compose file;
 # `infra/release/check-pins.sh` fails CI when they drift.
-ARG HAPPYVIEW_VERSION=2.14.0
+ARG HAPPYVIEW_VERSION=2.16.0
 
 # --- build ------------------------------------------------------------------
 FROM oven/bun:1.4 AS build

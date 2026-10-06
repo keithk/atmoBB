@@ -309,6 +309,22 @@ EOF
   echo "== generated app secrets"
 fi
 
+echo "== configuring the public OAuth client (operator key stays setup-only)"
+client_output=$(HAPPYVIEW_API_KEY="$HAPPYVIEW_API_KEY" \
+  HAPPYVIEW_CLIENT_KEY="$(root_value "$APP_ENV" HAPPYVIEW_CLIENT_KEY)" \
+  ATMOBB_APP_URL="https://$APP_HOST" HV=http://127.0.0.1:3000 \
+  "$NODE_BIN" "$REPO_DIR/appview/oauth-client.mjs" configure) ||
+  die "OAuth client configuration failed; review Happyview admin and rerun"
+client_key=$(printf '%s\n' "$client_output" | sed -n 's/^HAPPYVIEW_CLIENT_KEY=//p')
+case "$client_key" in hvc_*) ;; *) die "OAuth setup did not return a public client key" ;; esac
+app_tmp=$(mktemp)
+trap 'rm -f "$app_tmp"' EXIT HUP INT TERM
+sudo cat "$APP_ENV" | sed '/^HAPPYVIEW_CLIENT_KEY=/d' > "$app_tmp"
+printf 'HAPPYVIEW_CLIENT_KEY=%s\n' "$client_key" >> "$app_tmp"
+install_root_file "$app_tmp" "$APP_ENV"
+rm -f "$app_tmp"
+trap - EXIT HUP INT TERM
+
 unit_tmp=$(mktemp)
 trap 'rm -f "$unit_tmp"' EXIT HUP INT TERM
 cat > "$unit_tmp" <<EOF

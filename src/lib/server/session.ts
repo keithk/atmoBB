@@ -2,12 +2,13 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { env } from '$env/dynamic/private';
 import type { Cookies } from '@sveltejs/kit';
 
-export const APP_COOKIE = 'atmobb_session';
+// New authentication generation: legacy direct-PDS sessions must log in again.
+export const APP_COOKIE = 'atmobb_hv_session';
 
 const secret = () => env.ATMOBB_COOKIE_SECRET ?? 'dev-cookie-secret';
 
 const sign = (value: string) =>
-  createHmac('sha256', secret()).update(value).digest('base64url');
+  createHmac('sha256', secret()).update(`${APP_COOKIE}:${value}`).digest('base64url');
 
 export function setSessionCookie(cookies: Cookies, did: string) {
   cookies.set(APP_COOKIE, `${did}.${sign(did)}`, {
