@@ -4,6 +4,7 @@
   import PostMeta from '$lib/components/PostMeta.svelte';
   import BoardLabel from '$lib/components/BoardLabel.svelte';
   import RichText from '$lib/components/RichText.svelte';
+  import PostContent from '$lib/components/PostContent.svelte';
   import RichTextEditor from '$lib/components/RichTextEditor.svelte';
   import { page } from '$app/state';
   import { postAnchor, postAuthor, postPath, replyPath } from '$lib/appview-paths';
@@ -112,7 +113,7 @@
       {#if data.editing?.uri === data.thread.uri}
         <PostEditor uri={data.thread.uri} title={data.thread.value.title} tags={data.editing.tags} doc={data.editing.doc} cancelHref="{page.url.pathname}#{postAnchor(data.thread.uri)}" message={form?.message} allowImages={false} />
       {:else}
-        <RichText body={data.thread.value.body} threadUri={data.threadUri} handles={data.handles} />
+        <PostContent postUri={data.threadUri} body={data.thread.value.body} threadUri={data.threadUri} handles={data.handles} />
       {/if}
       {#if data.thread.authorProfile?.signature}
         <div class="atm-sig"><RichText body={data.thread.authorProfile.signature} /></div>
@@ -150,7 +151,7 @@
         {#if data.editing?.uri === reply.uri}
           <PostEditor uri={reply.uri} doc={data.editing.doc} cancelHref="{page.url.pathname}#{postAnchor(reply.uri)}" message={form?.message} allowImages={false} />
         {:else}
-          <RichText body={reply.value.body} threadUri={data.threadUri} handles={data.handles} />
+          <PostContent postUri={reply.uri} body={reply.value.body} threadUri={data.threadUri} handles={data.handles} />
         {/if}
         {#if reply.authorProfile?.signature}
           <div class="atm-sig"><RichText body={reply.authorProfile.signature} /></div>

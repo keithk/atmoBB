@@ -87,6 +87,40 @@ Shared forum UI uses an `atm-` prefix with BEM-style parts and modifiers. The ho
 
 Parts use `__` (`.atm-threadrow__title`), variants use `--` (`.atm-btn--primary`). Inspect the rendered markup to find the part hooks you want. Anything unprefixed is a page-local implementation detail and I will absolutely rename it.
 
+### Long post previews
+
+Thread starters and replies fold when their rendered body exceeds `36rem` plus
+a small allowance for a final line. This is roughly four or five paragraphs;
+images, quotes, and code count toward the height too. “Read full post” reveals
+the rest in place. Signatures, polls, and post actions are not folded. Without
+JavaScript, and when printing, the full text is shown.
+
+Adjust the preview in Custom CSS (responsive overrides work too):
+
+```css
+:root {
+  --post-preview-height: 44rem;
+  --post-preview-fade: 3rem;
+}
+
+.atm-post-content__expand {
+  color: var(--forum-link);
+  background: var(--forum-surface-2);
+}
+```
+
+To disable folding entirely, including the expand control:
+
+```css
+:root { --post-preview-height: 0px; }
+```
+
+Stable hooks are `.atm-post-content`, `.atm-post-content--collapsed`,
+`.atm-post-content__preview`, `.atm-post-content__text`,
+`.atm-post-content__expand`, and `.atm-post-content__chevron`. The fade uses
+`--forum-surface`; override the preview's `::after` background if your post
+surface differs. All built-in rules remain in the `atmobb` layer.
+
 ### Stamps
 
 Members wear up to three stamps on the post rail, the hovercard, the member list, and their profile. Each stamp is an `.atm-stamp` inside an `.atm-stamps` list, with modifiers for its shape (`--stamp`, `--pill`, `--ticket`, `--pixel`), its size (`--full`, `--compact`), and where it came from (`--admin`, `--default`, `--network`, `--byHand`).
