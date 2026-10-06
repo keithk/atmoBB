@@ -16,6 +16,7 @@
 @import './tokens/base.css' layer(atmobb);
 @import './components/forms.css' layer(atmobb);
 @import './components/content.css' layer(atmobb);
+@import './components/post-content.css' layer(atmobb);
 @import './components/forum.css' layer(atmobb);
 @import './components/navigation.css' layer(atmobb);
 @import './components/admin.css' layer(atmobb);
