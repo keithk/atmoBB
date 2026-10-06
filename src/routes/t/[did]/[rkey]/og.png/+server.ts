@@ -9,7 +9,7 @@ import { imageCid } from '$lib/richtext/blocks-tiptap';
 import { blobUrl } from '$lib/server/profiles';
 import { ogSkin } from '$lib/server/og/palette';
 
-export const GET: RequestHandler = async ({ params, url, fetch }) => {
+export const GET: RequestHandler = async ({ params, url }) => {
   const uri = threadUri(params.did, params.rkey);
   try {
     const [page, index] = await Promise.all([getThreadPage(uri), getBoardIndex(FORUM_DID())]);
@@ -31,14 +31,13 @@ export const GET: RequestHandler = async ({ params, url, fetch }) => {
     const imageUrl = cid ? await blobUrl(thread.author, cid).catch(() => undefined) : undefined;
     const [handle, image] = await Promise.all([
       resolveHandle(thread.author),
-      imageUrl ? imageDataUri(fetch, imageUrl) : null,
+      imageUrl ? imageDataUri(imageUrl) : null,
     ]);
     const authorHandle = handle.startsWith('did:') ? thread.author.slice(8, 20) : handle;
     const colors = ogSkin(index.forum?.theme, index.forum?.customCss);
     const avatar = await profileAvatarNode(
       thread.authorProfile,
       thread.author,
-      fetch,
       { size: 64, radius: 10, skin: colors },
       thread.authorProfile?.displayName ?? authorHandle,
     );

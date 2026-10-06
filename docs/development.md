@@ -192,6 +192,6 @@ Run both after you edit anything in `lexicons/`. The publish-only permission set
 | `bun run build` | production adapter-node build |
 | `bun run start` | run the built server with Node |
 | `bun run preview` | preview a production build |
-| `bun run check` | SvelteKit sync and TypeScript check, including generated code |
+| `bun run check` | SvelteKit sync, then `svelte-check` over the app (TypeScript and Svelte) plus the generated lexicon code |
 | `bun run test` | unit tests for pure TypeScript (path helpers, rich text serializers) with Vitest |
 | `bun run lex` | regenerate `src/lexicon/` from `lexicons/` |

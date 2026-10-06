@@ -1,3 +1,5 @@
+<script lang="ts"></script>
+
 <svg
   viewBox="0 0 24 24"
   width="1em"

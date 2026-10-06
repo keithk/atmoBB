@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import type { BoardIndex } from '$lib/server/appview';
   import BoardMarker from './BoardMarker.svelte';
 
   let { uri, name, board }: {
@@ -7,7 +8,9 @@
     name?: string;
     board?: { name: string; color?: string; emoji?: string };
   } = $props();
-  const metadata = $derived(board ?? page.data.sidebarBoards?.find((b) => b.uri === uri)?.value);
+  // page.data is indexably any; assert the sidebar shape so the lookup is typed.
+  const sidebarBoards = $derived(page.data.sidebarBoards as BoardIndex['boards'] | undefined);
+  const metadata = $derived(board ?? sidebarBoards?.find((b) => b.uri === uri)?.value);
 </script>
 
 <span class="board-label">

@@ -17,7 +17,7 @@ export const actions: Actions = {
     if (!locals.user) redirect(303, '/login');
     const form = await request.formData();
     const handle = String(form.get('handle') ?? '').trim().replace(/^@/, '');
-    if (!handle) return fail(400, { message: "Enter the forum account's handle." });
+    if (!handle) return fail(400, { message: "Enter the forum account's handle.", handle });
     let authorizeUrl: URL;
     try {
       // Ask for the collections extensions are approved for right now.

@@ -149,6 +149,20 @@ async function resolveVettedAddress(hostname: string): Promise<string> {
   return first.address;
 }
 
+/**
+ * Whether `hostname` resolves to an address the outbound fetcher would allow.
+ * False when it does not resolve or lands in a blocked range. Lets callers
+ * refuse to hand a browser a redirect into the shard's own network.
+ */
+export async function isPublicHostname(hostname: string): Promise<boolean> {
+  try {
+    await resolveVettedAddress(hostname);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // --- fetching ----------------------------------------------------------------
 
 export interface OutboundFetchOptions {

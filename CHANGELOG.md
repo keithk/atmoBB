@@ -14,6 +14,21 @@ HappyView 2.16.0. Release acceptance is incomplete: direct-engine read-denial as
 - Setup configures public OAuth and PDS service-proxy routing. Upgrades stop application writes before backups and leave the app stopped if setup fails. `./atmobb configure-oauth` provisions or repairs the public client.
 - Extensions use forum-purpose credentials, per-install collection restrictions, and separate forum consent. Private-board bindings are prohibited.
 
+## 0.5.2
+
+Happyview remains pinned to 2.14.0. No backfill is required.
+
+- Fixed Markdown copied from raw-text browser pages, such as raw Gists, bypassing conversion when the clipboard also includes a plain `<pre>` HTML wrapper. Formatted HTML, code blocks, and internal editor copies keep their existing paste behavior.
+
+## 0.5.1
+
+Happyview remains pinned to 2.14.0. No backfill is required.
+
+- Fixed Markdown pasted into the rich text editor appearing as plain text instead of formatted content.
+- Fixed a server-side request forgery in profile and image resolution. DID documents, PDS endpoints, handles, and member avatars and images now go through the same hardened, address-vetted fetcher the extension system already used, so a crafted DID document or handle can no longer make the server read from the shard's own network through member pages or Open Graph images.
+- Avatar and webring redirects now refuse to send a browser to a host that resolves onto the shard's own network, and the webring only redirects to a syntactically valid handle.
+- `bun run check` now typechecks the whole app, not just the generated lexicon code, and runs `svelte-check` so `.svelte` components are covered too. TypeScript is pinned to 6.0 because SvelteKit's type generator does not yet support TypeScript 7.
+
 ## 0.5.0
 
 Tested against Happyview 2.14.0. No backfill is required.

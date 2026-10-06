@@ -263,7 +263,7 @@ export function rejectRequest(id: string): Promise<void> {
     if (r?.isolated || r?.siteId) throw new Error('An installation may exist. Reconcile it on the host before rejecting this request.');
     // Even a timed-out approval may have reserved a slot. Fail closed.
     if (r?.status === 'failed') throw new Error('Retry approval to reconcile this failed request before rejecting it.');
-    if (r && (r.status === 'pending' || r.status === 'failed')) {
+    if (r && r.status === 'pending') {
       r.status = 'rejected';
       if (r.email && !r.notifiedAt) {
         r.notifiedAt = new Date().toISOString();

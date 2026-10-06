@@ -14,7 +14,7 @@ const signatureText = (blocks?: RichTextBlock[]): string =>
     .replace(/\s+/g, ' ')
     .trim();
 
-export const GET: RequestHandler = async ({ params, url, fetch }) => {
+export const GET: RequestHandler = async ({ params, url }) => {
   try {
     const id = await resolveActor(params.actor);
     if (!id) throw new Error('no member');
@@ -25,7 +25,6 @@ export const GET: RequestHandler = async ({ params, url, fetch }) => {
     const avatar = await profileAvatarNode(
       profile,
       id.did,
-      fetch,
       { size: 150, ring: true, presence: presenceFor(id.did), skin: colors },
       profile?.displayName ?? id.handle,
     );

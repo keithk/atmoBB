@@ -1,6 +1,6 @@
 {
   "name": "atmobb",
-  "version": "0.5.0",
+  "version": "0.5.2",
   "private": true,
   "packageManager": "bun@1.4.0",
   "engines": {
@@ -14,7 +14,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-kit sync && tsc --noEmit -p tsconfig.lexicon.json",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsc --noEmit -p tsconfig.lexicon.json",
     "test": "vitest run",
     "start": "node build"
   },
@@ -27,8 +27,10 @@
     "@sveltejs/kit": "^2.70.3",
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@types/node": "^26.4.0",
+    "happy-dom": "^20.14.5",
     "svelte": "^5.56.10",
-    "typescript": "^7.0.2",
+    "svelte-check": "^4.7.6",
+    "typescript": "^6.0.3",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"
   },

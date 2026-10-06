@@ -94,7 +94,7 @@ const safeStyleValue = (value: string): boolean =>
  * first and owner `:root` overrides win, just as they do on public pages.
  */
 export function ogSkin(theme: unknown, customCss?: unknown): OgSkin {
-  const properties = {
+  const properties: Record<string, string> = {
     '--online': classic.online,
     '--idle': classic.idle,
     '--offline': classic.offline,
@@ -106,7 +106,8 @@ export function ogSkin(theme: unknown, customCss?: unknown): OgSkin {
   const colors: OgSkin = { ...classic };
   for (const [token, key] of Object.entries(TOKEN_TO_SKIN)) {
     const value = resolveValue(properties[token] ?? '', properties);
-    if (value && safeStyleValue(value)) (colors[key] as string) = value;
+    // Every token in the map names a color field, so the string assignment is safe.
+    if (value && safeStyleValue(value)) (colors as unknown as Record<string, string>)[key] = value;
   }
   colors.body = colors.ink;
 

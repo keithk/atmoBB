@@ -10,6 +10,8 @@ import { forumStanding } from '$lib/server/membership';
 import { DEFAULT_THEME, personalTheme, normalizeTheme, themeCss, type ForumTheme } from '$lib/themes';
 import { profileForForum } from '$lib/profile-overrides';
 
+type ForumFavicon = { url: string; mimeType: string };
+
 const FONT_FAMILY = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,63}$/u;
 const cssString = (value: string) => JSON.stringify(value).replaceAll('<', '\\3c ');
 
@@ -45,7 +47,6 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
   let forumTheme: ForumTheme = DEFAULT_THEME;
   let forumFontCss = '';
   let forumCustomCss = '';
-  let forumFavicon: { url: string; mimeType: string } | null = null;
   let sidebarBoards: Awaited<ReturnType<typeof getBoardIndex>>['boards'] = [];
   let sidebarCategories: NonNullable<Awaited<ReturnType<typeof getBoardIndex>>['categories']> = [];
   let appviewDown = false;
@@ -54,9 +55,9 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
   // domain isn't assigned yet), layout-on-404 would recurse into a request
   // loop that floods the box.
   if (!route.id) {
-    return { user: locals.user, membership: null, avatarProfile: null, admin: false, staffRole: null, forumUnclaimed: false, bans: [], joinMode: 'open' as const, standing: 'open' as const, sponsorWindow: null, ringSize: 0, forum, forumDid: FORUM_DID(), forumTheme, forumFontCss, forumCustomCss, forumFavicon, sidebarBoards, sidebarCategories, appviewDown: true, notifyOn: false, unread: 0 };
+    return { user: locals.user, membership: null, avatarProfile: null, admin: false, staffRole: null, forumUnclaimed: false, bans: [], joinMode: 'open' as const, standing: 'open' as const, sponsorWindow: null, ringSize: 0, forum, forumDid: FORUM_DID(), forumTheme, forumFontCss, forumCustomCss, forumFavicon: null, sidebarBoards, sidebarCategories, appviewDown: true, notifyOn: false, unread: 0 };
   }
-  const [membership, avatarProfile, role, ring, standing, notify] = await Promise.all([
+  const [membership, avatarProfile, role, ring, standing, notify, forumFavicon] = await Promise.all([
     locals.user ? getMembership(locals.user.did, FORUM_DID()) : null,
     locals.user ? getOwnAvatarProfile(locals.user.did).catch(() => null) : null,
     staffRole(locals.user?.did),
@@ -81,11 +82,12 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
             ? String(source?.mimeType)
             : null;
           const url = cid && mimeType ? await blobUrl(FORUM_DID(), cid) : null;
-          if (url && mimeType) forumFavicon = { url, mimeType };
+          if (url && mimeType) return { url, mimeType };
         }
       } catch {
         appviewDown = true;
       }
+      return null;
     })(),
   ]);
   const preference = personalTheme(avatarProfile, FORUM_DID());
