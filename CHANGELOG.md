@@ -4,8 +4,11 @@ Versions follow [Semantic Versioning](https://semver.org) with the operator's
 workload in mind; [Releasing](docs/releasing.md) spells out what each level
 means. Every entry names the Happyview release it was tested against.
 
-## Unreleased
+## 0.5.1
 
+Happyview remains pinned to 2.14.0. No backfill is required.
+
+- Fixed Markdown pasted into the rich text editor appearing as plain text instead of formatted content.
 - Fixed a server-side request forgery in profile and image resolution. DID documents, PDS endpoints, handles, and member avatars and images now go through the same hardened, address-vetted fetcher the extension system already used, so a crafted DID document or handle can no longer make the server read from the shard's own network through member pages or Open Graph images.
 - Avatar and webring redirects now refuse to send a browser to a host that resolves onto the shard's own network, and the webring only redirects to a syntactically valid handle.
 - `bun run check` now typechecks the whole app, not just the generated lexicon code, and runs `svelte-check` so `.svelte` components are covered too. TypeScript is pinned to 6.0 because SvelteKit's type generator does not yet support TypeScript 7.
