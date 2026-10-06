@@ -681,7 +681,7 @@ export const schemaDict = {
             type: 'array',
             description:
               'The stamps the author wears on the viewing forum, in order.',
-            maxLength: 3,
+            maxLength: 6,
             items: {
               type: 'ref',
               ref: 'lex:app.atmobb.forum.getStamps#trayEntry',
@@ -1349,7 +1349,7 @@ export const schemaDict = {
           stamps: {
             type: 'array',
             description: 'The stamps the member wears on this forum, in order.',
-            maxLength: 3,
+            maxLength: 6,
             items: {
               type: 'ref',
               ref: 'lex:app.atmobb.forum.getStamps#trayEntry',
@@ -1418,7 +1418,7 @@ export const schemaDict = {
               worn: {
                 type: 'array',
                 description: 'Ids from the tray the actor wears, in order.',
-                maxLength: 3,
+                maxLength: 6,
                 items: {
                   type: 'string',
                   maxLength: 300,
@@ -1526,7 +1526,7 @@ export const schemaDict = {
                 type: 'array',
                 description:
                   'Ids from the tray the actor wears, in order. Present only when actor is given.',
-                maxLength: 3,
+                maxLength: 6,
                 items: {
                   type: 'string',
                   maxLength: 300,
@@ -1588,6 +1588,10 @@ export const schemaDict = {
             type: 'ref',
             ref: 'lex:app.atmobb.forum.stamp#look',
           },
+          trigger: {
+            type: 'ref',
+            ref: 'lex:app.atmobb.forum.stamp#trigger',
+          },
           board: {
             type: 'string',
             format: 'at-uri',
@@ -1624,6 +1628,15 @@ export const schemaDict = {
           look: {
             type: 'ref',
             ref: 'lex:app.atmobb.forum.stamp#look',
+          },
+          trigger: {
+            type: 'ref',
+            ref: 'lex:app.atmobb.forum.stamp#trigger',
+          },
+          triggerBoardName: {
+            type: 'string',
+            description:
+              'The board name for an earned firstPostInBoard trigger.',
           },
           uri: {
             type: 'string',
@@ -1823,7 +1836,7 @@ export const schemaDict = {
               type: 'array',
               description:
                 "Stamp ids the member wears on this forum, in order: an admin stamp's at-uri, or the fixed id of a generated stamp (atmobb:board:<board at-uri>, atmobb:arrival, atmobb:first-light, atmobb:early-days).",
-              maxLength: 3,
+              maxLength: 6,
               items: {
                 type: 'string',
                 maxLength: 300,
@@ -2179,6 +2192,14 @@ export const schemaDict = {
           'How the stamp is drawn: two colors and one of a bounded set of shapes. No free CSS or images.',
         required: ['bg', 'ink', 'shape'],
         properties: {
+          symbol: {
+            type: 'string',
+            minGraphemes: 1,
+            maxGraphemes: 1,
+            maxLength: 64,
+            description:
+              'Optional visible grapheme drawn on the stamp. Writers must reject invisible or whitespace-only symbols.',
+          },
           bg: {
             type: 'string',
             maxLength: 7,

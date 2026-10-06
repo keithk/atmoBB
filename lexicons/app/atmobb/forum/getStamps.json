@@ -41,7 +41,7 @@
             "worn": {
               "type": "array",
               "description": "Ids from the tray the actor wears, in order. Present only when actor is given.",
-              "maxLength": 3,
+              "maxLength": 6,
               "items": { "type": "string", "maxLength": 300 }
             }
           }
@@ -69,6 +69,7 @@
         "id": { "type": "string", "maxLength": 300 },
         "name": { "type": "string", "maxLength": 240, "maxGraphemes": 24 },
         "look": { "type": "ref", "ref": "app.atmobb.forum.stamp#look" },
+        "trigger": { "type": "ref", "ref": "app.atmobb.forum.stamp#trigger" },
         "board": {
           "type": "string",
           "format": "at-uri",
@@ -95,6 +96,11 @@
         "id": { "type": "string", "maxLength": 300 },
         "name": { "type": "string", "maxLength": 240, "maxGraphemes": 24 },
         "look": { "type": "ref", "ref": "app.atmobb.forum.stamp#look" },
+        "trigger": { "type": "ref", "ref": "app.atmobb.forum.stamp#trigger" },
+        "triggerBoardName": {
+          "type": "string",
+          "description": "The board name for an earned firstPostInBoard trigger."
+        },
         "uri": { "type": "string", "format": "at-uri" },
         "cid": { "type": "string", "format": "cid" },
         "board": {

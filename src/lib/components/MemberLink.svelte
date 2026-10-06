@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import type { Snippet } from 'svelte';
   import Avatar from './Avatar.svelte';
   import ProfileHovercard from './ProfileHovercard.svelte';
@@ -22,12 +22,18 @@
   let coords = $state({ left: 0, top: 0, below: true });
   let showTimer: ReturnType<typeof setTimeout> | undefined;
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
+  let wrapper: HTMLSpanElement;
 
   const CARD_W = 320;
   const CARD_H = 200;
 
   onMount(async () => {
     if (showAvatar) card = await loadProfileCard(actor);
+  });
+
+  onDestroy(() => {
+    clearTimeout(showTimer);
+    clearTimeout(hideTimer);
   });
 
   function place(el: HTMLElement) {
@@ -50,7 +56,13 @@
 
   function scheduleHide() {
     clearTimeout(showTimer);
-    hideTimer = setTimeout(() => (open = false), 160);
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      // A profile's stamp details live in the top layer, but are still inside
+      // this subtree. Keep the card alive while using either set of controls.
+      if (wrapper?.matches(':focus-within') || wrapper?.querySelector(':popover-open')) return;
+      open = false;
+    }, 160);
   }
 
   function stayOpen() {
@@ -58,7 +70,7 @@
   }
 </script>
 
-<span class="atm-memberlink">
+<span class="atm-memberlink" bind:this={wrapper}>
   <a
     href={profileHref(actor)}
     class={klass}
@@ -80,6 +92,8 @@
       role="tooltip"
       onmouseenter={stayOpen}
       onmouseleave={scheduleHide}
+      onfocusin={stayOpen}
+      onfocusout={scheduleHide}
     >
       <ProfileHovercard {card} />
     </div>
