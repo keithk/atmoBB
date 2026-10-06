@@ -270,6 +270,8 @@ Read the release notes first. Every release states the Happyview version it runs
 5. force-runs the release's setup job and checks its exit status before atmobb starts;
 6. starts atmobb and reports success only after its HTTP version, required containers, running image pins, and setup exit status all match.
 
+CLI and admin updates reject a lower HappyView version before stopping the app. Both the running and target images must have numeric version tags; an unknown version requires manual review. This prevents a Stable or main update from downgrading a database with forward-only migrations.
+
 The page shows persisted progress and the bounded update log. Its status survives the web app restarting because the updater runs separately on the host and stores state under `/var/lib/atmobb-updater`.
 
 **Advanced: unreleased `main`.** Expand **Advanced options**, read the warning, and type `main` to confirm. This resolves the branch to a specific 40-character commit, downloads exactly that source archive, and builds `atmobb-main:<commit>` locally before touching the running stack. The installed commit remains visible in Admin → Updates. `main` is not a release: it may be broken, may contain forward-only changes, and building it can consume substantial time, memory, and disk, fail, or degrade a small VPS. Use stable unless you deliberately accept those risks.

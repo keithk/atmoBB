@@ -400,6 +400,31 @@ EOF
   cmd_status
 }
 
+check_happyview_upgrade() {
+  need python3
+  guard_running=$(running_image happyview)
+  python3 - "$guard_running" "$1" <<'PY' || exit 1
+import re
+import sys
+
+def version(image):
+    tag = image.split("@", 1)[0]
+    match = re.search(r":([0-9]+)\.([0-9]+)\.([0-9]+)$", tag)
+    if not match:
+        raise ValueError("cannot determine a pinned numeric version")
+    return tuple(map(int, match.groups()))
+
+try:
+    current, target = map(version, sys.argv[1:])
+except ValueError:
+    sys.exit("Happyview version guard: cannot verify the running or target version. No containers are changed.")
+if target < current:
+    old = ".".join(map(str, current))
+    new = ".".join(map(str, target))
+    sys.exit(f"Happyview version guard: refusing downgrade {old} -> {new}. Database migrations are forward-only; use a compatible release.")
+PY
+}
+
 cmd_upgrade_happyview() {
   need jq
   ASSUME_YES=0
@@ -407,6 +432,7 @@ cmd_upgrade_happyview() {
   [ -f "$ENV_FILE" ] || die "no .env here; run ./atmobb install first"
   pinned=$(pinned_image happyview)
   running=$(running_image happyview)
+  check_happyview_upgrade "$pinned"
   if [ "$running" = "$pinned" ]; then
     echo "Happyview already runs $pinned; rechecking setup before restarting."
   fi
@@ -545,6 +571,7 @@ cmd_internal_update() {
       *:compose.caddy.yml) stage_compose="$stage_compose -f $work/bundle/compose.caddy.yml" ;;
       *:compose.hosting.yml) stage_compose="$stage_compose -f $work/bundle/compose.hosting.yml" ;;
     esac
+    check_happyview_upgrade "$($stage_compose config --format json | jq -er '.services.happyview.image')"
     $stage_compose pull
     commit=
   else
@@ -564,6 +591,7 @@ cmd_internal_update() {
     version=$(jq -er .version "$work/source/package.json")
     happyview=$(sed -n 's/^ARG HAPPYVIEW_VERSION=//p' "$work/source/Dockerfile")
     [ -n "$happyview" ] || die "main has no Happyview version pin"
+    check_happyview_upgrade "ghcr.io/gamesgamesgamesgamesgames/happyview:$happyview"
     image="atmobb-main:$commit"
     echo "== building $image before changing the running stack"
     $DOCKER build --build-arg "HAPPYVIEW_VERSION=$happyview" -t "$image" "$work/source"
@@ -583,6 +611,8 @@ cmd_internal_update() {
     $stage_compose pull postgres happyview
     [ "$compose_files" != compose.yml:compose.caddy.yml ] || $stage_compose pull caddy
   fi
+  # Check the actual staged Compose pin too, not only main's Dockerfile argument.
+  check_happyview_upgrade "$($stage_compose config --format json | jq -er '.services.happyview.image')"
   echo "ATMOBB_TARGET_VERSION=$version"
   echo "ATMOBB_TARGET_COMMIT=$commit"
 
@@ -643,6 +673,7 @@ case "$command" in
   status) cmd_status ;;
   logs) compose logs "$@" ;;
   _update) cmd_internal_update "$@" ;;
+  _check-happyview-upgrade) check_happyview_upgrade "${1:?supply the target image}" ;;
   help|-h|--help) usage ;;
   *) die "unknown command: $command (try ./atmobb help)" ;;
 esac

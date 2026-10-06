@@ -120,7 +120,7 @@ printf '{"installedVersion":"2.0.0","installedCommit":null,"backup":"/backup/one
 
 
 class UpgradeOrderingTest(unittest.TestCase):
-    def run_upgrade(self, managed, fail_setup=False):
+    def run_upgrade(self, managed, fail_setup=False, running="2.14.0", target="2.16.0", channel="main"):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             binaries = root / "bin"
@@ -138,9 +138,11 @@ class UpgradeOrderingTest(unittest.TestCase):
             (source / "docs" / "self-hosting.md").write_text("fixture")
             (source / "LICENSE").write_text("fixture")
             (source / "package.json").write_text('{"version":"0.5.0"}')
-            (source / "Dockerfile").write_text("ARG HAPPYVIEW_VERSION=2.16.0\n")
+            (source / "Dockerfile").write_text(f"ARG HAPPYVIEW_VERSION={target}\n")
             with tarfile.open(root / "archive.tar.gz", "w:gz") as archive:
                 archive.add(source, arcname="source")
+            with tarfile.open(root / "bundle.tar.gz", "w:gz") as archive:
+                archive.add(source / "infra" / "release", arcname="atmobb-0.5.0")
             (binaries / "docker").write_text("""#!/usr/bin/env python3
 import json, os, pathlib, sys
 args = sys.argv[1:]
@@ -150,22 +152,27 @@ if args == ['compose', 'version', '--short']: print('2.39.4')
 elif args[:1] == ['inspect']:
     if 'ExitCode' in args[2]: print('1' if os.environ['FAIL_SETUP'] == '1' else '0')
     elif args[-1] == 'happyview-id':
-        print('ghcr.io/gamesgamesgamesgamesgames/happyview:' + ('2.16.0' if (root / 'migrated').exists() else '2.14.0'))
+        print('ghcr.io/gamesgamesgamesgamesgames/happyview:' + (os.environ['TARGET_HV'] if (root / 'migrated').exists() else os.environ['RUNNING_HV']))
     else: print('atmobb-main:' + '0' * 40 if os.environ['MANAGED'] == '1' else 'ghcr.io/keithk/atmobb:0.5.0')
 elif args[:1] == ['compose']:
     if 'config' in args:
-        print(json.dumps({'services': {'happyview': {'image': 'ghcr.io/gamesgamesgamesgamesgames/happyview:2.16.0'},
+        print(json.dumps({'services': {'happyview': {'image': 'ghcr.io/gamesgamesgamesgamesgames/happyview:' + os.environ['TARGET_HV']},
           'atmobb': {'image': 'atmobb-main:' + '0' * 40 if os.environ['MANAGED'] == '1' else 'ghcr.io/keithk/atmobb:0.5.0'}}}))
     elif 'ps' in args and '-q' in args: print(args[-1] + '-id')
     elif 'up' in args and 'happyview' in args: (root / 'migrated').touch()
 """)
             (binaries / "curl").write_text("""#!/usr/bin/env python3
-import json, os, pathlib, shutil, sys
+import hashlib, json, os, pathlib, shutil, sys
 args = sys.argv[1:]
 root = pathlib.Path(os.environ['FIXTURE_ROOT'])
 if '-o' in args:
     out = pathlib.Path(args[args.index('-o') + 1])
     if out.name == 'commit.json': out.write_text(json.dumps({'sha': '0' * 40}))
+    elif out.name == 'release.json': out.write_text(json.dumps({'tag_name':'v0.5.0','assets':[
+        {'name':'atmobb-0.5.0.tar.gz','browser_download_url':'https://fixture/bundle'},
+        {'name':'SHA256SUMS','browser_download_url':'https://fixture/sums'}]}))
+    elif out.name == 'SHA256SUMS': out.write_text(hashlib.sha256((root / 'bundle.tar.gz').read_bytes()).hexdigest() + '  atmobb-0.5.0.tar.gz\\n')
+    elif out.name == 'atmobb-0.5.0.tar.gz': shutil.copy(root / 'bundle.tar.gz', out)
     else: shutil.copy(root / 'archive.tar.gz', out)
 else: print('{"version":"0.5.0","happyview":"2.16.0"}')
 """)
@@ -176,14 +183,31 @@ else: print('{"version":"0.5.0","happyview":"2.16.0"}')
                 binary.chmod(0o755)
             env = {**os.environ, "PATH": f"{binaries}:{os.environ['PATH']}",
                    "FIXTURE_ROOT": str(root), "MANAGED": str(int(managed)),
+                   "RUNNING_HV": running, "TARGET_HV": target,
                    "FAIL_SETUP": str(int(fail_setup)), "ATMOBB_BUNDLE_DIR": str(root),
                    "ATMOBB_UPDATER_STATE_DIR": str(root / "state"),
                    "ATMOBB_UPDATER_LIB_DIR": str(root / "lib"),
                    "ATMOBB_UPDATER_INTERNAL": "fixture"}
-            command = ["_update", "main"] if managed else ["upgrade-happyview", "--yes"]
+            command = ["_update", channel] if managed else ["upgrade-happyview", "--yes"]
             result = subprocess.run(["sh", str(release / "atmobb"), *command],
                                     env=env, capture_output=True, text=True)
             return result, (root / "docker.log").read_text().splitlines()
+
+    def test_downgrade_and_unknown_versions_never_stop_or_replace_the_app(self):
+        for managed, channel in ((False, "main"), (True, "main"), (True, "stable")):
+            for running, target in [("2.16.0", "2.14.0"), ("2.16.0", "latest"), ("unknown", "2.16.0")]:
+                with self.subTest(managed=managed, channel=channel, running=running, target=target):
+                    result, calls = self.run_upgrade(managed, running=running, target=target, channel=channel)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("Happyview version guard", result.stderr)
+                    self.assertFalse(any("stop atmobb" in call or "pg_dump" in call or
+                                         "up " in call or "build " in call for call in calls))
+
+    def test_same_and_newer_numeric_versions_are_allowed(self):
+        for running in ("2.16.0", "2.9.0"):
+            with self.subTest(running=running):
+                result, _ = self.run_upgrade(True, running=running, channel="stable")
+                self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_prepare_stop_backup_migrate_setup_then_start(self):
         for managed in (False, True):
