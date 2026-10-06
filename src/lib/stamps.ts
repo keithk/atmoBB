@@ -10,6 +10,8 @@ export interface StampLook {
   bg: string;
   ink: string;
   shape: StampShape;
+  /** One fixed letter or emoji, chosen by the stamp's creator. */
+  symbol?: string;
 }
 
 /** No fixed colors: the theme's `--forum-rank` tokens draw the stamp, so owner CSS keeps working. */
@@ -26,7 +28,7 @@ export const TOKEN_LOOK: TokenLook = { shape: 'pixel', tokens: true };
 export const LOW_CONTRAST = 3;
 
 /** Members wear at most this many stamps at once. */
-export const WORN_LIMIT = 3;
+export const WORN_LIMIT = 6;
 
 export const ARRIVAL_ID = 'atmobb:arrival';
 
@@ -42,11 +44,12 @@ const isShape = (value: unknown): value is StampShape => STAMP_SHAPES.includes(v
 /** A look from record or form data: full hex bg and ink plus a known shape, or null. */
 export function parseLook(input: unknown): StampLook | null {
   if (!input || typeof input !== 'object') return null;
-  const { bg, ink, shape } = input as Record<string, unknown>;
+  const { bg, ink, shape, symbol } = input as Record<string, unknown>;
   const safeBg = normalizeBoardColor(bg);
   const safeInk = normalizeBoardColor(ink);
   if (!safeBg || !safeInk || !isShape(shape)) return null;
-  return { bg: safeBg, ink: safeInk, shape };
+  const safeSymbol = parseStampSymbol(symbol);
+  return { bg: safeBg, ink: safeInk, shape, ...(safeSymbol ? { symbol: safeSymbol } : {}) };
 }
 
 function luminance(hex: string): number {
@@ -86,9 +89,69 @@ export function lookFor(entry: Pick<TrayEntry, 'look' | 'boardColor'>): Resolved
 /** The text on a stamp. Arrival stamps name the route and, when it resolved, the sponsor. */
 export function stampLabel(entry: Pick<TrayEntry, 'id' | 'name' | 'via' | 'sponsor'>, handles: Handles = {}): string {
   if (entry.id !== ARRIVAL_ID) return entry.name;
-  if (entry.via === 'founding' || !entry.sponsor) return 'original member';
-  const handle = resolvedHandle(handles, entry.sponsor);
+  if (entry.via === 'founding') return 'original member';
+  const handle = entry.sponsor ? resolvedHandle(handles, entry.sponsor) : null;
   return handle ? `brought in by @${handle}` : 'brought in';
+}
+
+/** Read old or malformed records safely, without discarding their colors. */
+export function parseStampSymbol(input: unknown): string | undefined {
+  if (typeof input !== 'string' || !input || new TextEncoder().encode(input).length > 64) return;
+  // Preserve emoji joiners/variation selectors, but reject controls, bidi tricks,
+  // whitespace and invisible-only graphemes.
+  if (/[\p{White_Space}\p{Cc}\u200b\u200e\u200f\u202a-\u202e\u2060-\u206f\ufeff]/u.test(input)) return;
+  if (!/[\p{L}\p{N}\p{P}\p{S}]/u.test(input) || graphemes(input) !== 1) return;
+  return input;
+}
+
+export function stampSymbol(entry: TrayEntry): string {
+  const symbol = parseStampSymbol(entry.look?.symbol);
+  if (symbol) return symbol;
+  if (entry.id === ARRIVAL_ID) return entry.via === 'founding' ? 'O' : entry.via === 'application' ? 'A' : 'I';
+  if (entry.id === 'atmobb:first-light') return '☀️';
+  if (entry.id === 'atmobb:early-days') return 'E';
+  const first = segmenter.segment(entry.name.trim())[Symbol.iterator]().next().value?.segment ?? '';
+  return parseStampSymbol(first.toUpperCase()) ?? parseStampSymbol(first) ?? 'S';
+}
+
+/** The same factual explanation in the collection and on public stamp details. */
+export function stampDescription(entry: TrayEntry, handles: Handles = {}): string {
+  if (entry.source === 'byHand') return 'Awarded by this forum’s admins.';
+  if (entry.id === ARRIVAL_ID) {
+    const sponsor = entry.sponsor ? resolvedHandle(handles, entry.sponsor) : null;
+    if (entry.via === 'founding') return 'Here when this forum began.';
+    if (entry.via === 'application') return sponsor ? `Joined by application, approved by @${sponsor}.` : 'Joined this forum by application.';
+    if (entry.via === 'invite') return sponsor ? `Invited to this forum by @${sponsor}.` : 'Joined this forum by invitation.';
+    return 'A keepsake of joining this forum.';
+  }
+  if (entry.board) return `Earned by making a first post in ${entry.name}.`;
+  if (entry.id === 'atmobb:first-light') return 'Earned by making a first post on a forum indexed by this appview.';
+  const trigger = entry.trigger;
+  switch (trigger?.kind) {
+    case 'firstPostInBoard':
+      return `Earned by making a first post in ${entry.triggerBoardName ?? 'a board on this forum'}.`;
+    case 'firstPostHere':
+      return 'Earned by making a first post on this forum.';
+    case 'profileBefore':
+      return trigger.before && Number.isFinite(Date.parse(trigger.before))
+        ? `Earned by creating an atmoBB profile before ${trigger.before.slice(0, 10)}.`
+        : 'Earned for an early atmoBB profile.';
+    case 'arrivedBy':
+      if (trigger.via === 'founding') return 'Earned as a founding member of this forum.';
+      if (trigger.via === 'invite') return 'Earned by joining this forum by invitation.';
+      if (trigger.via === 'application') return 'Earned by joining this forum by application.';
+      break;
+    case 'byHand':
+      return 'Awarded by this forum’s admins.';
+  }
+  if (entry.id === 'atmobb:early-days') return 'Earned for an early atmoBB profile.';
+  return entry.source === 'network'
+    ? 'A stamp shared by the forums on this appview.'
+    : 'Awarded by this forum. The earning details aren’t available.';
+}
+
+export function stampOrigin(entry: TrayEntry): string {
+  return entry.source === 'network' ? 'Across this appview’s forums' : 'From this forum';
 }
 
 export function ariaLabel(entry: Pick<TrayEntry, 'id' | 'name' | 'via' | 'sponsor' | 'board'>, handles: Handles = {}): string {
@@ -118,9 +181,21 @@ export function parseWearing(input: string[], tray: Pick<TrayEntry, 'id'>[]): We
   const held = new Set(tray.map((entry) => entry.id));
   const ids = [...new Set(input.filter((id) => held.has(id)))];
   if (ids.length > WORN_LIMIT) {
-    return { ok: false, error: `You can wear up to three stamps. Untick ${ids.length - WORN_LIMIT} to save.` };
+    return { ok: false, error: `You can wear up to ${WORN_LIMIT} stamps. Take off ${ids.length - WORN_LIMIT} to save.` };
   }
   return { ok: true, ids };
+}
+
+/** Swap a selected stamp with its neighbor; shared by the draft and no-JS actions. */
+export function moveStamp(ids: string[], move: string): string[] {
+  const [dir, id] = move.split(/:(.*)/, 2);
+  if (dir !== 'up' && dir !== 'down') return ids;
+  const at = ids.indexOf(id);
+  const to = at + (dir === 'up' ? -1 : 1);
+  if (at < 0 || to < 0 || to >= ids.length) return ids;
+  const out = [...ids];
+  [out[at], out[to]] = [out[to], out[at]];
+  return out;
 }
 
 /**
@@ -228,6 +303,7 @@ export function parseTrigger(
 
 export interface StampFormFields {
   name?: unknown;
+  symbol?: unknown;
   bg?: unknown;
   ink?: unknown;
   shape?: unknown;
@@ -268,10 +344,14 @@ export function parseStampName(input: unknown): { ok: true; name: string } | { o
 export function parseStampForm(fields: StampFormFields, boards: readonly string[] = []): StampFormResult {
   const name = parseStampName(fields.name);
   if (!name.ok) return name;
+  const symbol = parseStampSymbol(fields.symbol);
+  if (fields.symbol !== undefined && fields.symbol !== '' && !symbol) {
+    return { ok: false, error: 'Choose one visible letter or emoji for the compact stamp, or leave it blank to use its initial.' };
+  }
   const bg = normalizeBoardColor(fields.bg);
   const ink = normalizeBoardColor(fields.ink);
   if (!bg || !ink) return { ok: false, error: 'Background and ink must be six-digit hex colors such as #1a73e8.' };
-  const look = parseLook({ bg, ink, shape: fields.shape });
+  const look = parseLook({ bg, ink, shape: fields.shape, symbol });
   if (!look) return { ok: false, error: 'Choose one of the stamp shapes.' };
   const kind = text(fields.kind);
   const wanted = isKind(kind) ? TRIGGER_PARAM[kind] : null;

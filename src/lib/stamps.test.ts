@@ -11,6 +11,9 @@ import {
   parseStampForm,
   parseTrigger,
   parseWearing,
+  moveStamp,
+  stampSymbol,
+  stampDescription,
   sameTrigger,
   sponsorDids,
   stampLabel,
@@ -76,14 +79,14 @@ describe('defaultLook', () => {
 });
 
 describe('wornEntries', () => {
-  it('keeps the first three in order', () => {
-    const five = ['a', 'b', 'c', 'd', 'e'].map((id) => entry(id));
-    expect(wornEntries(five).map((e) => e.id)).toEqual(['a', 'b', 'c']);
+  it('keeps the first six in order', () => {
+    const seven = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((id) => entry(id));
+    expect(wornEntries(seven).map((e) => e.id)).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
   });
 
   it('resolves worn ids against the tray in the member’s order', () => {
     const tray = ['a', 'b', 'c', 'd'].map((id) => entry(id));
-    expect(wornFromTray(tray, ['c', 'a', 'missing', 'd', 'b']).map((e) => e.id)).toEqual(['c', 'a', 'd']);
+    expect(wornFromTray(tray, ['c', 'a', 'missing', 'd', 'b']).map((e) => e.id)).toEqual(['c', 'a', 'd', 'b']);
   });
 });
 
@@ -94,11 +97,13 @@ describe('parseWearing', () => {
     expect(parseWearing(['a', 'b'], tray)).toEqual({ ok: true, ids: ['a', 'b'] });
   });
 
-  it('refuses more than three rather than truncating', () => {
-    const four = ['a', 'b', 'c', 'd'].map((id) => entry(id));
-    const result = parseWearing(['a', 'b', 'c', 'd'], four);
+  it('accepts six and refuses seven rather than truncating', () => {
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+    const tray = ids.map((id) => entry(id));
+    expect(parseWearing(ids.slice(0, 6), tray)).toEqual({ ok: true, ids: ids.slice(0, 6) });
+    const result = parseWearing(ids, tray);
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toMatch(/three/);
+    if (!result.ok) expect(result.error).toMatch(/6/);
   });
 
   it('strips ids not in the tray, drops duplicates, and keeps the submitted order', () => {
@@ -226,6 +231,53 @@ describe('parseStampForm', () => {
   it('rejects abbreviated hex and unknown shapes', () => {
     expect(parseStampForm({ ...fields, bg: '#abc' }).ok).toBe(false);
     expect(parseStampForm({ ...fields, shape: 'hexagon' }).ok).toBe(false);
+  });
+
+  it('accepts one visible grapheme, including complex emoji, and rejects invisible or multiple symbols', () => {
+    for (const symbol of ['A', 'é', '👨‍👩‍👧‍👦', '🇨🇦', '☀️', '1️⃣']) {
+      expect(parseStampForm({ ...fields, symbol })).toMatchObject({ ok: true, value: { look: { symbol } } });
+    }
+    for (const symbol of ['AB', '🙂🙂', '\u200b', '\u202eA', 'A\n', 'a' + '\u0301'.repeat(40)]) {
+      expect(parseStampForm({ ...fields, symbol }).ok).toBe(false);
+    }
+    expect(parseStampForm({ ...fields, symbol: '' })).toMatchObject({ ok: true });
+  });
+});
+
+describe('compact stamps', () => {
+  it('uses the creator’s symbol, with a safe initial for legacy records', () => {
+    expect(stampSymbol(entry('x', { name: 'Music', look: { bg: '#ffffff', ink: '#111111', shape: 'stamp', symbol: '🎵' } }))).toBe('🎵');
+    expect(stampSymbol(entry('x', { name: 'music' }))).toBe('M');
+    expect(stampSymbol(entry('x', { name: '👨‍👩‍👧‍👦 club' }))).toBe('👨‍👩‍👧‍👦');
+    expect(stampSymbol(entry('x', { name: 'ßeta' }))).toBe('ß');
+    expect(stampSymbol(entry('x', { name: '\u200b' }))).toBe('S');
+    expect(stampSymbol(entry('atmobb:arrival', { via: 'founding' }))).toBe('O');
+    expect(stampSymbol(entry('atmobb:first-light'))).toBe('☀️');
+  });
+
+  it('ignores a malformed symbol without losing a legacy stamp’s colors', () => {
+    const look = { bg: '#ffffff', ink: '#111111', shape: 'stamp', symbol: 'too long' };
+    expect(parseLook(look)).toEqual({ bg: '#ffffff', ink: '#111111', shape: 'stamp' });
+    expect(stampSymbol(entry('x', { name: 'Music', look }))).toBe('M');
+  });
+
+  it('explains known earning rules without inventing a reason for legacy or manual awards', () => {
+    expect(stampDescription(entry('board', { board: 'at://b', name: 'Music', source: 'default' }))).toBe('Earned by making a first post in Music.');
+    expect(stampDescription(entry('x', { trigger: { kind: 'firstPostInBoard', board: 'at://b' }, triggerBoardName: 'Music' }))).toBe('Earned by making a first post in Music.');
+    expect(stampDescription(entry('x', { source: 'byHand', trigger: { kind: 'firstPostHere' } }))).toBe('Awarded by this forum’s admins.');
+    expect(stampDescription(entry('x'))).toBe('Awarded by this forum. The earning details aren’t available.');
+    expect(stampDescription(entry('atmobb:early-days', { source: 'network', trigger: { kind: 'profileBefore', before: '2026-10-01T00:00:00Z' } }))).toContain('2026-10-01');
+    expect(stampDescription(entry('atmobb:arrival', { via: 'application', sponsor: 'did:plc:a' }), { 'did:plc:a': 'alice.test' })).toBe('Joined by application, approved by @alice.test.');
+  });
+});
+
+describe('moveStamp', () => {
+  it('moves a stamp without mutating the draft or losing the rest of the selection', () => {
+    const ids = ['a', 'at://b', 'c'];
+    expect(moveStamp(ids, 'up:at://b')).toEqual(['at://b', 'a', 'c']);
+    expect(moveStamp(ids, 'down:at://b')).toEqual(['a', 'c', 'at://b']);
+    expect(ids).toEqual(['a', 'at://b', 'c']);
+    for (const move of ['up:a', 'down:c', 'sideways:a', 'up:missing']) expect(moveStamp(ids, move)).toEqual(ids);
   });
 });
 

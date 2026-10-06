@@ -14,7 +14,7 @@
           "wearing": {
             "type": "array",
             "description": "Stamp ids the member wears on this forum, in order: an admin stamp's at-uri, or the fixed id of a generated stamp (atmobb:board:<board at-uri>, atmobb:arrival, atmobb:first-light, atmobb:early-days).",
-            "maxLength": 3,
+            "maxLength": 6,
             "items": { "type": "string", "maxLength": 300 }
           },
           "createdAt": { "type": "string", "format": "datetime" }

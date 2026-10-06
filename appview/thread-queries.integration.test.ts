@@ -495,7 +495,7 @@ run('stamp resolution SQL integration', () => {
     const wornCount: Record<string, number> = {};
     for (const row of rows) {
       wornCount[row.did] ??= 0;
-      const worn = row.worn_rank != null && wornCount[row.did] < 3;
+      const worn = row.worn_rank != null && wornCount[row.did] < 6;
       if (worn) wornCount[row.did] += 1;
       trays[row.did].push({ id: row.id, source: row.source, name: row.name, worn, row });
     }
@@ -537,7 +537,7 @@ run('stamp resolution SQL integration', () => {
       ['here', 'here', { kind: 'firstPostHere' }],
     ];
     for (const [rkey, name, trigger] of stamps) {
-      await record(stamp(rkey), F, `${NS}.forum.stamp`, { name, look, trigger, createdAt: `2026-01-0${stamps.findIndex((s) => s[0] === rkey) + 1}T00:00:00Z` }, '2026-01-01T00:00:00Z');
+      await record(stamp(rkey), F, `${NS}.forum.stamp`, { name, look: rkey === 'regular' ? { ...look, symbol: '👨‍👩‍👧‍👦' } : look, trigger, createdAt: `2026-01-0${stamps.findIndex((s) => s[0] === rkey) + 1}T00:00:00Z` }, '2026-01-01T00:00:00Z');
     }
     // AE4: firsts in four boards, no wearing.
     await first('did:plc:four', null, '2026-01-01T00:00:00Z');
@@ -545,6 +545,11 @@ run('stamp resolution SQL integration', () => {
       await first('did:plc:four', board, at);
     }
     await declaration('did:plc:four', F, { createdAt: '2026-01-03T00:00:00Z' }, '2026-01-03T00:00:00Z');
+    await posted('did:plc:six', [BOARD, SECOND, THIRD, FOURTH], '2026-01-05T00:00:00Z');
+    await declaration('did:plc:six', F, {
+      wearing: [stamp('regular'), boardId(THIRD), 'atmobb:first-light', boardId(BOARD), stamp('here'), boardId(FOURTH)],
+    }, '2026-01-05T00:00:00Z');
+    await award('did:plc:manual', stamp('regular'));
     // AE5: a by-hand award left out of wearing.
     await posted('did:plc:r1', [BOARD], '2026-01-05T00:00:00Z');
     await award('did:plc:r1', stamp('helper'));
@@ -606,6 +611,28 @@ run('stamp resolution SQL integration', () => {
     expect(second.row.board).toBe(SECOND);
     expect(second.row.board_color).toBe('#123456');
     expect(tray.find((e) => e.id === boardId(BOARD))!.row.board_color).toBeNull();
+  });
+
+  it('wears six explicitly selected stamps in the member’s order', async () => {
+    const trays = await resolve(['did:plc:six']);
+    expect(worn(trays['did:plc:six'])).toEqual([
+      stamp('regular'), boardId(THIRD), 'atmobb:first-light', boardId(BOARD), stamp('here'), boardId(FOURTH),
+    ]);
+  });
+
+  it('carries known trigger reasons without attributing a configured trigger to a by-hand award', async () => {
+    const trays = await resolve(['did:plc:four', 'did:plc:old', 'did:plc:manual']);
+    const regular = trays['did:plc:four'].find((entry) => entry.id === stamp('regular'))!;
+    expect(JSON.parse(regular.row.trigger as string)).toEqual({ kind: 'firstPostInBoard', board: SECOND });
+    expect(regular.row.trigger_board_name).toBe('Second');
+    expect(JSON.parse(regular.row.look as string).symbol).toBe('👨‍👩‍👧‍👦');
+    const early = trays['did:plc:old'].find((entry) => entry.id === 'atmobb:early-days')!;
+    expect(JSON.parse(early.row.trigger as string)).toEqual({ kind: 'profileBefore', before: queries.cutoffs[0] });
+    expect(JSON.parse(early.row.look as string).symbol).toBe('E');
+    const manual = trays['did:plc:manual'].find((entry) => entry.id === stamp('regular'))!;
+    expect(manual.source).toBe('byHand');
+    expect(manual.row.trigger).toBeNull();
+    expect(manual.row.trigger_board_name).toBeNull();
   });
 
   it('AE5: an awarded by-hand stamp left out of wearing is in the tray and not worn; a revoked one is not held', async () => {
@@ -684,6 +711,7 @@ run('stamp resolution SQL integration', () => {
     expect(open.map((row) => [row.did, row.since])).toEqual([
       ['did:plc:r1', '2026-01-01T00:00:00Z'], ['did:plc:ghost', '2026-01-02T00:00:00Z'], ['did:plc:nodate', '2026-01-02T12:00:00Z'],
       ['did:plc:four', '2026-01-03T00:00:00Z'], ['did:plc:applied', '2026-01-04T00:00:00Z'],
+      ['did:plc:six', '2026-01-05T00:00:00Z'],
       ['did:plc:bare', '2026-01-07T00:00:00Z'],
     ]);
     expect(Object.keys(open[0])).not.toContain('posts');

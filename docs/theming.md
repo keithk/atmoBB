@@ -123,7 +123,7 @@ surface differs. All built-in rules remain in the `atmobb` layer.
 
 ### Stamps
 
-Members wear up to three stamps on the post rail, the hovercard, the member list, and their profile. Each stamp is an `.atm-stamp` inside an `.atm-stamps` list, with modifiers for its shape (`--stamp`, `--pill`, `--ticket`, `--pixel`), its size (`--full`, `--compact`), and where it came from (`--admin`, `--default`, `--network`, `--byHand`).
+Members wear up to six stamps on the post rail, the hovercard, the member list, and their profile. Members who have not chosen still wear at most three defaults. Each stamp is an `.atm-stamp` inside an `.atm-stamps` list, with modifiers for its shape (`--stamp`, `--pill`, `--ticket`, `--pixel`), its size (`--full`, `--compact`), and where it came from (`--admin`, `--default`, `--network`, `--byHand`).
 
 A stamp with fixed colors (an admin's own stamp, a board's first-post stamp in the board's color, the network set) carries `.atm-stamp--custom` and sets `--atm-stamp-bg` and `--atm-stamp-ink` inline. Every other stamp, the arrival stamp included, draws from `--forum-rank` and `--forum-rank-bg`, the same tokens the `.atm-rank` badge and member titles use, so a theme that restyles those tokens restyles the default stamps with them.
 

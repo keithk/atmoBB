@@ -42,6 +42,8 @@ export {
 /** How the stamp is drawn: two colors and one of a bounded set of shapes. No free CSS or images. */
 export interface Look {
   $type?: 'app.atmobb.forum.stamp#look'
+  /** Optional visible grapheme drawn on the stamp. Writers must reject invisible or whitespace-only symbols. */
+  symbol?: string
   /** Background as a full six-digit hex color (for example #1a73e8). Writers must validate the #RRGGBB format. */
   bg: string
   /** Text and outline as a full six-digit hex color (for example #ffffff). Writers must validate the #RRGGBB format. */

@@ -50,7 +50,7 @@
         "stamps": {
           "type": "array",
           "description": "The stamps the member wears on this forum, in order.",
-          "maxLength": 3,
+          "maxLength": 6,
           "items": { "type": "ref", "ref": "app.atmobb.forum.getStamps#trayEntry" }
         }
       }

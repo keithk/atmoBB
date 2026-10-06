@@ -196,6 +196,7 @@ export interface StampLook {
   bg: string;
   ink: string;
   shape: string;
+  symbol?: string;
 }
 
 /** What earns an admin-defined stamp; the field matching `kind` is set. */
@@ -218,6 +219,9 @@ export interface TrayEntry {
   source: string;
   /** Present for admin and network stamps; board and arrival defaults are drawn by the app. */
   look?: StampLook;
+  /** The trigger actually satisfied; absent for by-hand awards. */
+  trigger?: StampTrigger;
+  triggerBoardName?: string;
   uri?: string;
   cid?: string;
   /** For a board default: the board and its color, when it has one. */
@@ -239,7 +243,7 @@ export interface Members {
     sponsor?: string;
     /** invite, application, or founding. */
     via?: string;
-    /** The stamps the member wears on this forum, in order, at most three. */
+    /** The stamps the member wears on this forum, in order, at most six. */
     stamps: TrayEntry[];
   }[];
   cursor?: string;
@@ -291,7 +295,7 @@ export interface ThreadPage {
     cid?: string;
     author: string;
     authorProfile?: ActorProfile;
-    /** The stamps the author wears on the viewing forum, in order, at most three. */
+    /** The stamps the author wears on the viewing forum, in order, at most six. */
     authorStamps: TrayEntry[];
     value: {
       title: string;
@@ -315,7 +319,7 @@ export interface ThreadPage {
     cid?: string;
     author: string;
     authorProfile?: ActorProfile;
-    /** The stamps the author wears on the viewing forum, in order, at most three. */
+    /** The stamps the author wears on the viewing forum, in order, at most six. */
     authorStamps: TrayEntry[];
     value: {
       body?: RichTextBlock[];
@@ -629,7 +633,7 @@ export interface Membership {
   sponsored: { did: string; since: string; via?: string }[];
   /** Every stamp the actor holds on this forum. */
   tray: TrayEntry[];
-  /** Ids from the tray the actor wears, in order, at most three. */
+  /** Ids from the tray the actor wears, in order, at most six. */
   worn: string[];
 }
 
@@ -640,7 +644,7 @@ export interface Stamps {
   /** The forum's stamp records, minus any firstPostInBoard stamp whose board is gone. */
   stamps: { uri: string; cid: string; name: string; look: StampLook; trigger: StampTrigger; createdAt: string }[];
   /** The network set every forum offers: first light and early days. */
-  network: { id: string; name: string; look: StampLook }[];
+  network: { id: string; name: string; look: StampLook; trigger?: StampTrigger }[];
   /** Present when `actor` was given. */
   tray?: TrayEntry[];
   worn?: string[];

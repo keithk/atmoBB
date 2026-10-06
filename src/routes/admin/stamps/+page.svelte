@@ -55,6 +55,7 @@
 
   interface Draft {
     name: string;
+    symbol: string;
     bg: string;
     ink: string;
     shape: string;
@@ -74,6 +75,7 @@
     const sent = form?.uri === uri ? form.fields : undefined;
     const fields = sent ?? {
       name: stamp?.name ?? '',
+      symbol: stamp?.look?.symbol ?? '',
       bg: stamp?.look?.bg ?? NEW_LOOK.bg,
       ink: stamp?.look?.ink ?? NEW_LOOK.ink,
       shape: stamp?.look?.shape ?? NEW_LOOK.shape,
@@ -140,6 +142,14 @@
       aria-describedby="{id}-name-help"
     />
     <span class="atm-hint" id="{id}-name-help">Up to {STAMP_NAME_MAX_GRAPHEMES} characters. Shows on the stamp, so keep it short.</span>
+  </div>
+
+  <div class="atm-field">
+    <label class="atm-label" for="{id}-symbol">Compact symbol</label>
+    <input class="atm-input" id="{id}-symbol" name="symbol" value={draft.symbol}
+      oninput={(e) => edit(uri, stamp, { symbol: e.currentTarget.value })}
+      aria-describedby="{id}-symbol-help" placeholder="e.g. A or 🌱" />
+    <span class="atm-hint" id="{id}-symbol-help">One letter or emoji, shared by everyone wearing this stamp. Leave blank to use its initial. Shown in posts and other small views.</span>
   </div>
 
   <fieldset class="trigger">

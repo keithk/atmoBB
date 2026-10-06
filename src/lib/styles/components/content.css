@@ -89,7 +89,7 @@
   margin: 0;
   padding: 0;
 }
-.atm-stamps--compact { gap: 4px; }
+.atm-stamps--compact { gap: 2px; }
 .atm-stamps li { display: inline-flex; max-width: 100%; }
 .atm-stamp {
   display: inline-block;
@@ -112,7 +112,7 @@
 .atm-stamp--stamp {
   border-width: var(--border-solid);
   border-radius: var(--radius-xs);
-  transform: rotate(-2deg);
+  border-style: double;
 }
 .atm-stamp--pill {
   font: var(--w-semibold) var(--text-2xs)/1 var(--font-body);
@@ -133,11 +133,18 @@
 }
 .atm-stamp--pixel { font-family: var(--font-pixel); border-radius: var(--radius-sm); }
 .atm-stamp--compact {
-  font-size: 10px;
-  padding: 2px 5px;
-  max-width: 18ch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  flex: none;
+  font: var(--w-bold) var(--text-sm)/1 var(--font-mono);
+  letter-spacing: 0;
+  text-transform: none;
 }
-.atm-stamp--compact.atm-stamp--ticket { padding-inline: 8px; }
+.atm-stamp--compact.atm-stamp--ticket { padding: 0; }
 
 /* ---- SystemTag (rpg.actor game-system labels) ---- */
 .atm-systag {

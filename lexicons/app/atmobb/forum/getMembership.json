@@ -32,7 +32,7 @@
             "worn": {
               "type": "array",
               "description": "Ids from the tray the actor wears, in order.",
-              "maxLength": 3,
+              "maxLength": 6,
               "items": { "type": "string", "maxLength": 300 }
             }
           }
