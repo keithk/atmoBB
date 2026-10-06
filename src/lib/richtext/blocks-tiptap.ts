@@ -29,6 +29,8 @@ function markFor(feature: FacetFeature): Mark | null {
       return { type: 'strike' };
     case 'spoiler':
       return { type: 'spoiler' };
+    case 'code':
+      return { type: 'code' };
     case 'link':
       return feature.uri ? { type: 'link', attrs: { href: feature.uri } } : null;
     default:
