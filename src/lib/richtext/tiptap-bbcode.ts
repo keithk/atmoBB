@@ -49,7 +49,10 @@ function serializeInline(nodes: JSONContent[] = []): string {
     for (let i = common; i < target.length; i++) out += target[i].open;
     open = target;
 
-    out += node.text ?? '';
+    // Encode code spans so literal BBCode inside them cannot become structure.
+    out += node.marks?.some((mark) => mark.type === 'code')
+      ? `[icode=${encodeURIComponent(node.text ?? '')}]`
+      : node.text ?? '';
   }
   for (let i = open.length - 1; i >= 0; i--) out += open[i].close;
   return out;

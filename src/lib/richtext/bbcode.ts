@@ -50,8 +50,8 @@ export const quoteSubjectArg = (subject: { uri: string; cid: string }) => `${sub
 const encoder = new TextEncoder();
 const byteLength = (s: string) => encoder.encode(s).length;
 
-const INLINE_TAGS = new Set(['b', 'i', 'u', 's', 'spoiler', 'url']);
-const INLINE_TAG_RE = /\[(\/?)(b|i|u|s|spoiler|url)(?:=([^\]]*))?\]/gi;
+const INLINE_TAGS = new Set(['b', 'i', 'u', 's', 'spoiler', 'url', 'icode']);
+const INLINE_TAG_RE = /\[(\/?)(b|i|u|s|spoiler|url|icode)(?:=([^\]]*))?\]/gi;
 // Block-level constructs, scanned in document order: paired [quote]/[code], or a
 // self-closing [img=<cid>] whose blob rides the composer's images side-channel.
 const BLOCK_RE = /\[(quote|code|h1|h2|h3|list)(?:=([^\]]*))?\]([\s\S]*?)\[\/\1\]|\[img=([^\]\s]+)\]/gi;
@@ -68,6 +68,8 @@ function featureFor(tag: string, arg?: string): FacetFeature {
       return { $type: `${NS}.facet#strikethrough` };
     case 'spoiler':
       return { $type: `${NS}.facet#spoiler` };
+    case 'icode':
+      return { $type: `${NS}.facet#code` };
     default:
       return { $type: `${NS}.facet#link`, uri: arg ?? '' };
   }
@@ -91,6 +93,18 @@ export function parseInline(src: string): { text: string; facets?: Facet[] } {
     last = m.index + m[0].length;
     const closing = m[1] === '/';
     const tag = m[2].toLowerCase();
+    if (tag === 'icode') {
+      try {
+        if (closing || m[3] === undefined) throw new Error('Invalid code span');
+        const start = byteLength(clean);
+        clean += decodeURIComponent(m[3]);
+        const end = byteLength(clean);
+        if (end > start) facets.push({ index: { byteStart: start, byteEnd: end }, features: [featureFor(tag)] });
+      } catch {
+        clean += m[0];
+      }
+      continue;
+    }
     if (!INLINE_TAGS.has(tag)) continue;
     if (!closing) {
       stack.push({ tag, start: byteLength(clean), uri: m[3] });

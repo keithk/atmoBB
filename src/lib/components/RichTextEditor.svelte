@@ -9,6 +9,7 @@
   import { Quote } from '$lib/richtext/quote-node';
   import { MentionDecorations } from '$lib/richtext/mention-decorations';
   import { docToBBCode, collectImages } from '$lib/richtext/tiptap-bbcode';
+  import { markdownToDoc } from '$lib/richtext/markdown';
   import ImageIcon from '$lib/components/ImageIcon.svelte';
 
   let {
@@ -71,7 +72,15 @@
       ],
       content: initial ?? value,
       editorProps: {
-        handlePaste: (_view, event) => insertFiles(imageFiles(event.clipboardData?.files)),
+        handlePaste: (_view, event) => {
+          if (insertFiles(imageFiles(event.clipboardData?.files))) return true;
+          const clipboard = event.clipboardData;
+          // Preserve rich HTML, internal copies, and literal pastes into code.
+          if (!editor || editor.isActive('codeBlock') || editor.isActive('code') || clipboard?.getData('text/html')) return false;
+          const text = clipboard?.getData('text/plain');
+          if (!text) return false;
+          return editor.commands.insertContent(markdownToDoc(text).content ?? []);
+        },
         handleDrop: (view, event) => {
           const files = imageFiles((event as DragEvent).dataTransfer?.files);
           if (!files.length) return false;
