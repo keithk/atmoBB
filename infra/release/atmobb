@@ -4,6 +4,7 @@
 # secrets and the Happyview operator key.
 set -eu
 # ATMOBB_INSTANCE_CONFIG_VERSION=1
+# ATMOBB_MAINTENANCE_VERSION=1
 
 BUNDLE_DIR=${ATMOBB_BUNDLE_DIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}
 cd "$BUNDLE_DIR"
@@ -28,6 +29,9 @@ Usage: ./atmobb <command> [options]
   backup [DIR]       pg_dump, OAuth state, and .env into DIR
                      (default ./backups/<timestamp>).
   status             Container state and the running atmobb version.
+  maintenance on|off|status|recover
+                     Gate public traffic and stop writes; reopen only after
+                     the durable target passes setup and health checks.
   logs [ARGS]        docker compose logs ARGS
   help
 
@@ -41,8 +45,8 @@ die() {
 }
 
 need() {
-  for command in "$@"; do
-    command -v "$command" >/dev/null 2>&1 || die "$command is required"
+  for required_command in "$@"; do
+    command -v "$required_command" >/dev/null 2>&1 || die "$required_command is required"
   done
 }
 
@@ -51,25 +55,26 @@ need() {
 if [ "$(id -u)" -eq 0 ]; then
   as_root() { "$@"; }
 else
-  need sudo
-  as_root() { sudo "$@"; }
+  as_root() { need sudo; sudo "$@"; }
 fi
 
-need docker
-if docker info >/dev/null 2>&1; then
-  DOCKER=docker
-else
-  need sudo
-  sudo docker info >/dev/null 2>&1 || die "Docker is not running, or is unavailable to this user and through sudo"
-  DOCKER="sudo docker"
-fi
-COMPOSE_VERSION=$($DOCKER compose version --short 2>/dev/null) || die "Docker Compose v2.20 or newer is required"
-COMPOSE_VERSION=${COMPOSE_VERSION#v}
-major=${COMPOSE_VERSION%%.*}
-rest=${COMPOSE_VERSION#*.}
-minor=${rest%%.*}
-[ "$major" -gt 2 ] || { [ "$major" -eq 2 ] && [ "$minor" -ge 20 ]; } ||
-  die "Docker Compose v2.20 or newer is required (found $COMPOSE_VERSION)"
+init_docker() {
+  need docker
+  if docker info >/dev/null 2>&1; then
+    DOCKER=docker
+  else
+    need sudo
+    sudo docker info >/dev/null 2>&1 || die "Docker is not running, or is unavailable to this user and through sudo"
+    DOCKER="sudo docker"
+  fi
+  COMPOSE_VERSION=$($DOCKER compose version --short 2>/dev/null) || die "Docker Compose v2.20 or newer is required"
+  COMPOSE_VERSION=${COMPOSE_VERSION#v}
+  major=${COMPOSE_VERSION%%.*}
+  rest=${COMPOSE_VERSION#*.}
+  minor=${rest%%.*}
+  [ "$major" -gt 2 ] || { [ "$major" -eq 2 ] && [ "$minor" -ge 20 ]; } ||
+    die "Docker Compose v2.20 or newer is required (found $COMPOSE_VERSION)"
+}
 
 compose() {
   $DOCKER compose --project-name "$PROJECT" "$@"
@@ -100,6 +105,250 @@ else
   UPDATER_ENV_FILE=/etc/atmobb/updater-$INSTANCE_ID.env; UPDATER_UNIT=atmobb-updater-$INSTANCE_ID.service
 fi
 PROJECT=${ATMOBB_COMPOSE_PROJECT:-$PROJECT}
+state_dir=${ATMOBB_UPDATER_STATE_DIR:-$UPDATER_STATE_DIR}
+maintenance_default=/var/lib/atmobb-maintenance
+[ "$INSTANCE_ID" = atmobb ] || maintenance_default=$maintenance_default-$INSTANCE_ID
+MAINTENANCE_DIR=${ATMOBB_MAINTENANCE_DIR:-$(env_value ATMOBB_MAINTENANCE_DIR)}
+MAINTENANCE_DIR=${MAINTENANCE_DIR:-$maintenance_default}
+MARKER=$MAINTENANCE_DIR/active
+RECOVERY=$state_dir/maintenance-target
+
+# File locks survive worker execution but release automatically on failure or
+# reboot. Daemon _update already owns the host lock: never acquire it twice.
+with_locks() {
+  need python3
+  exec python3 -c '
+import fcntl, os, subprocess, sys
+state, host, script, command, *args = sys.argv[1:]
+os.makedirs(state, mode=0o700, exist_ok=True)
+os.chmod(state, 0o700)
+locks = []
+try:
+    paths = ([host] if command in ("upgrade", "upgrade-happyview") else [])
+    paths.append(os.path.join(state, "maintenance.lock"))
+    for path in paths:
+        fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+        locks.append(fd)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    sys.exit("atmobb: another update or maintenance operation is running")
+env = dict(os.environ, ATMOBB_MAINTENANCE_LOCKED="1")
+sys.exit(subprocess.call(["sh", script, command, *args], env=env, pass_fds=locks))
+' "$state_dir" "${ATMOBB_HOST_UPDATE_LOCK:-/var/lock/atmobb-hosting.lock}" "$0" "$@"
+}
+
+# fsync both files and containing directories before destructive work. A
+# power loss must not erase the target while leaving migrated databases.
+durable() {
+  python3 - "$@" <<'PY'
+import os, sys
+for path in sys.argv[1:]:
+    paths = []
+    if os.path.isdir(path):
+        for root, dirs, files in os.walk(path):
+            paths.extend(os.path.join(root, f) for f in files)
+            paths.append(root)
+    else:
+        paths.append(path)
+    for item in paths:
+        fd = os.open(item, os.O_RDONLY)
+        try: os.fsync(fd)
+        finally: os.close(fd)
+    fd = os.open(os.path.dirname(path), os.O_RDONLY)
+    try: os.fsync(fd)
+    finally: os.close(fd)
+PY
+}
+
+target_compose() {
+  if [ -f "$RECOVERY/compose.hosting.yml" ]; then
+    $DOCKER compose --project-name "$PROJECT" --project-directory "$BUNDLE_DIR" --env-file "$ENV_FILE" \
+      -f "$RECOVERY/compose.yml" -f "$RECOVERY/compose.hosting.yml" -f "$RECOVERY/images.json" "$@"
+  else
+    $DOCKER compose --project-name "$PROJECT" --project-directory "$BUNDLE_DIR" --env-file "$ENV_FILE" \
+      -f "$RECOVERY/compose.yml" -f "$RECOVERY/images.json" "$@"
+  fi
+}
+
+require_maintenance_bundle() {
+  grep -q '^# ATMOBB_MAINTENANCE_VERSION=1$' "$1/compose.yml" &&
+    grep -q '^# ATMOBB_MAINTENANCE_VERSION=1$' "$1/atmobb" ||
+    die "candidate bundle lacks maintenance support; install a maintenance-capable release first"
+}
+
+# Persist a complete candidate before enabling the gate. Never replace an
+# interrupted target: it may already have run forward-only migrations.
+prepare_target() {
+  source_bundle=$1
+  target_kind=$2
+  [ ! -e "$MARKER" ] || die "maintenance is already active; use maintenance recover before another upgrade"
+  require_maintenance_bundle "$source_bundle"
+  prepared=$(mktemp -d "$state_dir/maintenance-prepared.XXXXXX")
+  chmod 700 "$prepared"
+  cp "$source_bundle/compose.yml" "$prepared/compose.yml"
+  case "$(env_value COMPOSE_FILE)" in
+    *:compose.hosting.yml) cp "$source_bundle/compose.hosting.yml" "$prepared/compose.hosting.yml" ;;
+    ''|compose.yml|compose.yml:compose.caddy.yml) ;;
+    *) die "unsupported COMPOSE_FILE for maintenance" ;;
+  esac
+  config=$($DOCKER compose --project-name "$PROJECT" --env-file "$ENV_FILE" -f "$prepared/compose.yml" config --format json)
+  for service in atmobb happyview setup postgres; do
+    if [ "$target_kind" = manual ]; then
+      current_service=$service
+      [ "$service" != setup ] || current_service=atmobb
+      container=$(compose ps -q "$current_service")
+      [ -n "$container" ] || die "$current_service must be running to save a manual maintenance target"
+      image_id=$($DOCKER inspect --format '{{.Image}}' "$container")
+    else
+      image_ref=$(printf '%s' "$config" | jq -er --arg s "$service" '.services[$s].image')
+      image_id=$($DOCKER image inspect --format '{{.Id}}' "$image_ref")
+    fi
+    [ -n "$image_id" ] || die "cannot resolve immutable image for $service"
+    printf '%s\n' "$image_id" > "$prepared/$service.image"
+  done
+  metadata=$($DOCKER run --rm --network none --entrypoint node "$(cat "$prepared/atmobb.image")" \
+    -p 'JSON.stringify({version:require("./package.json").version,happyview:process.env.HAPPYVIEW_EXPECTED_VERSION})')
+  printf '%s' "$metadata" | jq -e '.version | strings | select(length > 0)' >/dev/null
+  printf '%s' "$metadata" | jq -e '.happyview | strings | select(length > 0)' >/dev/null
+  target_commit=${commit:-}
+  if [ "$target_kind" = manual ] && [ -f "$RECOVERY/target.json" ] &&
+    cmp -s "$prepared/atmobb.image" "$RECOVERY/atmobb.image" &&
+    cmp -s "$prepared/happyview.image" "$RECOVERY/happyview.image"; then
+    target_commit=$(jq -r '.commit // ""' "$RECOVERY/target.json")
+  fi
+  printf '%s\n' "$metadata" | jq --arg commit "$target_commit" \
+    '. + {commit: (if $commit == "" then null else $commit end)}' > "$prepared/target.json"
+  jq -n --arg app "$(cat "$prepared/atmobb.image")" --arg hv "$(cat "$prepared/happyview.image")" \
+    --arg setup "$(cat "$prepared/setup.image")" --arg pg "$(cat "$prepared/postgres.image")" \
+    '{services:{atmobb:{image:$app},happyview:{image:$hv},setup:{image:$setup},postgres:{image:$pg}}}' > "$prepared/images.json"
+  if [ "$target_kind" = manual ]; then
+    : > "$prepared/backup-complete"
+  else
+    mkdir "$prepared/payload"
+    for file in compose.yml compose.hosting.yml atmobb updater.py updater-page.html env.example SELF-HOSTING.md LICENSE; do
+      [ ! -f "$source_bundle/$file" ] || cp "$source_bundle/$file" "$prepared/payload/$file"
+    done
+  fi
+  durable "$prepared"
+  # No active gate means the old target is no longer needed. A crash in this
+  # gap cannot expose partially activated work: activation has not started.
+  rm -rf "$RECOVERY"
+  mv "$prepared" "$RECOVERY"
+  durable "$RECOVERY"
+}
+
+verify_gate() {
+  for host in "$(env_value APP_HOST)" "$(env_value HAPPYVIEW_HOST)"; do
+    valid_hostname "$host" || die "maintenance requires configured public hostnames"
+    headers=$(mktemp "$state_dir/gate.XXXXXX")
+    code=$(curl --silent --show-error --connect-timeout 5 --max-time 15 \
+      --dump-header "$headers" --output /dev/null --write-out '%{http_code}' "https://$host/") ||
+      die "cannot verify maintenance gate for $host; leaving maintenance active"
+    if [ "$code" != 503 ] || ! tr -d '\r' < "$headers" | grep -Eiq '^X-Atmobb-Maintenance: 1[[:space:]]*$'; then
+      rm -f "$headers"
+      die "$host is not maintenance-gated; explicitly install/configure the proxy before updating"
+    fi
+    rm -f "$headers"
+  done
+}
+
+gate_and_stop() {
+  install -d -m 755 "$MAINTENANCE_DIR"
+  [ -e "$MARKER" ] || install -m 644 /dev/null "$MARKER"
+  durable "$MAINTENANCE_DIR"
+  verify_gate
+  # Stop the app and Happyview ingestion before pg_dump; leave Postgres and
+  # Caddy running. Compose waits for graceful shutdown before returning.
+  compose stop --timeout 60 atmobb happyview
+}
+
+resume_target() {
+  [ -f "$RECOVERY/target.json" ] && [ -f "$RECOVERY/images.json" ] ||
+    die "no durable maintenance target; refusing to reopen a potentially partial upgrade"
+  gate_and_stop
+  if [ ! -f "$RECOVERY/backup-complete" ]; then
+    backup=$(cmd_backup)
+    durable "$backup"
+    printf '%s\n' "$backup" > "$RECOVERY/backup-complete.tmp"
+    mv "$RECOVERY/backup-complete.tmp" "$RECOVERY/backup-complete"
+    durable "$RECOVERY"
+  fi
+  # Publish the durable backup before any migration can fail, including retries.
+  backup=$(cat "$RECOVERY/backup-complete")
+  [ -z "$backup" ] || echo "ATMOBB_BACKUP=$backup"
+  if [ -d "$RECOVERY/payload" ]; then
+    for file in "$RECOVERY"/payload/*; do
+      [ -f "$file" ] || continue
+      name=${file##*/}
+      case "$name" in atmobb|updater.py) mode=755 ;; *) mode=644 ;; esac
+      install -m "$mode" "$file" "$BUNDLE_DIR/$name.maintenance-tmp"
+      mv "$BUNDLE_DIR/$name.maintenance-tmp" "$BUNDLE_DIR/$name"
+    done
+    if [ -f "$BUNDLE_DIR/updater.py" ]; then
+      updater_lib=${ATMOBB_UPDATER_LIB_DIR:-$UPDATER_LIB_DIR}
+      install -d -m 755 "$updater_lib"
+      for name in updater.py atmobb updater-page.html; do
+        case "$name" in updater-page.html) mode=644 ;; *) mode=755 ;; esac
+        install -m "$mode" "$BUNDLE_DIR/$name" "$updater_lib/$name.maintenance-tmp"
+        mv "$updater_lib/$name.maintenance-tmp" "$updater_lib/$name"
+      done
+    fi
+    durable "$BUNDLE_DIR/compose.yml"
+  fi
+  target_compose up -d postgres happyview
+  wait_for_happyview target_compose
+  target_compose up --no-deps --force-recreate --exit-code-from setup setup
+  setup_id=$(target_compose ps -a -q setup)
+  [ -n "$setup_id" ] && [ "$($DOCKER inspect --format '{{.State.ExitCode}}' "$setup_id")" = 0 ] &&
+    [ "$($DOCKER inspect --format '{{.Image}}' "$setup_id")" = "$(cat "$RECOVERY/setup.image")" ] ||
+    die "target setup did not finish successfully"
+  target_compose up -d --no-deps atmobb
+  attempt=0
+  until response=$(curl --silent --fail --connect-timeout 2 --max-time 5 "http://127.0.0.1:$APP_PORT/api/version"); do
+    attempt=$((attempt + 1))
+    [ "$attempt" -lt 90 ] || die "atmobb did not become healthy; maintenance remains active"
+    sleep 2
+  done
+  expected_version=$(jq -er .version "$RECOVERY/target.json")
+  expected_hv=$(jq -er .happyview "$RECOVERY/target.json")
+  [ "$(printf '%s' "$response" | jq -er .version)" = "$expected_version" ] ||
+    die "atmobb version differs from durable target; maintenance remains active"
+  [ "$(printf '%s' "$response" | jq -er .happyview)" = "$expected_hv" ] ||
+    die "atmobb expects a different Happyview version"
+  hv_response=$(curl --silent --fail --connect-timeout 2 --max-time 5 \
+    -H "Host: $(env_value HAPPYVIEW_HOST)" "http://127.0.0.1:$HAPPYVIEW_PORT/config")
+  [ "$(printf '%s' "$hv_response" | jq -er .version)" = "$expected_hv" ] ||
+    die "Happyview version differs from durable target"
+  for service in atmobb happyview postgres; do
+    container=$(target_compose ps --status running -q "$service")
+    [ -n "$container" ] && [ "$($DOCKER inspect --format '{{.Image}}' "$container")" = "$(cat "$RECOVERY/$service.image")" ] ||
+      die "$service does not run the durable target image"
+  done
+  verify_gate
+  jq --arg backup "$(cat "$RECOVERY/backup-complete")" \
+    '{installedVersion:.version, installedCommit:.commit, backup:$backup}' "$RECOVERY/target.json" > "$state_dir/result.json.tmp"
+  mv "$state_dir/result.json.tmp" "$state_dir/result.json"
+  durable "$state_dir/result.json"
+  rm -f "$MARKER"
+  durable "$MAINTENANCE_DIR"
+  echo "== target healthy; maintenance off"
+}
+
+cmd_maintenance() {
+  case "${1:-status}" in
+    status)
+      if [ -e "$MARKER" ]; then echo '{"active":true}'; else echo '{"active":false}'; fi ;;
+    on)
+      need curl jq python3
+      if [ ! -e "$MARKER" ]; then prepare_target "$BUNDLE_DIR" manual; fi
+      gate_and_stop ;;
+    off|recover)
+      need curl jq python3
+      [ -e "$MARKER" ] || { echo "maintenance is already off"; return; }
+      resume_target ;;
+    *) die "usage: maintenance on|off|status|recover" ;;
+  esac
+}
 
 # Replace KEY=... in .env, or append it. Keeps the file at mode 600.
 set_env() {
@@ -117,26 +366,26 @@ set_env() {
   rm -f "$tmp"
 }
 
-# Image tag the bundle pins for a service, and the tag its container runs.
+# Image reference the bundle pins, and the immutable image its container runs.
 pinned_image() {
   compose config --format json | jq -er --arg s "$1" '.services[$s].image'
 }
 running_image() {
   id=$(compose ps -q "$1" 2>/dev/null | head -n 1)
   [ -n "$id" ] || return 0
-  $DOCKER inspect --format '{{.Config.Image}}' "$id"
+  $DOCKER inspect --format '{{.Image}}' "$id"
 }
 
 wait_for_happyview() {
   echo "== waiting for Happyview"
-  compose run --rm --no-deps setup sh -c '
+  "${1:-compose}" run --rm --no-deps setup sh -c '
     attempt=0
-    until curl --fail --silent --output /dev/null http://happyview:3000/health; do
+    until curl --fail --silent --connect-timeout 2 --max-time 5 --output /dev/null http://happyview:3000/health; do
       attempt=$((attempt + 1))
       [ "$attempt" -lt 90 ] || { echo "Happyview did not become healthy in 3 minutes" >&2; exit 1; }
       sleep 2
     done
-    curl --silent -H "Host: $HAPPYVIEW_HOST" http://happyview:3000/config | jq -r "\"Happyview \" + .version"
+    curl --silent --connect-timeout 2 --max-time 5 -H "Host: $HAPPYVIEW_HOST" http://happyview:3000/config | jq -r "\"Happyview \" + .version"
   '
 }
 
@@ -271,6 +520,8 @@ EOF
   set_env ATMOBB_APP_PORT "$APP_PORT"
   set_env ATMOBB_HAPPYVIEW_PORT "$HAPPYVIEW_PORT"
   set_env ATMOBB_UPDATER_SOCKET_DIR "$UPDATER_SOCKET_DIR"
+  set_env ATMOBB_UPDATER_PUBLIC_SOCKET_DIR "$UPDATER_SOCKET_DIR-public"
+  set_env ATMOBB_MAINTENANCE_DIR "$MAINTENANCE_DIR"
   set_env ATMOBB_FORUM_DID "$FORUM_DID"
   set_env ATMOBB_DATA_DIR "$DATA_DIR"
   [ -n "$(env_value POSTGRES_PASSWORD)" ] || set_env POSTGRES_PASSWORD "$(openssl rand -hex 24)"
@@ -287,9 +538,11 @@ EOF
   as_root chown 10001:10001 "$DATA_DIR"
 
   echo "== installing the restricted host updater"
+  as_root install -d -m 755 "$MAINTENANCE_DIR"
   as_root install -d -m 755 "$UPDATER_LIB_DIR" /etc/atmobb
   as_root install -m 755 "$BUNDLE_DIR/updater.py" "$UPDATER_LIB_DIR/updater.py"
   as_root install -m 755 "$BUNDLE_DIR/atmobb" "$UPDATER_LIB_DIR/atmobb"
+  as_root install -m 644 "$BUNDLE_DIR/updater-page.html" "$UPDATER_LIB_DIR/updater-page.html"
   updater_env=$(mktemp)
   updater_unit=$(mktemp)
   python_bin=$(command -v python3)
@@ -297,9 +550,12 @@ EOF
   umask 077
   cat > "$updater_env" <<EOF
 ATMOBB_BUNDLE_DIR=$BUNDLE_DIR
+APP_HOST=$APP_HOST
 ATMOBB_UPDATER_TOKEN=$(env_value ATMOBB_UPDATER_TOKEN)
 ATMOBB_UPDATER_SOCKET_GID=10001
 ATMOBB_UPDATER_SOCKET=$UPDATER_SOCKET_DIR/updater.sock
+ATMOBB_UPDATER_PUBLIC_SOCKET=$UPDATER_SOCKET_DIR-public/updater.sock
+ATMOBB_MAINTENANCE_DIR=$MAINTENANCE_DIR
 ATMOBB_UPDATER_STATE_DIR=$UPDATER_STATE_DIR
 ATMOBB_UPDATER_WORKER=$UPDATER_LIB_DIR/atmobb
 ATMOBB_UPDATER_LIB_DIR=$UPDATER_LIB_DIR
@@ -376,13 +632,16 @@ EOF
 }
 
 cmd_upgrade() {
-  need jq
+  need jq curl python3
   [ -f "$ENV_FILE" ] || die "no .env here; run ./atmobb install first"
+  [ ! -e "$MARKER" ] || die "maintenance is active; run maintenance recover"
+  require_maintenance_bundle "$BUNDLE_DIR"
   echo "== pulling images"
   compose pull
   pinned=$(pinned_image happyview)
+  pinned_id=$($DOCKER image inspect --format '{{.Id}}' "$pinned")
   running=$(running_image happyview)
-  if [ -n "$running" ] && [ "$running" != "$pinned" ]; then
+  if [ -n "$running" ] && [ "$running" != "$pinned_id" ]; then
     cat >&2 <<EOF
 atmobb: this bundle pins $pinned but $running is running.
 
@@ -391,22 +650,19 @@ run './atmobb upgrade-happyview' to move the stack together.
 EOF
     exit 1
   fi
-  echo "== restarting with $(pinned_image atmobb)"
-  compose up -d --remove-orphans
-  cmd_status
+  prepare_target "$BUNDLE_DIR" upgrade
+  resume_target
 }
 
 cmd_upgrade_happyview() {
-  need jq
+  need jq curl python3
   ASSUME_YES=0
   [ "${1:-}" != "--yes" ] || ASSUME_YES=1
   [ -f "$ENV_FILE" ] || die "no .env here; run ./atmobb install first"
   pinned=$(pinned_image happyview)
   running=$(running_image happyview)
-  if [ "$running" = "$pinned" ]; then
-    echo "Happyview already runs $pinned; nothing to do."
-    exit 0
-  fi
+  [ ! -e "$MARKER" ] || die "maintenance is active; run maintenance recover"
+  require_maintenance_bundle "$BUNDLE_DIR"
   cat <<EOF
 
 Happyview:  ${running:-not running}  ->  $pinned
@@ -415,16 +671,10 @@ Startup runs forward-only migrations. Once they finish you cannot go back down
 a version. A backup is taken first.
 EOF
   confirm "Upgrade Happyview?"
-  backup_dir=$(cmd_backup)
-  echo "== backup written to $backup_dir"
-  echo "== pulling $pinned"
-  compose pull happyview
-  echo "== recreating Happyview (migrations run now; watch: docker compose logs -f happyview)"
-  compose up -d --no-deps happyview
-  wait_for_happyview
-  echo "== reapplying atmobb setup and restarting the app"
-  compose up -d
-  cmd_status
+  echo "== preparing images before maintenance"
+  compose pull
+  prepare_target "$BUNDLE_DIR" upgrade
+  resume_target
   cat <<EOF
 
 Done. If the release notes ask for it, run './atmobb backfill' now to rebuild
@@ -439,16 +689,23 @@ cmd_backfill() {
 
 cmd_backup() {
   [ -f "$ENV_FILE" ] || die "no .env here; run ./atmobb install first"
-  dir=${1:-$BUNDLE_DIR/backups/$(date -u +%Y%m%dT%H%M%SZ)}
+  if [ "$#" -gt 0 ]; then
+    dir=$1
+    [ ! -e "$dir" ] || die "backup destination already exists: $dir"
+    mkdir -m 700 -p "$dir"
+  else
+    mkdir -p "$BUNDLE_DIR/backups"
+    dir=$(mktemp -d "$BUNDLE_DIR/backups/$(date -u +%Y%m%dT%H%M%SZ).XXXXXX")
+  fi
   data_dir=$(env_value ATMOBB_DATA_DIR)
   data_dir=${data_dir:-$DEFAULT_DATA_DIR}
   umask 077
   mkdir -p "$dir"
   echo "== backing up to $dir" >&2
-  compose exec -T postgres pg_dump -Fc -U happyview -d happyview > "$dir/postgres.dump"
-  as_root tar -C "$(dirname "$data_dir")" -czf - "$(basename "$data_dir")" > "$dir/oauth.tar.gz"
-  cp "$ENV_FILE" "$dir/env"
-  cp "$BUNDLE_DIR/compose.yml" "$dir/compose.yml"
+  compose exec -T postgres pg_dump -Fc -U happyview -d happyview > "$dir/postgres.dump" || return 1
+  as_root tar -C "$(dirname "$data_dir")" -czf - "$(basename "$data_dir")" > "$dir/oauth.tar.gz" || return 1
+  cp "$ENV_FILE" "$dir/env" || return 1
+  cp "$BUNDLE_DIR/compose.yml" "$dir/compose.yml" || return 1
   for file in compose.caddy.yml compose.hosting.yml Caddyfile; do
     [ ! -f "$BUNDLE_DIR/$file" ] || cp "$BUNDLE_DIR/$file" "$dir/$file"
   done
@@ -472,15 +729,13 @@ cmd_internal_update() {
   token=$(env_value ATMOBB_UPDATER_TOKEN)
   [ -n "$token" ] && [ "${ATMOBB_UPDATER_INTERNAL:-}" = "$token" ] || die "_update is reserved for atmobb-updater"
   [ "$target" = stable ] || [ "$target" = main ] || die "update target must be stable or main"
+  [ ! -e "$MARKER" ] || die "maintenance is active; recover the durable target before another update"
   need curl jq openssl tar
   state_dir=${ATMOBB_UPDATER_STATE_DIR:-$UPDATER_STATE_DIR}
-  updater_lib=${ATMOBB_UPDATER_LIB_DIR:-$UPDATER_LIB_DIR}
   release_api=${ATMOBB_UPDATE_RELEASE_API:-https://api.github.com/repos/keithk/atmoBB/releases/latest}
   main_api=${ATMOBB_UPDATE_MAIN_API:-https://api.github.com/repos/keithk/atmoBB/commits/main}
   archive_base=${ATMOBB_UPDATE_ARCHIVE_BASE:-https://github.com/keithk/atmoBB/archive}
-  health_url=${ATMOBB_UPDATE_HEALTH_URL:-http://127.0.0.1:$APP_PORT/api/version}
   work=$state_dir/work.$$
-  result=$state_dir/result.json
   compose_files=$(env_value COMPOSE_FILE)
   case "$compose_files" in
     ''|compose.yml|compose.yml:compose.caddy.yml|compose.yml:compose.hosting.yml) ;;
@@ -510,6 +765,7 @@ cmd_internal_update() {
     actual=$(openssl dgst -sha256 "$work/$asset" | awk '{print tolower($NF)}')
     [ "$actual" = "$expected" ] || die "release checksum verification failed"
     tar -xzf "$work/$asset" --strip-components=1 -C "$work/bundle"
+    require_maintenance_bundle "$work/bundle"
     grep -q '^# ATMOBB_INSTANCE_CONFIG_VERSION=1$' "$work/bundle/compose.yml" &&
       grep -q '^# ATMOBB_INSTANCE_CONFIG_VERSION=1$' "$work/bundle/atmobb" ||
       die "candidate release does not support isolated instance configuration"
@@ -532,6 +788,7 @@ cmd_internal_update() {
       "$archive_base/$commit.tar.gz" -o "$work/main.tar.gz"
     mkdir "$work/source"
     tar -xzf "$work/main.tar.gz" --strip-components=1 -C "$work/source"
+    require_maintenance_bundle "$work/source/infra/release"
     grep -q '^# ATMOBB_INSTANCE_CONFIG_VERSION=1$' "$work/source/infra/release/compose.yml" &&
       grep -q '^# ATMOBB_INSTANCE_CONFIG_VERSION=1$' "$work/source/infra/release/atmobb" ||
       die "candidate main bundle does not support isolated instance configuration"
@@ -541,7 +798,7 @@ cmd_internal_update() {
     image="atmobb-main:$commit"
     echo "== building $image before changing the running stack"
     $DOCKER build --build-arg "HAPPYVIEW_VERSION=$happyview" -t "$image" "$work/source"
-    for file in compose.yml compose.caddy.yml compose.hosting.yml Caddyfile atmobb updater.py env.example; do
+    for file in compose.yml compose.caddy.yml compose.hosting.yml Caddyfile atmobb updater.py updater-page.html env.example; do
       cp "$work/source/infra/release/$file" "$work/bundle/$file"
     done
     cp "$work/source/docs/self-hosting.md" "$work/bundle/SELF-HOSTING.md"
@@ -560,54 +817,30 @@ cmd_internal_update() {
   echo "ATMOBB_TARGET_VERSION=$version"
   echo "ATMOBB_TARGET_COMMIT=$commit"
 
-  echo "== backing up before any migration or container replacement"
-  backup=$(cmd_backup)
-  echo "ATMOBB_BACKUP=$backup"
-  echo "== backup complete: $backup"
-  echo "== activating prepared bundle"
-  owner=$(stat -c '%u:%g' "$ENV_FILE")
-  for file in compose.yml compose.caddy.yml compose.hosting.yml Caddyfile atmobb updater.py env.example SELF-HOSTING.md LICENSE; do
-    [ -f "$work/bundle/$file" ] || continue
-    case "$file" in atmobb|updater.py) mode=755 ;; *) mode=644 ;; esac
-    install -m "$mode" "$work/bundle/$file" "$BUNDLE_DIR/$file"
-    chown "$owner" "$BUNDLE_DIR/$file"
-  done
-  install -d -m 755 "$updater_lib"
-  install -m 755 "$BUNDLE_DIR/updater.py" "$updater_lib/updater.py"
-  install -m 755 "$BUNDLE_DIR/atmobb" "$updater_lib/atmobb"
-  echo "== starting pinned Happyview and applying migrations/setup"
-  compose up -d postgres happyview
-  wait_for_happyview
-  # Force this release's one-shot setup even when two locally built image tags
-  # happen to resolve to the same image ID. This applies Lua, lexicons, and
-  # derived-table setup before the app can move to the prepared image.
-  compose up --no-deps --force-recreate setup
-  echo "== starting atmobb"
-  compose up -d --remove-orphans
-  attempt=0
-  until response=$(curl --silent --fail "$health_url" 2>/dev/null); do
-    attempt=$((attempt + 1))
-    [ "$attempt" -lt 90 ] || die "atmobb did not become healthy in 3 minutes; run ./atmobb status and docker compose logs"
-    sleep 2
-  done
-  running_version=$(printf '%s' "$response" | jq -er .version)
-  [ "$running_version" = "$version" ] || die "health check reached atmobb $running_version, expected $version"
-  [ -n "$(compose ps --status running -q postgres)" ] && [ -n "$(compose ps --status running -q happyview)" ] && [ -n "$(compose ps --status running -q atmobb)" ] ||
-    die "one or more required containers are not running; run ./atmobb status"
-  [ "$(running_image atmobb)" = "$(pinned_image atmobb)" ] || die "atmobb is healthy but still runs the previous image"
-  [ "$(running_image happyview)" = "$(pinned_image happyview)" ] || die "Happyview is healthy but still runs the previous image"
-  setup_id=$(compose ps -a -q setup | head -n 1)
-  [ -n "$setup_id" ] && [ "$($DOCKER inspect --format '{{.State.ExitCode}}' "$setup_id")" = 0 ] ||
-    die "the Happyview setup container did not finish successfully; inspect docker compose logs setup"
-  tmp_result=$result.$$
-  jq -n --arg version "$version" --arg commit "$commit" --arg backup "$backup" \
-    '{installedVersion:$version, backup:$backup} + (if $commit == "" then {installedCommit:null} else {installedCommit:$commit} end)' > "$tmp_result"
-  mv "$tmp_result" "$result"
+  prepare_target "$work/bundle" upgrade
+  [ "$(jq -er .version "$RECOVERY/target.json")" = "$version" ] ||
+    die "prepared image version does not match requested release"
+  resume_target
   echo "== update complete and healthy"
 }
 
 command=${1:-help}
 [ "$#" -eq 0 ] || shift
+# Read-only status needs neither Docker nor access to the private updater
+# directory. It is safe to read concurrently with the atomic public marker.
+if [ "$command" = maintenance ] && [ "${1:-status}" = status ]; then
+  cmd_maintenance status
+  exit
+fi
+case "$command" in
+  upgrade|upgrade-happyview|_update|maintenance)
+    [ "$(id -u)" -eq 0 ] ||
+      die "this command needs root to lock private updater state; rerun: sudo $0 $command $*"
+    if [ "${ATMOBB_MAINTENANCE_LOCKED:-}" != 1 ]; then
+      with_locks "$command" "$@"
+    fi ;;
+esac
+init_docker
 case "$command" in
   install) cmd_install "$@" ;;
   upgrade) cmd_upgrade "$@" ;;
@@ -615,6 +848,7 @@ case "$command" in
   backfill) cmd_backfill "$@" ;;
   backup) cmd_backup "$@" >/dev/null ;;
   status) cmd_status ;;
+  maintenance) cmd_maintenance "$@" ;;
   logs) compose logs "$@" ;;
   _update) cmd_internal_update "$@" ;;
   help|-h|--help) usage ;;

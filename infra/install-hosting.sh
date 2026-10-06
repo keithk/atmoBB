@@ -9,6 +9,8 @@ for command in python3 docker caddy systemctl sudo curl jq openssl; do
 done
 grep -q '^# ATMOBB_INSTANCE_CONFIG_VERSION=1$' "$2/atmobb"
 grep -q '^# ATMOBB_INSTANCE_CONFIG_VERSION=1$' "$2/compose.yml"
+grep -q '^# ATMOBB_MAINTENANCE_VERSION=1$' "$2/atmobb"
+grep -q '^# ATMOBB_MAINTENANCE_VERSION=1$' "$2/compose.yml"
 grep -Fxq 'import /etc/caddy/atmobb-hosting/*.caddy' /etc/caddy/Caddyfile || {
   echo 'First add: import /etc/caddy/atmobb-hosting/*.caddy to the host Caddyfile. See docs/hosted-tenants.md.' >&2
   exit 1
@@ -17,7 +19,7 @@ install -d -m 755 /usr/local/lib/atmobb-hosting /etc/atmobb /etc/caddy/atmobb-ho
 install -d -m 700 /var/lib/atmobb-hosting /var/lib/atmobb-hosting/template
 install -m 755 "$source_dir/hosting.py" /usr/local/lib/atmobb-hosting/hosting.py
 # Do not import an installation's .env or mutable storage into the template.
-for file in atmobb updater.py compose.yml compose.caddy.yml Caddyfile env.example; do
+for file in atmobb updater.py updater-page.html compose.yml compose.caddy.yml Caddyfile env.example; do
   install -m 755 "$2/$file" "/var/lib/atmobb-hosting/template/$file"
 done
 python3 - "$1" <<'PY'

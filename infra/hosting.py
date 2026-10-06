@@ -144,11 +144,13 @@ def provision(instance):
                 for name in ('atmobb', 'compose.yml'):
                     if '# ATMOBB_INSTANCE_CONFIG_VERSION=1' not in (Path(config['template']) / name).read_text().splitlines():
                         raise ValueError('Template does not support isolated instances.')
+                    if '# ATMOBB_MAINTENANCE_VERSION=1' not in (Path(config['template']) / name).read_text().splitlines():
+                        raise ValueError('Template does not support per-instance maintenance.')
                 temporary = destination.with_suffix('.preparing')
                 if temporary.exists():
                     shutil.rmtree(temporary)
                 temporary.mkdir(parents=True, mode=0o700)
-                for name in ('atmobb', 'updater.py', 'compose.yml', 'compose.caddy.yml', 'Caddyfile', 'env.example'):
+                for name in ('atmobb', 'updater.py', 'updater-page.html', 'compose.yml', 'compose.caddy.yml', 'Caddyfile', 'env.example'):
                     shutil.copy2(Path(config['template']) / name, temporary / name)
                 app_host = f"{instance['subdomain']}.{config['domain']}"
                 (temporary / '.env').write_text(
@@ -176,10 +178,16 @@ def provision(instance):
             routes = Path(config['routes'])
             route = routes / f'{identifier}.caddy'
             previous_route = route.read_text() if route.exists() else None
+            # Render the same gate and protected operator route as bundled Caddy.
+            # The public marker lives outside the root-only tenant bundle.
             route.write_text(
-                f"{app_host} {{\n reverse_proxy 127.0.0.1:{instance['appPort']}\n}}\n"
-                f"hv.{app_host} {{\n @admin path /admin /admin/*\n respond @admin 404\n"
-                f" reverse_proxy 127.0.0.1:{instance['happyviewPort']}\n}}\n")
+                (destination / 'Caddyfile').read_text()
+                .replace('{$APP_HOST}', app_host)
+                .replace('{$HAPPYVIEW_HOST}', f'hv.{app_host}')
+                .replace('atmobb:3001', f"127.0.0.1:{instance['appPort']}")
+                .replace('happyview:3000', f"127.0.0.1:{instance['happyviewPort']}")
+                .replace('/srv/atmobb-maintenance', f'/var/lib/atmobb-maintenance-{identifier}')
+                .replace('/run/atmobb-updater-public', f'/run/atmobb-updater-{identifier}-public'))
             route.chmod(0o644)  # Host Caddy runs as an unprivileged user.
             try:
                 subprocess.run(['caddy', 'validate', '--config', '/etc/caddy/Caddyfile'], check=True, capture_output=True)
