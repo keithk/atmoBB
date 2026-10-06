@@ -10,6 +10,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class SetupTest(unittest.TestCase):
+    def test_bootstrap_key_can_provision_public_oauth_clients(self):
+        script = (ROOT / "appview/bootstrap-admin.sh").read_text()
+        assignment = next(line for line in script.splitlines() if line.startswith("PERMISSIONS="))
+        permissions = set(json.loads(assignment.split("=", 1)[1].strip("'")))
+        self.assertTrue({"api-clients:view", "api-clients:create", "api-clients:edit"} <= permissions)
+        self.assertNotIn("api-clients:delete", permissions)
+        self.assertNotIn("*", permissions)
+
     def run_setup(self, failure=""):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

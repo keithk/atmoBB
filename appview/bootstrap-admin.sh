@@ -38,7 +38,7 @@ done
 TOKEN="hv_$(openssl rand -hex 24)"
 HASH=$(printf '%s' "$TOKEN" | openssl dgst -sha256 -hex | awk '{print $NF}')
 PREFIX=$(printf '%s' "$TOKEN" | cut -c1-7)
-PERMISSIONS='["lexicons:create","scripts:manage","backfill:create","backfill:read","settings:manage"]'
+PERMISSIONS='["lexicons:create","scripts:manage","backfill:create","backfill:read","settings:manage","api-clients:view","api-clients:create","api-clients:edit"]'
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 $PG_EXEC psql -q -U happyview -d happyview -c "
