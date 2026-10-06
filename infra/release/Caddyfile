@@ -1,12 +1,48 @@
-# Used by compose.caddy.yml. Mirrors the host-Caddy sites that
-# infra/install-self-host.sh generates, addressing services by Compose name.
+# Reference routes for release bundles, used by compose.caddy.yml.
+# Hosted provisioning renders these with per-instance host paths and ports.
 
 {$APP_HOST} {
-	reverse_proxy atmobb:3001
+	route {
+	        redir /_atmobb /_atmobb/ 308
+	        handle_path /_atmobb/* {
+	                reverse_proxy unix//run/atmobb-updater-public/updater.sock
+	        }
+	        @maintenance file {
+	                root /srv/atmobb-maintenance
+	                try_files /active
+	        }
+	        handle @maintenance {
+	                header {
+	                        Retry-After 60
+	                        Cache-Control no-store
+	                        X-Atmobb-Maintenance 1
+	                }
+	                respond "This forum is temporarily unavailable for maintenance. Please try again shortly." 503
+	        }
+	        handle {
+	                reverse_proxy atmobb:3001
+	        }
+	}
 }
 
 {$HAPPYVIEW_HOST} {
-	@admin path /admin /admin/*
-	respond @admin 404
-	reverse_proxy happyview:3000
+	route {
+	        @admin path /admin /admin/*
+	        respond @admin 404
+	        @maintenance file {
+	                root /srv/atmobb-maintenance
+	                try_files /active
+	        }
+	        handle @maintenance {
+	                header {
+	                        Retry-After 60
+	                        Cache-Control no-store
+	                        X-Atmobb-Maintenance 1
+	                }
+	                respond "This forum is temporarily unavailable for maintenance. Please try again shortly." 503
+	        }
+	        handle {
+	                reverse_proxy happyview:3000
+	        }
+	}
 }

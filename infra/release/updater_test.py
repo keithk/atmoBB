@@ -1,4 +1,6 @@
 import http.client
+import hashlib
+import hmac
 import fcntl
 import json
 import os
@@ -23,17 +25,31 @@ class UnixConnection(http.client.HTTPConnection):
 
 class UpdaterTest(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        # macOS's default temporary directory can exceed sockaddr_un's limit.
+        self.temp = tempfile.TemporaryDirectory(dir="/tmp")
         root = Path(self.temp.name)
         self.bundle = root / "bundle"
         self.state = root / "state"
         self.socket = root / "run" / "updater.sock"
+        self.public_socket = root / "run-public" / "updater.sock"
+        self.maintenance = root / "maintenance"
         self.host_lock = root / "hosting.lock"
         self.bundle.mkdir()
         (self.bundle / "compose.yml").write_text("image: ghcr.io/keithk/atmobb:1.2.3\n")
         command = self.bundle / "atmobb"
         command.write_text("""#!/bin/sh
 set -eu
+test "$ATMOBB_UPDATER_INTERNAL" = test-token
+echo "$*" >> "$ATMOBB_BUNDLE_DIR/commands"
+if [ "$1" = maintenance ]; then
+  sleep 0.25
+  mkdir -p "$ATMOBB_MAINTENANCE_DIR"
+  if [ "$2" = on ]; then touch "$ATMOBB_MAINTENANCE_DIR/active"; else rm -f "$ATMOBB_MAINTENANCE_DIR/active"; fi
+  if [ "$2" = recover ] && [ -f "$ATMOBB_BUNDLE_DIR/recovery-result.json" ]; then
+    cp "$ATMOBB_BUNDLE_DIR/recovery-result.json" "$ATMOBB_UPDATER_STATE_DIR/result.json"
+  fi
+  exit 0
+fi
 echo preparing-$2
 echo ATMOBB_TARGET_VERSION=2.0.0
 echo ATMOBB_TARGET_COMMIT=0123456789abcdef0123456789abcdef01234567
@@ -51,13 +67,19 @@ printf '{"installedVersion":"2.0.0","installedCommit":null,"backup":"/backup/one
             "ATMOBB_UPDATER_SOCKET_GID": str(os.getgid()),
             "ATMOBB_UPDATER_WORKER": str(command),
             "ATMOBB_HOST_UPDATE_LOCK": str(self.host_lock),
+            "ATMOBB_MAINTENANCE_DIR": str(self.maintenance),
+            "APP_HOST": "forum.example",
         })
-        self.process = subprocess.Popen(["python3", "infra/release/updater.py"], env=env)
-        for _ in range(100):
-            if self.socket.exists():
+        self.env = env
+        self.start()
+
+    def start(self):
+        self.process = subprocess.Popen(["python3", "infra/release/updater.py"], env=self.env)
+        for _ in range(300):
+            if self.socket.exists() and self.public_socket.exists():
                 probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                 try:
-                    probe.connect(str(self.socket))
+                    probe.connect(str(self.public_socket))
                     break
                 except ConnectionRefusedError:
                     pass
@@ -72,6 +94,19 @@ printf '{"installedVersion":"2.0.0","installedCommit":null,"backup":"/backup/one
         self.process.wait(timeout=5)
         self.temp.cleanup()
 
+    def test_recovery_publishes_only_its_fresh_verified_target(self):
+        recovered = {"installedVersion": "2.1.0", "installedCommit": "a" * 40, "backup": "/backup/recovered"}
+        (self.bundle / "recovery-result.json").write_text(json.dumps(recovered))
+        self.assertEqual(self.request("POST", "/maintenance/recover")[0], 202)
+        for _ in range(100):
+            _, state = self.request("GET", "/status")
+            if state["status"] not in ("waiting", "running"):
+                break
+            time.sleep(0.02)
+        self.assertEqual(state["status"], "succeeded")
+        for key, value in recovered.items():
+            self.assertEqual(state[key], value)
+
     def request(self, method: str, path: str, token: str = "test-token"):
         connection = UnixConnection(str(self.socket))
         connection.request(method, path, headers={"Authorization": f"Bearer {token}"})
@@ -79,6 +114,122 @@ printf '{"installedVersion":"2.0.0","installedCommit":null,"backup":"/backup/one
         body = json.loads(response.read())
         connection.close()
         return response.status, body
+
+    def public_request(self, method, path, headers=None):
+        connection = UnixConnection(str(self.public_socket))
+        connection.request(method, path, headers=headers or {})
+        response = connection.getresponse()
+        raw = response.read()
+        body = json.loads(raw) if response.getheader("content-type") == "application/json" else raw.decode()
+        self.assertEqual(response.getheader("cache-control"), "no-store")
+        self.assertEqual(response.getheader("x-content-type-options"), "nosniff")
+        self.assertIsNone(response.getheader("access-control-allow-origin"))
+        self.assertNotIn("unsafe-inline", response.getheader("content-security-policy"))
+        connection.close()
+        return response.status, body
+
+    def session_headers(self):
+        _, session = self.request("POST", "/session")
+        return {"Cookie": f"atmobb_updater={session['token']}", "Origin": "https://forum.example",
+                "X-Atmobb-Operator": "1"}
+
+    def finished(self):
+        for _ in range(300):
+            _, state = self.request("GET", "/status")
+            if state["status"] not in ("waiting", "running"):
+                return state
+            time.sleep(.02)
+        self.fail("operation did not finish")
+
+    def test_public_cookie_scope_expiry_and_csrf(self):
+        status, page = self.public_request("GET", "/")
+        self.assertEqual(status, 200)
+        self.assertNotIn("test-token", page)
+        self.assertNotIn("innerHTML", page)
+        self.assertEqual(self.public_request("GET", "/status")[0], 401)
+        self.assertEqual(self.public_request("GET", "/status", {"Authorization": "Bearer test-token"})[0], 401)
+        headers = self.session_headers()
+        self.assertEqual(self.public_request("GET", "/status", headers)[0], 200)
+        self.assertEqual(self.public_request("POST", "/session", headers)[0], 404)
+        self.assertEqual(self.request("POST", "/session", headers["Cookie"].split("=", 1)[1])[0], 401)
+        for secret, expiry in (("other-tenant-token", int(time.time()) + 300), ("test-token", int(time.time()) - 1)):
+            payload = f"v1.{expiry}"
+            token = payload + "." + hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+            self.assertEqual(self.public_request("GET", "/status", {"Cookie": f"atmobb_updater={token}"})[0], 401)
+        for token in ("wrong", "v1.no.bad", f"v1.{int(time.time()) + 300}.é"):
+            self.assertEqual(self.public_request("GET", "/status", {"Cookie": f"atmobb_updater={token}"})[0], 401)
+        for bad in ({k: v for k, v in headers.items() if k != "Origin"},
+                    {**headers, "Origin": "https://evil.example"},
+                    {**headers, "Origin": "http://forum.example"},
+                    {**headers, "X-Atmobb-Operator": "0"}):
+            self.assertEqual(self.public_request("POST", "/maintenance/on", bad)[0], 403)
+        self.assertEqual(self.public_request("POST", "/maintenance/on", {**headers, "Origin": "https://FORUM.example:443"})[0], 202)
+        self.assertEqual(self.request("POST", "/update/stable")[0], 409)
+        self.assertEqual(self.finished()["status"], "succeeded")
+        self.assertEqual(self.public_socket.stat().st_mode & 0o777, 0o666)
+        self.assertEqual(self.public_socket.parent.stat().st_mode & 0o777, 0o755)
+        self.assertEqual(self.socket.stat().st_mode & 0o777, 0o660)
+
+    def test_maintenance_dispatch_marker_and_stale_result(self):
+        self.state.mkdir(exist_ok=True)
+        (self.state / "result.json").write_text('{"installedVersion":"stale"}')
+        for action in ("on", "off", "recover"):
+            self.assertEqual(self.request("POST", f"/maintenance/{action}")[0], 202)
+            result = self.finished()
+            self.assertEqual(result["status"], "succeeded")
+            self.assertEqual(result["action"], "maintenance")
+            self.assertEqual(result["installedVersion"], "1.2.3")
+            self.assertEqual(result["maintenance"], action == "on")
+        self.assertEqual((self.bundle / "commands").read_text().splitlines(),
+                         ["maintenance on", "maintenance off", "maintenance recover"])
+
+    def test_failed_state_and_marker_survive_restart(self):
+        self.process.terminate()
+        self.process.wait(timeout=5)
+        self.maintenance.mkdir()
+        (self.maintenance / "active").touch()
+        self.state.mkdir(exist_ok=True)
+        persisted = {"status": "failed", "message": "setup failed", "backup": "/backup/safe", "log": ["failure"]}
+        (self.state / "state.json").write_text(json.dumps(persisted))
+        self.start()
+        _, state = self.request("GET", "/status")
+        self.assertEqual(state, {**persisted, "maintenance": True})
+
+    def test_interrupted_state_retains_maintenance_and_backup(self):
+        self.process.terminate()
+        self.process.wait(timeout=5)
+        self.maintenance.mkdir()
+        (self.maintenance / "active").touch()
+        self.state.mkdir(exist_ok=True)
+        (self.state / "state.json").write_text(json.dumps({
+            "status": "running", "action": "update", "backup": "/backup/last", "log": ["setup started"],
+        }))
+        self.start()
+        _, state = self.request("GET", "/status")
+        self.assertEqual(state["status"], "failed")
+        self.assertTrue(state["maintenance"])
+        self.assertEqual(state["backup"], "/backup/last")
+        self.assertEqual(state["log"], ["setup started"])
+
+    def test_maintenance_uses_shared_host_lock(self):
+        with self.host_lock.open("a+") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            self.assertEqual(self.public_request("POST", "/maintenance/on", self.session_headers())[0], 202)
+            time.sleep(.05)
+            self.assertEqual(self.request("GET", "/status")[1]["status"], "waiting")
+            self.assertFalse((self.bundle / "commands").exists())
+            self.assertEqual(self.request("POST", "/update/main")[0], 409)
+        self.assertTrue(self.finished()["maintenance"])
+
+    def test_origin_fallback_uses_host_and_https(self):
+        self.process.terminate()
+        self.process.wait(timeout=5)
+        self.env["APP_HOST"] = ""
+        self.start()
+        headers = {**self.session_headers(), "Host": "Forum.Example:443"}
+        self.assertEqual(self.public_request("POST", "/maintenance/on", {**headers, "Origin": "http://forum.example"})[0], 403)
+        self.assertEqual(self.public_request("POST", "/maintenance/on", headers)[0], 202)
+        self.finished()
 
     def test_authentication_actions_serialization_and_persisted_result(self):
         self.assertEqual(self.request("GET", "/status", "wrong")[0], 401)
@@ -100,6 +251,12 @@ printf '{"installedVersion":"2.0.0","installedCommit":null,"backup":"/backup/one
         self.assertEqual(finished["candidateCommit"], "0123456789abcdef0123456789abcdef01234567")
         self.assertIn("preparing-stable", finished["log"])
         self.assertTrue((self.state / "state.json").exists())
+
+    def test_private_session_mint(self):
+        status, session = self.request("POST", "/session")
+        self.assertEqual(status, 200)
+        self.assertIn("token", session)
+        self.assertIn("expiresAt", session)
 
     def test_waits_on_host_lock_without_losing_instance_status(self):
         with self.host_lock.open("a+") as lock:
@@ -124,12 +281,15 @@ class InstanceConfigTest(unittest.TestCase):
             root = Path(directory)
             binaries = root / 'bin'
             binaries.mkdir()
+            # Exercise the root-owned worker contract without elevating the test.
+            (binaries / 'id').write_text('#!/bin/sh\necho 0\n')
             (root / '.env').write_text('ATMOBB_INSTANCE_ID=tenant-z\nATMOBB_APP_PORT=12721\nATMOBB_HAPPYVIEW_PORT=12720\nATMOBB_UPDATER_TOKEN=fixture\n')
             (root / 'compose.yml').write_text('original instance config\n')
             old = root / 'source' / 'infra' / 'release'
             old.mkdir(parents=True)
-            (old / 'compose.yml').write_text('old single-instance config\n')
-            (old / 'atmobb').write_text('#!/bin/sh\n')
+            # Maintenance support alone must not bypass the instance-isolation gate.
+            (old / 'compose.yml').write_text('# ATMOBB_MAINTENANCE_VERSION=1\nold single-instance config\n')
+            (old / 'atmobb').write_text('#!/bin/sh\n# ATMOBB_MAINTENANCE_VERSION=1\n')
             with tarfile.open(root / 'archive.tar.gz', 'w:gz') as archive:
                 archive.add(root / 'source', arcname='source')
             (binaries / 'docker').write_text('''#!/bin/sh

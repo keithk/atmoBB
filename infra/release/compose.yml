@@ -9,6 +9,7 @@
 # host (docs/self-hosting.md) or add the bundled proxy:
 #   docker compose -f compose.yml -f compose.caddy.yml up -d
 # ATMOBB_INSTANCE_CONFIG_VERSION=1
+# ATMOBB_MAINTENANCE_VERSION=1
 
 services:
   postgres:

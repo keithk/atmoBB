@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Forum operations · atmoBB</title>
+<style>
+:root{color-scheme:light dark;font:16px/1.6 system-ui,sans-serif;background:#f7f5f0;color:#252b30}
+*{box-sizing:border-box}body{max-width:860px;margin:auto;padding:32px 20px}header{border-bottom:2px solid #315b65;padding-bottom:24px}
+nav{display:flex;gap:24px}a{color:#245c69}h1{font-family:Georgia,serif;font-size:2.4rem;line-height:1.2;margin-bottom:12px}
+h2{font-size:1.15rem;margin-top:28px}
+.panel{border:1px solid #c5ccc9;border-radius:6px;padding:20px;margin-top:24px;background:#fffefa}
+#notice{font-weight:600}button{font:inherit;font-weight:600;border:1px solid #315b65;border-radius:4px;background:#e9f0ee;color:#254f59;padding:10px 16px;cursor:pointer;min-height:44px}
+button:hover{background:#d7e5e0}button:disabled{opacity:.5;cursor:wait}.actions{display:flex;gap:12px;flex-wrap:wrap}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#edf0ec;padding:16px;max-height:360px;overflow:auto;font-size:.85rem}
+dt{font-weight:600}dd{margin:0 0 12px;overflow-wrap:anywhere}:focus-visible{outline:3px solid #c27734;outline-offset:4px}
+@media(prefers-color-scheme:dark){:root{background:#1b2226;color:#e3e8e6}.panel{background:#232c30;border-color:#526165}a{color:#aad2d7}pre{background:#192024}button{background:#314a4f;color:#e3eeec}button:hover{background:#3c5c60}}
+</style>
+<header>
+<h1>Forum operations</h1>
+<p>This console stays available while the forum is offline or an update needs attention.</p>
+<nav aria-label="Return links"><a href="/admin/updates">Back to administration</a><a href="/">Open forum</a></nav>
+</header>
+<p id="notice" role="status" aria-live="polite">Checking your operator session…</p>
+<section class="panel" aria-labelledby="current"><h2 id="current">Current operation</h2>
+<dl><dt>Forum access</dt><dd id="maintenance">Checking…</dd><dt>Operation</dt><dd id="operation">Checking…</dd>
+<dt>Installed version</dt><dd id="version">—</dd><dt>Last backup</dt><dd id="backup">—</dd></dl>
+<p id="message"></p><h2>Operation log</h2><pre id="log" tabindex="0" aria-label="Operation log">No log yet.</pre></section>
+<section aria-labelledby="actions"><h2 id="actions">Update the forum</h2>
+<p>Install the latest stable release, or choose main explicitly. Main is development code and may be unstable. Recover an interrupted update before starting another.</p>
+<div class="actions"><button disabled data-action="update/stable">Update / retry stable</button><button disabled data-action="update/main">Update from main…</button></div>
+<h2>Maintenance and recovery</h2>
+<p>Maintenance pauses public forum access. Recovery reruns setup and health checks; the forum reopens only when they pass. It does not roll back the database. Keep the backup path above if manual recovery is needed.</p>
+<div class="actions"><button disabled data-action="maintenance/on">Enable maintenance</button><button disabled data-action="maintenance/recover">Recover and reopen</button></div></section>
+<noscript><p>JavaScript is required for operations. Use the host command <code>sudo ./atmobb maintenance recover</code> to recover without this page.</p></noscript>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const buttons = [...document.querySelectorAll('[data-action]')];
+let busy = false;
+function setText(id, value) {
+  const element = $(id);
+  if (element.textContent !== value) element.textContent = value;
+}
+function enabled(value) { buttons.forEach(button => { button.disabled = !value; }); }
+function expired() {
+  enabled(false);
+  $('notice').textContent = 'Your operator session is missing or expired. Return to administration to open a new session. If the forum is unavailable, run sudo ./atmobb maintenance recover on the host. No login credentials are accepted here.';
+}
+async function refresh() {
+  if (busy) return;
+  try {
+    const response = await fetch('/_atmobb/status', {credentials:'same-origin', cache:'no-store'});
+    if (response.status === 401) { expired(); return; }
+    if (!response.ok) throw new Error('Status is unavailable. Retrying shortly.');
+    const state = await response.json();
+    const active = ['waiting','running'].includes(state.status);
+    buttons.forEach(button => {
+      const recovery = button.dataset.action === 'maintenance/recover';
+      button.disabled = active || (recovery ? !state.maintenance : state.maintenance);
+    });
+    setText('notice', active ? 'An operation is active. You can leave this page; work continues on the host.' : state.status === 'failed' ? 'The last operation failed. Review the log before retrying or recovering.' : 'Operator session active. Status refreshes every three seconds.');
+    setText('maintenance', state.maintenance ? 'Maintenance enabled — forum access is paused.' : 'Maintenance disabled.');
+    setText('operation', [state.action, state.target, state.status].filter(Boolean).join(' · '));
+    setText('version', state.installedVersion || 'Unknown');
+    setText('backup', state.backup || 'No backup recorded');
+    setText('message', state.message || '');
+    setText('log', (state.log || []).join('\n') || 'No log yet.');
+  } catch (error) { enabled(false); $('notice').textContent = error.message; }
+}
+buttons.forEach(button => button.addEventListener('click', async () => {
+  const action = button.dataset.action;
+  if (action === 'update/main' && prompt('Main is untested and may run forward-only migrations. Building uses host memory, disk, and CPU. Type main to continue.') !== 'main') return;
+  busy = true; enabled(false);
+  try {
+    const response = await fetch('/_atmobb/' + action, {method:'POST', credentials:'same-origin', headers:{'X-Atmobb-Operator':'1'}});
+    if (response.status === 401) { expired(); return; }
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'The operation could not be started.');
+    $('notice').textContent = 'Operation accepted. Waiting for host progress…';
+  } catch (error) { $('notice').textContent = error.message; }
+  finally { busy = false; }
+}));
+refresh();
+setInterval(refresh, 3000);
+</script>
+</html>

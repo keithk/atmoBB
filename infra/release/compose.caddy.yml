@@ -22,11 +22,11 @@ services:
       HAPPYVIEW_HOST: ${HAPPYVIEW_HOST:?run ./atmobb install}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Public marker only; updater state, logs, and credentials stay private.
+      - ${ATMOBB_MAINTENANCE_DIR:-/var/lib/atmobb-maintenance}:/srv/atmobb-maintenance:ro
+      - ${ATMOBB_UPDATER_PUBLIC_SOCKET_DIR:-/run/atmobb-updater-public}:/run/atmobb-updater-public:ro
       - caddy_data:/data
       - caddy_config:/config
-    depends_on:
-      - atmobb
-      - happyview
 
 volumes:
   caddy_data:

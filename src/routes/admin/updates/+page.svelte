@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
 
   let { data, form } = $props();
+  const operationsBlocked = $derived(data.status?.status === 'waiting' || data.status?.status === 'running' || data.status?.maintenance);
   onMount(() => {
     if (data.status?.status !== 'waiting' && data.status?.status !== 'running') return;
     const timer = setInterval(() => void invalidateAll(), 3000);
@@ -10,7 +11,6 @@
   });
 </script>
 
-{#if form?.queued}<p class="atm-ok">Update queued. This page will refresh while it runs.</p>{/if}
 {#if form?.message}<p class="atm-err">{form.message}</p>{/if}
 
 <div class="atm-card updates">
@@ -27,7 +27,7 @@
     {#if data.status?.status === 'waiting'}
       <p class="atm-ok update__status">Update queued for the host-wide updater…</p>
     {:else if data.status?.status === 'running'}
-      <p class="atm-ok update__status">Updating from {data.status.target}… The forum stays on its current containers until preparation and backup finish.</p>
+      <p class="atm-ok update__status">The host updater is running. Maintenance begins after image preparation, before writes stop and backups begin.</p>
     {:else if data.status?.status === 'failed'}
       <div class="failure">
         <p class="failure__title">Update failed</p>
@@ -36,7 +36,7 @@
         {#if data.status.backup}<p>Pre-migration backup: <code>{data.status.backup}</code></p>{/if}
       </div>
     {:else if data.status?.status === 'succeeded'}
-      <p class="atm-ok update__status">Last update finished successfully.</p>
+      <p class="atm-ok update__status">Last operation finished successfully.</p>
     {/if}
     {#if data.status?.candidateVersion}
       <p class="atm-hint update__status">Selected target: atmobb {data.status.candidateVersion}{#if data.status.candidateCommit} at <code>{data.status.candidateCommit}</code>{/if}</p>
@@ -45,14 +45,31 @@
 
     {#if data.enabled && data.status}
       <form method="POST" action="?/stable">
-        <button class="atm-btn atm-btn--primary" disabled={data.status.status === 'waiting' || data.status.status === 'running'}>update to latest stable release</button>
+        <button class="atm-btn atm-btn--primary" disabled={operationsBlocked}>update to latest stable release</button>
       </form>
-      <p class="atm-hint">Downloads the verified release bundle, pulls its pinned images, backs up the forum, applies Happyview migrations and setup, then checks health.</p>
+      <p class="atm-hint">Prepares the verified release, enables maintenance, stops writes, backs up the forum, then applies migrations and setup. The forum reopens only after target-version health checks pass.</p>
+      <form method="POST" action="?/console">
+        <button class="atm-btn atm-btn--ghost">open update and recovery console</button>
+      </form>
+      <p class="atm-hint">Updates continue in a protected console that stays available while the forum is offline. Console access lasts 12 hours; host CLI recovery remains available after it expires.</p>
     {:else if !data.enabled}
       <p class="atm-hint update__status">Updates from this page need a release-bundle installation with the host updater. A bundle installed before Admin → Updates existed gets it by rerunning <code>./atmobb install</code> in its bundle directory. Source installs and other deployments update the way they were set up; see <a href="https://github.com/keithk/atmoBB/blob/main/docs/self-hosting.md#upgrades">Upgrades</a>.</p>
     {/if}
   </div>
 </div>
+
+{#if data.enabled && data.status}
+  <div class="atm-card maintenance">
+    <div class="atm-card__header"><span>Maintenance mode</span></div>
+    <div class="atm-card__body update">
+      <p class="update__status">Temporarily close this forum without installing an update. Visitors receive a maintenance response and cannot submit writes.</p>
+      <form method="POST" action="?/maintenance">
+        <button class="atm-btn atm-btn--ghost" disabled={operationsBlocked}>enable maintenance</button>
+      </form>
+      <p class="atm-hint">The recovery console stays open. Disabling maintenance reruns setup and health checks before reopening the forum.</p>
+    </div>
+  </div>
+{/if}
 
 {#if data.enabled && data.status}
   <details class="advanced">
@@ -65,7 +82,7 @@
           <span class="atm-label">Type <code>main</code> to confirm</span>
           <input class="atm-input" name="confirmation" required autocomplete="off" />
         </label>
-        <button class="atm-btn atm-btn--ghost" disabled={data.status.status === 'waiting' || data.status.status === 'running'}>resolve and build main</button>
+        <button class="atm-btn atm-btn--ghost" disabled={operationsBlocked}>resolve and build main</button>
       </form>
     </div>
   </details>
@@ -79,7 +96,8 @@
 {/if}
 
 <style>
-  .updates, .advanced, .log { max-width: 72ch; }
+  .updates, .maintenance, .advanced, .log { max-width: 72ch; }
+  .maintenance { margin-top: var(--space-5); }
   .update { display: grid; gap: var(--space-4); }
   .version { margin: var(--space-1) 0 0; display: flex; align-items: center; gap: var(--space-2); }
   .commit { min-width: 0; overflow-wrap: anywhere; }

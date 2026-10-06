@@ -223,6 +223,32 @@ The forum listens on `127.0.0.1:3001` and Happyview on `127.0.0.1:3000`. Caddy, 
 
 If you run your own reverse proxy, preserve the original host and protocol headers, keep both application ports on loopback, and block `/admin` and `/admin/*` on the public Happyview hostname. The bundle's `Caddyfile` is the reference for what each site needs.
 
+Release-bundle maintenance requires the gate on **both hostnames**. Bundled Caddy
+mounts the installation's public marker directory read-only and serves the
+maintenance response independently of the app, Happyview, and updater processes.
+The `/_atmobb/` route on the forum hostname reaches the updater's separate,
+authenticated public Unix socket. Never proxy the private updater socket.
+
+For host Caddy, render the bundle's `Caddyfile` into your site's configuration,
+substituting these values before validating and loading it:
+
+| Bundled value | Host-Caddy value for the default installation |
+|---|---|
+| `{$APP_HOST}` | This installation's forum hostname |
+| `{$HAPPYVIEW_HOST}` | This installation's Happyview hostname |
+| `atmobb:3001` | `127.0.0.1:3001` |
+| `happyview:3000` | `127.0.0.1:3000` |
+| `/srv/atmobb-maintenance` | `/var/lib/atmobb-maintenance` |
+| `/run/atmobb-updater-public/updater.sock` | `/run/atmobb-updater-public/updater.sock` |
+
+Use the installation's `.env` ports and `ATMOBB_MAINTENANCE_DIR` /
+`ATMOBB_UPDATER_PUBLIC_SOCKET_DIR` for non-default installations. Caddy needs
+directory traversal and read access to the marker directory, and access to the
+public socket. Neither directory contains credentials, backup data, or update
+logs. Hosted provisioning renders these routes for each tenant automatically.
+Keep these gates ahead of the application upstreams; the operator route bypasses
+only the forum maintenance gate, not updater authorization.
+
 ## Operations
 
 Bundle commands run from the bundle directory. Source-install commands assume `COMPOSE` and `PG_EXEC` are set as shown in step 3.
@@ -265,16 +291,25 @@ Read the release notes first. Every release states the Happyview version it runs
 
 1. resolves the latest published release, downloads its bundle and checksum, verifies the bundle, and pulls its pinned prebuilt images;
 2. leaves the running containers untouched if download or pull preparation fails;
-3. backs up Postgres, OAuth state, `.env`, and Compose/Caddy configuration before any migration or activation;
+3. enables maintenance on both public hostnames, verifies the gate, stops application writes, and backs up Postgres, OAuth state, `.env`, and Compose/Caddy configuration before any migration or activation;
 4. activates the prepared bundle, starts its pinned Happyview version, and waits for startup migrations;
 5. force-runs the release's setup job so new lexicons, Lua queries, and derived-table setup are applied before atmobb starts;
-6. starts atmobb and reports success only after its HTTP version, required containers, running image pins, and setup exit status all match.
+6. starts atmobb and removes maintenance only after its target HTTP version, required containers, running images, Happyview version, and setup exit status all match.
 
-The page shows persisted progress and the bounded update log. Its status survives the web app restarting because the updater runs separately on the host and stores state under `/var/lib/atmobb-updater`.
+Starting an update opens the protected `/_atmobb/` operator console. It shows
+persisted progress, the bounded update log, maintenance state, and recovery
+controls while the app is stopped. The updater runs separately on the host and
+stores private state under `/var/lib/atmobb-updater`.
 
 **Advanced: unreleased `main`.** Expand **Advanced options**, read the warning, and type `main` to confirm. This resolves the branch to a specific 40-character commit, downloads exactly that source archive, and builds `atmobb-main:<commit>` locally before touching the running stack. The installed commit remains visible in Admin → Updates. `main` is not a release: it may be broken, may contain forward-only changes, and building it can consume substantial time, memory, and disk, fail, or degrade a small VPS. Use stable unless you deliberately accept those risks.
 
-Both admin paths move the bundled atmobb, Happyview, Postgres, setup, and optional Caddy definitions together rather than updating only the frontend. The web app can request only stable or main over an authenticated Unix socket; it does not receive the Docker socket, a shell, a selectable ref, or the Happyview operator key.
+Both admin paths update the application stack together rather than updating only
+the frontend. Caddy keeps running with its existing configuration throughout the
+operation; updates do not replace the active proxy configuration or recreate the
+proxy. Proxy changes are a separate operator task. The web app can request only
+fixed update and maintenance actions over an authenticated Unix socket; it does
+not receive the Docker socket, a shell, a selectable ref, or the Happyview
+operator key.
 
 If an update fails, open its log and note whether it reports a pre-migration backup. Then inspect the host directly:
 
@@ -285,19 +320,81 @@ cd /srv/atmobb
 sudo journalctl -u atmobb-updater -n 200 --no-pager
 ```
 
-A preparation failure occurs before activation and leaves the previous containers running. A failure after activation or a Happyview migration needs operator recovery. Happyview migrations may be forward-only, so the updater does not automatically claim or attempt rollback; preserve the backup path shown in Admin → Updates, copy it off-host, and restore the database, OAuth state, and matching saved configuration together if recovery requires a restore.
+A preparation failure leaves the previous containers and maintenance state
+unchanged. A failure after maintenance begins keeps the forum closed, including
+across updater restarts. Use **Recover and reopen** in the operator console or
+`sudo ./atmobb maintenance recover` after inspecting the failure. Recovery reapplies
+the saved target, runs setup, and checks health before removing maintenance.
+Happyview migrations may be forward-only: there is no automatic database
+rollback. Preserve the reported backup and copy it off-host. If a deliberate
+restore is necessary, restore the database, OAuth state, and matching saved
+configuration together.
 
-**Manual bundle update.** You can still download and unpack a new release tarball over the bundle directory (`.env` and `backups/` are yours and aren't in the tarball), then run:
+### Maintenance mode
+
+Maintenance is per installation. It blocks public requests, including writes,
+on both the forum and Happyview hostnames with `503 Service Unavailable`,
+`Retry-After: 60`, and `Cache-Control: no-store`. Happyview's public `/admin`
+remains `404`. Requests already being served drain when the worker stops the
+app and Happyview before taking an update backup. Direct local operator access
+and writes through unrelated AT Protocol clients are outside this public gate.
+
+Enable maintenance from **Admin → Updates → Maintenance mode**, or run from the
+installation's bundle directory:
+
+```sh
+sudo ./atmobb maintenance on
+./atmobb maintenance status
+sudo ./atmobb maintenance off
+# After an interrupted or failed update:
+sudo ./atmobb maintenance recover
+```
+
+Mutating maintenance and upgrade commands require root to access private recovery
+state and operation locks. `status` only reads the public marker.
+`off` is a checked reopen, not a force switch: setup and the saved target's health
+checks must pass. Do not remove the marker by hand to bypass a failed check.
+An active update and manual maintenance commands share an installation lock.
+Other forums keep serving normally.
+
+The operator console uses an installation-specific, signed 12-hour session
+issued only after the app verifies forum-admin authorization. Its cookie is
+Secure, HttpOnly, and SameSite=Strict, scoped to `/_atmobb`; the host bearer
+secret stays on the server. The public API requires this session and same-origin
+POSTs with an explicit operator header. Sessions survive updater restarts but
+expire without renewal. If the app is offline after expiry, use the host CLI
+for recovery. When the app is online, **open update and recovery console** in
+Admin → Updates issues a new session.
+
+The installed host updater, worker, bundle, and proxy must all support maintenance
+before it is used. `./atmobb install` installs the updater and public marker/socket
+configuration while preserving existing secrets. Configure and validate host
+Caddy as described above; bundled Caddy needs the maintenance mounts and current
+reference routes. Treat this prerequisite setup as a deliberate operator
+configuration task, not an ordinary application update. Update candidates without
+maintenance support are rejected, and an unverified public gate prevents the
+worker from stopping writes or taking migration backups.
+
+Source/systemd installs without the release-bundle updater use their own
+maintenance and deployment procedure; these commands do not manage them.
+
+### Manual bundle updates
+
+**Manual bundle update.** Download and stage the new release tarball, then copy
+its application bundle files into the installation directory. Preserve the
+installation's existing `Caddyfile` and `compose.caddy.yml`: proxy changes are
+applied separately. Keep `.env`, `backups/`, and private updater recovery state.
+Then run:
 
 ```sh
 cd /srv/atmobb
-./atmobb upgrade
+sudo ./atmobb upgrade
 ```
 
 That pulls the new atmobb image, reruns setup, and restarts the app. If the new bundle pins a different Happyview, `upgrade` stops and tells you to run:
 
 ```sh
-./atmobb upgrade-happyview
+sudo ./atmobb upgrade-happyview
 ```
 
 which takes a backup, shows the version change, asks for confirmation, recreates only Happyview, waits for its migrations to finish, then reapplies setup and restarts the app. Happyview migrations are forward-only: once they run, you cannot go back down a version, which is why the backup comes first. Afterwards `./atmobb status` shows the running version.

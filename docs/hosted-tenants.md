@@ -13,7 +13,13 @@ Members-only boards can use each installation's own session secret. This separat
 
 This first backend supports a Linux host with systemd, Docker Compose v2.20+, Python 3, and **host Caddy**. The host's Caddy owns ports 80/443; do not run bundled Caddy in hosted stacks. Keep the existing operator forum behind the same ingress. Install the release prerequisites (`curl`, `jq`, `openssl`, `sudo`) too.
 
-Use a trusted release bundle built from code containing `ATMOBB_INSTANCE_CONFIG_VERSION=1`. A published app image including Admin → Updates is required for tenants, and the operator image must include Admin → Hosting's fleet controls. Source changes alone do not update an older pinned published image. Do not advertise this service before publishing and testing a corresponding release. Old release candidates lacking multi-instance support are deliberately rejected by the updater before activation.
+Use a trusted release bundle containing `ATMOBB_INSTANCE_CONFIG_VERSION=1` and
+`ATMOBB_MAINTENANCE_VERSION=1`. A published app image including Admin → Updates
+is required for tenants, and the operator image must include Admin → Hosting's
+fleet controls. Source changes alone do not update an older pinned published
+image. Do not advertise this service before publishing and testing a
+corresponding release. Candidates without multi-instance and maintenance support
+are rejected before activation.
 
 1. Choose a dedicated hosting domain, e.g. `forums.example.net`. Point `*.forums.example.net` at the host. Also arrange DNS for `hv.<tenant>.forums.example.net`: a first-level wildcard is not a wildcard certificate for nested names. Caddy obtains individual certificates using HTTP challenges. Do not reuse a suffix containing unmanaged/legacy sites without reserving those names; existing Caddy routes and legacy sites must not collide.
 2. Add this top-level line to `/etc/caddy/Caddyfile` (keep the operator forum's existing routes):
@@ -62,6 +68,8 @@ The request's UUID is the permanent `ATMOBB_INSTANCE_ID`. For `<id>`, the contro
 | Compose project (network and DB volume prefix) | `atmobb-<id>` |
 | OAuth data | `/var/lib/atmobb/<id>/oauth` |
 | Updater socket (only this tenant mounts it) | `/run/atmobb-updater-<id>/updater.sock` |
+| Authenticated public updater socket (host Caddy) | `/run/atmobb-updater-<id>-public/updater.sock` |
+| Public maintenance marker | `/var/lib/atmobb-maintenance-<id>/active` |
 | Updater state | `/var/lib/atmobb-updater-<id>/` |
 | Root-owned worker | `/usr/local/lib/atmobb-<id>/` |
 | Updater config / unit | `/etc/atmobb/updater-<id>.env` / `atmobb-updater-<id>.service` |
@@ -73,7 +81,27 @@ Provisioning reserves its slot and port pair durably, starts the stack through t
 
 Stable/main updates from either admin panel use the same per-instance updater. All updater daemons and provisioning share `/var/lock/atmobb-hosting.lock`, so expensive managed operations wait for one another host-wide. A waiting update is visible and cannot be double-submitted. This lock does not constrain manual Docker commands or guarantee enough RAM for a main build alongside running forums. Use stable releases on small hosts.
 
-Updates prepare images before replacement, back up before migrations, rerun setup, and check versions/images/container health. Backups are local and contain credentials/private data: copy them off-host and test restoration. Also back up the hosting controller's `state.json`, configuration, and Caddy routes. No automatic rollback of forward-only migrations is promised. Real Happyview migration/restore and measured multi-stack capacity remain deployment acceptance checks, separate from mocked orchestration tests.
+Updates prepare images before enabling maintenance on that tenant's forum and
+Happyview hostnames. The worker verifies both public gates before stopping writes
+and taking backups. Caddy serves a non-cacheable `503` with `Retry-After` while
+the app is stopped; the protected `/_atmobb/` console remains reachable through
+that tenant's public updater socket. Each installation has its own marker,
+session-signing secret, recovery target, and operation lock. A tenant's
+maintenance state does not close other tenants or the operator forum.
+
+The worker reruns setup and verifies the target versions, images, and container
+health before reopening. Failures and updater restarts preserve maintenance.
+Use that tenant's console or run `sudo ./atmobb maintenance recover` in its bundle
+directory; see [maintenance mode](self-hosting.md#maintenance-mode). Existing
+tenant routes must contain both maintenance gates and the protected operator
+route before managed maintenance is used. Updating the hosting template alone
+does not rewrite existing tenants' routes.
+
+Backups are local and contain credentials/private data: copy them off-host and
+test restoration. Also back up the hosting controller's `state.json`,
+configuration, and Caddy routes. There is no automatic rollback of forward-only
+migrations. Real Happyview migration/restore and measured multi-stack capacity
+remain deployment acceptance checks, separate from local orchestration tests.
 
 ## Legacy shared hosting (migration reference)
 
