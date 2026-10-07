@@ -32,6 +32,8 @@ export interface OutputSchema {
   tray?: TrayEntry[]
   /** Ids from the tray the actor wears, in order. Present only when actor is given. */
   worn?: string[]
+  /** At-uris the actor pinned to their profile page on this forum, from their newest membership record, in order. Unverified: the app checks each is the actor's own readable topic. Present only when actor is given. */
+  pinned?: string[]
 }
 
 export interface CallOptions {

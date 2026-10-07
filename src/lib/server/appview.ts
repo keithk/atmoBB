@@ -655,6 +655,8 @@ export interface Stamps {
   /** Present when `actor` was given. */
   tray?: TrayEntry[];
   worn?: string[];
+  /** Present when `actor` was given: the topic at-uris they pinned to their profile page, unverified. */
+  pinned?: string[];
 }
 
 export const getStamps = (forum = FORUM_DID(), actor?: string) =>

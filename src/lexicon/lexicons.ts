@@ -1626,7 +1626,7 @@ export const schemaDict = {
       main: {
         type: 'query',
         description:
-          "A forum's stamps: the admin-defined stamp records plus the generated network set. With actor, also that member's tray (every stamp they hold on this forum) and the ids they currently wear, in order.",
+          "A forum's stamps: the admin-defined stamp records plus the generated network set. With actor, also that member's tray (every stamp they hold on this forum), the ids they currently wear, in order, and the topics they pinned to their profile page.",
         parameters: {
           type: 'params',
           required: ['forum'],
@@ -1683,6 +1683,16 @@ export const schemaDict = {
                 items: {
                   type: 'string',
                   maxLength: 300,
+                },
+              },
+              pinned: {
+                type: 'array',
+                description:
+                  "At-uris the actor pinned to their profile page on this forum, from their newest membership record, in order. Unverified: the app checks each is the actor's own readable topic. Present only when actor is given.",
+                maxLength: 4,
+                items: {
+                  type: 'string',
+                  format: 'at-uri',
                 },
               },
             },
