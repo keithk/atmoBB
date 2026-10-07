@@ -5,16 +5,16 @@ import { join } from 'node:path';
 import type { HappyViewSession } from '@happyview/oauth-client';
 const state = vi.hoisted(() => ({ env: {} as Record<string, string | undefined> }));
 vi.mock('$env/dynamic/private', () => ({ env: state.env }));
-import { MEMBER_SCOPE, MODERATION_SCOPE, STAMP_SCOPE, clientMetadata, forumScopeStatus, oauthClient, oauthScope, sysopScope } from './atproto-oauth';
+import { GUESTBOOK_SCOPE, MEMBER_SCOPE, MODERATION_SCOPE, STAMP_SCOPE, clientMetadata, forumScopeStatus, oauthClient, oauthScope, sysopScope } from './atproto-oauth';
 import { BINDING_SCOPE, ENDORSEMENT_SCOPE, refreshExtensionScopes } from './extensions/scopes';
 
 // The scope strings every forum consented to before extensions existed.
 const MEMBER_SCOPE_BEFORE_EXTENSIONS =
-  'atproto include:app.atmobb.authForum rpc:pub.atmo.notify.requestPermission?aud=did%3Aweb%3Arelay.atmo.pub%23notif_relay blob:image/*';
+  'atproto include:app.atmobb.authForum repo:app.atmobb.actor.guestbook rpc:pub.atmo.notify.requestPermission?aud=did%3Aweb%3Arelay.atmo.pub%23notif_relay blob:image/*';
 const SYSOP_SCOPE_BEFORE_EXTENSIONS =
   'atproto include:app.atmobb.authSysop repo:app.atmobb.moderation.action?action=create repo:app.atmobb.forum.stamp blob:image/* blob:font/*';
 const OAUTH_SCOPE_BEFORE_EXTENSIONS =
-  'atproto include:app.atmobb.authForum rpc:pub.atmo.notify.requestPermission?aud=did%3Aweb%3Arelay.atmo.pub%23notif_relay include:app.atmobb.authSysop repo:app.atmobb.moderation.action?action=create repo:app.atmobb.forum.stamp blob:image/* blob:font/*';
+  'atproto include:app.atmobb.authForum repo:app.atmobb.actor.guestbook rpc:pub.atmo.notify.requestPermission?aud=did%3Aweb%3Arelay.atmo.pub%23notif_relay include:app.atmobb.authSysop repo:app.atmobb.moderation.action?action=create repo:app.atmobb.forum.stamp blob:image/* blob:font/*';
 
 const GAME = 'com.example.diplomacy.game';
 const ORDER = 'com.example.diplomacy.order';
@@ -55,6 +55,12 @@ describe('forum OAuth scopes', () => {
     expect(sysopScope().split(' ')).toContain(STAMP_SCOPE);
     expect(oauthScope().split(' ')).toContain(STAMP_SCOPE);
     expect(clientMetadata().scope.split(' ')).toContain(STAMP_SCOPE);
+  });
+
+  it('requests guestbook writes explicitly in the member flow and client metadata', () => {
+    expect(MEMBER_SCOPE.split(' ')).toContain(GUESTBOOK_SCOPE);
+    expect(oauthScope().split(' ')).toContain(GUESTBOOK_SCOPE);
+    expect(clientMetadata().scope.split(' ')).toContain(GUESTBOOK_SCOPE);
   });
 
   it('requests exactly the scopes it did before extensions when none are installed', () => {

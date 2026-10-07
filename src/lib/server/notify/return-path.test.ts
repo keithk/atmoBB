@@ -54,6 +54,16 @@ describe('safeReturnPath', () => {
     expect(safeReturnPath('/b/general/extra')).toBeNull();
   });
 
+  it('accepts a member profile, where signing a guestbook sends a visitor through login', () => {
+    expect(safeReturnPath('/members/alice.bsky.social')).toBe('/members/alice.bsky.social');
+    expect(safeReturnPath('/members/did%3Aplc%3Aabc123')).toBe('/members/did%3Aplc%3Aabc123');
+    expect(safeReturnPath('/members/alice.bsky.social?reconsented=1')).toBe('/members/alice.bsky.social?reconsented=1');
+    expect(safeReturnPath('/members/alice.bsky.social?x=1')).toBeNull();
+    expect(safeReturnPath('/members/alice/extra')).toBeNull();
+    expect(safeReturnPath('/members/%2F%2Fevil.example')).toBeNull();
+    expect(safeReturnPath('/members/')).toBeNull();
+  });
+
   it('rejects protocol-relative, backslash, absolute, and off-list paths', () => {
     expect(safeReturnPath('//evil.example')).toBeNull();
     expect(safeReturnPath('/\\evil')).toBeNull();

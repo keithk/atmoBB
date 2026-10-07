@@ -10,6 +10,9 @@ import { schemas } from './lexicons.js'
 import { CID } from 'multiformats/cid'
 import { type OmitKey, type Un$Typed } from './util.js'
 import * as AppAtmobbActorGetActivity from './types/app/atmobb/actor/getActivity.js'
+import * as AppAtmobbActorGetGuestbook from './types/app/atmobb/actor/getGuestbook.js'
+import * as AppAtmobbActorGetRegulars from './types/app/atmobb/actor/getRegulars.js'
+import * as AppAtmobbActorGuestbook from './types/app/atmobb/actor/guestbook.js'
 import * as AppAtmobbActorProfile from './types/app/atmobb/actor/profile.js'
 import * as AppAtmobbDiscussionCreateReply from './types/app/atmobb/discussion/createReply.js'
 import * as AppAtmobbDiscussionCreateThread from './types/app/atmobb/discussion/createThread.js'
@@ -53,6 +56,9 @@ import * as ComAtprotoRepoPutRecord from './types/com/atproto/repo/putRecord.js'
 import * as ComAtprotoRepoStrongRef from './types/com/atproto/repo/strongRef.js'
 
 export * as AppAtmobbActorGetActivity from './types/app/atmobb/actor/getActivity.js'
+export * as AppAtmobbActorGetGuestbook from './types/app/atmobb/actor/getGuestbook.js'
+export * as AppAtmobbActorGetRegulars from './types/app/atmobb/actor/getRegulars.js'
+export * as AppAtmobbActorGuestbook from './types/app/atmobb/actor/guestbook.js'
 export * as AppAtmobbActorProfile from './types/app/atmobb/actor/profile.js'
 export * as AppAtmobbDiscussionCreateReply from './types/app/atmobb/discussion/createReply.js'
 export * as AppAtmobbDiscussionCreateThread from './types/app/atmobb/discussion/createThread.js'
@@ -145,10 +151,12 @@ export class AppAtmobbNS {
 
 export class AppAtmobbActorNS {
   _client: XrpcClient
+  guestbook: AppAtmobbActorGuestbookRecord
   profile: AppAtmobbActorProfileRecord
 
   constructor(client: XrpcClient) {
     this._client = client
+    this.guestbook = new AppAtmobbActorGuestbookRecord(client)
     this.profile = new AppAtmobbActorProfileRecord(client)
   }
 
@@ -161,6 +169,113 @@ export class AppAtmobbActorNS {
       params,
       undefined,
       opts,
+    )
+  }
+
+  getGuestbook(
+    params?: AppAtmobbActorGetGuestbook.QueryParams,
+    opts?: AppAtmobbActorGetGuestbook.CallOptions,
+  ): Promise<AppAtmobbActorGetGuestbook.Response> {
+    return this._client.call(
+      'app.atmobb.actor.getGuestbook',
+      params,
+      undefined,
+      opts,
+    )
+  }
+
+  getRegulars(
+    params?: AppAtmobbActorGetRegulars.QueryParams,
+    opts?: AppAtmobbActorGetRegulars.CallOptions,
+  ): Promise<AppAtmobbActorGetRegulars.Response> {
+    return this._client.call(
+      'app.atmobb.actor.getRegulars',
+      params,
+      undefined,
+      opts,
+    )
+  }
+}
+
+export class AppAtmobbActorGuestbookRecord {
+  _client: XrpcClient
+
+  constructor(client: XrpcClient) {
+    this._client = client
+  }
+
+  async list(
+    params: OmitKey<ComAtprotoRepoListRecords.QueryParams, 'collection'>,
+  ): Promise<{
+    cursor?: string
+    records: { uri: string; value: AppAtmobbActorGuestbook.Record }[]
+  }> {
+    const res = await this._client.call('com.atproto.repo.listRecords', {
+      collection: 'app.atmobb.actor.guestbook',
+      ...params,
+    })
+    return res.data
+  }
+
+  async get(
+    params: OmitKey<ComAtprotoRepoGetRecord.QueryParams, 'collection'>,
+  ): Promise<{
+    uri: string
+    cid: string
+    value: AppAtmobbActorGuestbook.Record
+  }> {
+    const res = await this._client.call('com.atproto.repo.getRecord', {
+      collection: 'app.atmobb.actor.guestbook',
+      ...params,
+    })
+    return res.data
+  }
+
+  async create(
+    params: OmitKey<
+      ComAtprotoRepoCreateRecord.InputSchema,
+      'collection' | 'record'
+    >,
+    record: Un$Typed<AppAtmobbActorGuestbook.Record>,
+    headers?: Record<string, string>,
+  ): Promise<{ uri: string; cid: string }> {
+    const collection = 'app.atmobb.actor.guestbook'
+    const res = await this._client.call(
+      'com.atproto.repo.createRecord',
+      undefined,
+      { collection, ...params, record: { ...record, $type: collection } },
+      { encoding: 'application/json', headers },
+    )
+    return res.data
+  }
+
+  async put(
+    params: OmitKey<
+      ComAtprotoRepoPutRecord.InputSchema,
+      'collection' | 'record'
+    >,
+    record: Un$Typed<AppAtmobbActorGuestbook.Record>,
+    headers?: Record<string, string>,
+  ): Promise<{ uri: string; cid: string }> {
+    const collection = 'app.atmobb.actor.guestbook'
+    const res = await this._client.call(
+      'com.atproto.repo.putRecord',
+      undefined,
+      { collection, ...params, record: { ...record, $type: collection } },
+      { encoding: 'application/json', headers },
+    )
+    return res.data
+  }
+
+  async delete(
+    params: OmitKey<ComAtprotoRepoDeleteRecord.InputSchema, 'collection'>,
+    headers?: Record<string, string>,
+  ): Promise<void> {
+    await this._client.call(
+      'com.atproto.repo.deleteRecord',
+      undefined,
+      { collection: 'app.atmobb.actor.guestbook', ...params },
+      { headers },
     )
   }
 }

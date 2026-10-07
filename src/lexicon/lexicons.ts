@@ -62,6 +62,215 @@ export const schemaDict = {
       },
     },
   },
+  AppAtmobbActorGetGuestbook: {
+    lexicon: 1,
+    id: 'app.atmobb.actor.getGuestbook',
+    defs: {
+      main: {
+        type: 'query',
+        description:
+          "The entries signed in one member's guestbook on one forum, newest first by index time. Nothing while the owner keeps it closed or is banned; entries indexed while it was closed, by signers banned or shut out by a closed gate, or within 24 hours of the same signer's previous entry never show. With includeHidden, entries hidden by staff or the owner, or from a signer the owner blocked, come back flagged instead of dropped.",
+        parameters: {
+          type: 'params',
+          required: ['forum', 'subject'],
+          properties: {
+            forum: {
+              type: 'string',
+              format: 'did',
+            },
+            subject: {
+              type: 'string',
+              format: 'did',
+            },
+            limit: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 50,
+              default: 20,
+            },
+            cursor: {
+              type: 'string',
+            },
+            includeHidden: {
+              type: 'boolean',
+              default: false,
+              description:
+                'Return hidden entries, flagged. For the owner and staff.',
+            },
+            viewer: {
+              type: 'string',
+              format: 'did',
+              description:
+                'Report whether the owner blocked this signer, as viewerBlocked.',
+            },
+          },
+        },
+        output: {
+          encoding: 'application/json',
+          schema: {
+            type: 'object',
+            required: ['entries', 'open'],
+            properties: {
+              entries: {
+                type: 'array',
+                items: {
+                  type: 'ref',
+                  ref: 'lex:app.atmobb.actor.getGuestbook#entry',
+                },
+              },
+              cursor: {
+                type: 'string',
+              },
+              open: {
+                type: 'boolean',
+                description:
+                  'Whether the guestbook takes entries now: the owner turned it on and is not banned forum-wide.',
+              },
+              viewerBlocked: {
+                type: 'boolean',
+                description:
+                  'Only with viewer: whether the owner blocked that signer. False while the guestbook is closed.',
+              },
+            },
+          },
+        },
+      },
+      entry: {
+        type: 'object',
+        required: ['uri', 'cid', 'author', 'text', 'createdAt', 'indexedAt'],
+        properties: {
+          uri: {
+            type: 'string',
+            format: 'at-uri',
+          },
+          cid: {
+            type: 'string',
+            format: 'cid',
+            description: 'For a strongRef, as a staff hide names it.',
+          },
+          author: {
+            type: 'string',
+            format: 'did',
+          },
+          text: {
+            type: 'string',
+          },
+          createdAt: {
+            type: 'string',
+            format: 'datetime',
+            description: "The signer's own timestamp.",
+          },
+          indexedAt: {
+            type: 'string',
+            format: 'datetime',
+            description:
+              'When the appview indexed the entry; ordering and every time rule use this.',
+          },
+          hidden: {
+            type: 'string',
+            knownValues: ['owner', 'staff', 'blocked'],
+            description:
+              'Only with includeHidden: why the entry is hidden. staff: a forum hide. owner: the owner hid it. blocked: the owner blocked its signer.',
+          },
+        },
+      },
+    },
+  },
+  AppAtmobbActorGetRegulars: {
+    lexicon: 1,
+    id: 'app.atmobb.actor.getRegulars',
+    defs: {
+      main: {
+        type: 'query',
+        description:
+          'The members an actor replies alongside most on one forum: at least two shared public threads in the last 180 days, most shared first. At most six; no counts.',
+        parameters: {
+          type: 'params',
+          required: ['actor', 'forum'],
+          properties: {
+            actor: {
+              type: 'string',
+              format: 'did',
+            },
+            forum: {
+              type: 'string',
+              format: 'did',
+            },
+          },
+        },
+        output: {
+          encoding: 'application/json',
+          schema: {
+            type: 'object',
+            required: ['regulars'],
+            properties: {
+              regulars: {
+                type: 'array',
+                maxLength: 6,
+                items: {
+                  type: 'ref',
+                  ref: 'lex:app.atmobb.actor.getRegulars#regular',
+                },
+              },
+            },
+          },
+        },
+      },
+      regular: {
+        type: 'object',
+        required: ['did'],
+        properties: {
+          did: {
+            type: 'string',
+            format: 'did',
+          },
+          profile: {
+            type: 'unknown',
+            description:
+              "The member's app.atmobb.actor.profile record, when they have one.",
+          },
+        },
+      },
+    },
+  },
+  AppAtmobbActorGuestbook: {
+    lexicon: 1,
+    id: 'app.atmobb.actor.guestbook',
+    defs: {
+      main: {
+        type: 'record',
+        description:
+          "A guestbook entry: a short note signed on a member's profile page on one forum. Lives in the signer's own repo — signing is an act of the signer, taking it back is deleting this record. The profile owner decides what shows through their membership record.",
+        key: 'tid',
+        record: {
+          type: 'object',
+          required: ['forum', 'subject', 'text', 'createdAt'],
+          properties: {
+            forum: {
+              type: 'string',
+              format: 'did',
+            },
+            subject: {
+              type: 'string',
+              format: 'did',
+              description:
+                'The member whose guestbook this entry is signed in.',
+            },
+            text: {
+              type: 'string',
+              description: 'Plain text; no rich text.',
+              maxLength: 3000,
+              maxGraphemes: 300,
+            },
+            createdAt: {
+              type: 'string',
+              format: 'datetime',
+            },
+          },
+        },
+      },
+    },
+  },
   AppAtmobbActorProfile: {
     lexicon: 1,
     id: 'app.atmobb.actor.profile',
@@ -158,6 +367,64 @@ export const schemaDict = {
               type: 'string',
               format: 'uri',
             },
+            profileSkin: {
+              type: 'string',
+              description:
+                "Color skin visitors see on this member's profile page. Omit to use the forum's look; forums may turn skins off.",
+              knownValues: [
+                'classic',
+                'sky',
+                'bubblegum',
+                'midnight',
+                'forest',
+              ],
+              maxLength: 64,
+            },
+            banner: {
+              type: 'ref',
+              ref: 'lex:app.atmobb.actor.profile#banner',
+              description:
+                'Patterned banner across the top of the profile page.',
+            },
+            headline: {
+              type: 'string',
+              description:
+                "Short line shown under the member's name on their profile page.",
+              maxLength: 800,
+              maxGraphemes: 80,
+            },
+            currently: {
+              type: 'string',
+              description:
+                'What the member is up to right now, shown under the headline.',
+              maxLength: 800,
+              maxGraphemes: 80,
+            },
+            about: {
+              type: 'array',
+              description:
+                'Long-form About me on the profile page, separate from the short bio in description.',
+              maxLength: 20,
+              items: {
+                type: 'union',
+                refs: [
+                  'lex:app.atmobb.richtext.block#text',
+                  'lex:app.atmobb.richtext.block#quote',
+                  'lex:app.atmobb.richtext.block#code',
+                  'lex:app.atmobb.richtext.block#image',
+                ],
+              },
+            },
+            panels: {
+              type: 'array',
+              description:
+                'Profile page panels in display order. Panels missing from the list follow in the default order; unknown ids are ignored.',
+              maxLength: 32,
+              items: {
+                type: 'ref',
+                ref: 'lex:app.atmobb.actor.profile#panel',
+              },
+            },
             avatarBuilder: {
               type: 'ref',
               ref: 'lex:app.atmobb.actor.profile#avatarBuilder',
@@ -194,6 +461,12 @@ export const schemaDict = {
                 'avatar',
                 'title',
                 'notifications',
+                'profileSkin',
+                'banner',
+                'headline',
+                'currently',
+                'about',
+                'panels',
               ],
             },
           },
@@ -241,6 +514,95 @@ export const schemaDict = {
                 'lex:app.atmobb.richtext.block#image',
               ],
             },
+          },
+          profileSkin: {
+            type: 'string',
+            maxLength: 64,
+            knownValues: ['classic', 'sky', 'bubblegum', 'midnight', 'forest'],
+          },
+          banner: {
+            type: 'ref',
+            ref: 'lex:app.atmobb.actor.profile#banner',
+          },
+          headline: {
+            type: 'string',
+            maxLength: 800,
+            maxGraphemes: 80,
+          },
+          currently: {
+            type: 'string',
+            maxLength: 800,
+            maxGraphemes: 80,
+          },
+          about: {
+            type: 'array',
+            maxLength: 20,
+            items: {
+              type: 'union',
+              refs: [
+                'lex:app.atmobb.richtext.block#text',
+                'lex:app.atmobb.richtext.block#quote',
+                'lex:app.atmobb.richtext.block#code',
+                'lex:app.atmobb.richtext.block#image',
+              ],
+            },
+          },
+          panels: {
+            type: 'array',
+            maxLength: 32,
+            items: {
+              type: 'ref',
+              ref: 'lex:app.atmobb.actor.profile#panel',
+            },
+          },
+        },
+      },
+      banner: {
+        type: 'object',
+        description: 'A CSS-drawn banner: a pattern over a color swatch.',
+        properties: {
+          pattern: {
+            type: 'string',
+            maxLength: 32,
+            knownValues: ['plain', 'stars', 'scanlines', 'checker'],
+          },
+          swatch: {
+            type: 'string',
+            maxLength: 32,
+            knownValues: [
+              'coral',
+              'rust',
+              'plum',
+              'berry',
+              'navy',
+              'teal',
+              'pine',
+              'slate',
+            ],
+          },
+        },
+      },
+      panel: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: {
+            type: 'string',
+            maxLength: 32,
+            knownValues: [
+              'about',
+              'pinned',
+              'stamps',
+              'regulars',
+              'activity',
+              'guestbook',
+              'bluesky',
+              'signature',
+            ],
+          },
+          hidden: {
+            type: 'boolean',
+            description: 'Hidden from visitors. Absent means shown.',
           },
         },
       },
@@ -1473,7 +1835,7 @@ export const schemaDict = {
       main: {
         type: 'query',
         description:
-          "A forum's stamps: the admin-defined stamp records plus the generated network set. With actor, also that member's tray (every stamp they hold on this forum) and the ids they currently wear, in order.",
+          "A forum's stamps: the admin-defined stamp records plus the generated network set. With actor, also that member's tray (every stamp they hold on this forum), the ids they currently wear, in order, and the topics they pinned to their profile page.",
         parameters: {
           type: 'params',
           required: ['forum'],
@@ -1530,6 +1892,16 @@ export const schemaDict = {
                 items: {
                   type: 'string',
                   maxLength: 300,
+                },
+              },
+              pinned: {
+                type: 'array',
+                description:
+                  "At-uris the actor pinned to their profile page on this forum, from their newest membership record, in order. Unverified: the app checks each is the actor's own readable topic. Present only when actor is given.",
+                maxLength: 4,
+                items: {
+                  type: 'string',
+                  format: 'at-uri',
                 },
               },
             },
@@ -1842,10 +2214,70 @@ export const schemaDict = {
                 maxLength: 300,
               },
             },
+            pinned: {
+              type: 'array',
+              description:
+                "At-uris of the member's own topics on this forum, pinned to their profile page in order.",
+              maxLength: 4,
+              items: {
+                type: 'string',
+                format: 'at-uri',
+              },
+            },
+            guestbook: {
+              type: 'boolean',
+              description:
+                "Whether the member's guestbook on this forum is open for signing. Absent means closed.",
+            },
+            guestbookClosed: {
+              type: 'array',
+              description:
+                'Periods the guestbook was closed; an entry indexed during one never shows. Turning the guestbook on records the end of the current closed period (or, the first time, a period from the beginning of time to now); turning it off starts a new one. Past 20, the oldest periods merge into one, so nothing they covered resurfaces.',
+              maxLength: 20,
+              items: {
+                type: 'ref',
+                ref: 'lex:app.atmobb.forum.membership#closedPeriod',
+              },
+            },
+            guestbookHidden: {
+              type: 'array',
+              description: 'At-uris of guestbook entries the member hid.',
+              maxLength: 500,
+              items: {
+                type: 'string',
+                format: 'at-uri',
+              },
+            },
+            guestbookBlocked: {
+              type: 'array',
+              description:
+                'Signers the member blocked from their guestbook; none of their entries show.',
+              maxLength: 500,
+              items: {
+                type: 'string',
+                format: 'did',
+              },
+            },
             createdAt: {
               type: 'string',
               format: 'datetime',
             },
+          },
+        },
+      },
+      closedPeriod: {
+        type: 'object',
+        description:
+          'A span the guestbook was closed. With no end it is closed still.',
+        required: ['from'],
+        properties: {
+          from: {
+            type: 'string',
+            format: 'datetime',
+          },
+          to: {
+            type: 'string',
+            format: 'datetime',
           },
         },
       },
@@ -2038,6 +2470,11 @@ export const schemaDict = {
               type: 'boolean',
               description:
                 "Hide the board and arrival default stamps on member rails. The 'here since' line always shows. Absent means shown.",
+            },
+            hideProfileSkins: {
+              type: 'boolean',
+              description:
+                "Show every member profile page in the forum's own colors, ignoring members' profile skins. Banner patterns and headlines still show. Absent means skins show.",
             },
             createdAt: {
               type: 'string',
@@ -3193,6 +3630,9 @@ export function validate(
 
 export const ids = {
   AppAtmobbActorGetActivity: 'app.atmobb.actor.getActivity',
+  AppAtmobbActorGetGuestbook: 'app.atmobb.actor.getGuestbook',
+  AppAtmobbActorGetRegulars: 'app.atmobb.actor.getRegulars',
+  AppAtmobbActorGuestbook: 'app.atmobb.actor.guestbook',
   AppAtmobbActorProfile: 'app.atmobb.actor.profile',
   AppAtmobbDiscussionCreateReply: 'app.atmobb.discussion.createReply',
   AppAtmobbDiscussionCreateThread: 'app.atmobb.discussion.createThread',

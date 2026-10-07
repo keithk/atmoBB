@@ -7,8 +7,13 @@
   import MemberLink from '$lib/components/MemberLink.svelte';
   import SponsorLine from '$lib/components/SponsorLine.svelte';
   import StampRow from '$lib/components/StampRow.svelte';
+  import StampDetails from '$lib/components/StampDetails.svelte';
+  import ProfilePanel from '$lib/components/profile/ProfilePanel.svelte';
+  import Guestbook from '$lib/components/profile/Guestbook.svelte';
+  import type { ProfilePanelId } from '$lib/profile-page';
+  import type { RichTextBlock } from '$lib/richtext/bbcode';
   import { page } from '$app/state';
-  import { hereSince } from '$lib/profile-card';
+  import { hereSince, profileHref } from '$lib/profile-card';
 
   let { data, form } = $props();
 
@@ -16,7 +21,7 @@
   const saved = $derived(page.url.searchParams.has('saved'));
   const pending = $derived(page.url.searchParams.has('pending'));
   const boardName = (uri?: string) => (uri ? data.boards.find((b) => b.uri === uri)?.name ?? 'one board' : 'whole forum');
-  const day = (iso?: string) => (iso ? new Date(iso).toLocaleDateString() : '');
+  const day = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString() : '');
 
   const m = $derived(data.member);
   const p = $derived(data.member.profile);
@@ -40,6 +45,39 @@
   );
   const forumName = $derived(page.data.forum?.name ?? 'this forum');
   const sig = $derived(p?.signature ?? []);
+  const about = $derived((Array.isArray(p?.about) ? p.about : []) as RichTextBlock[]);
+  const headline = $derived(typeof p?.headline === 'string' ? p.headline.trim() : '');
+  const currently = $derived(typeof p?.currently === 'string' ? p.currently.trim() : '');
+  // The owner's in-place invitations, never shown on a banned owner's plain page.
+  const invite = $derived(data.isYou && !data.look.plain);
+  // The same page without ?as=visitor, keeping any other query.
+  const editingHref = $derived.by(() => {
+    const url = new URL(page.url);
+    url.searchParams.delete('as');
+    return `${url.pathname}${url.search}`;
+  });
+
+  const titles: Record<ProfilePanelId, string> = {
+    about: 'About me',
+    pinned: 'Pinned topics',
+    stamps: 'Stamp shelf',
+    regulars: 'Regulars',
+    activity: 'Recent activity',
+    guestbook: 'Guestbook',
+    bluesky: 'Recent on Bluesky',
+    signature: 'Signature',
+  };
+  const chipLabels: Record<ProfilePanelId, string> = {
+    about: 'About',
+    pinned: 'Pinned',
+    stamps: 'Stamps',
+    regulars: 'Regulars',
+    activity: 'Activity',
+    guestbook: 'Guestbook',
+    bluesky: 'Bluesky',
+    signature: 'Signature',
+  };
+  const panelTitle = (id: ProfilePanelId) => (id === 'pinned' && !data.isYou ? `Pinned by ${name}` : titles[id]);
 </script>
 
 <nav class="atm-crumbs atm-crumbs--spaced">
@@ -47,240 +85,215 @@
   <span class="atm-crumbs__current">@{m.handle}</span>
 </nav>
 
-<article class="profile">
-  <header class="cover">
-    <Avatar seed={m.did} profile={p} size={100} presence={m.presence} ring alt={name} />
-    <div class="cover__id">
-      <h1 class="cover__name">{name}</h1>
-      <code class="cover__handle">@{m.handle}</code>
-      <div class="cover__meta">
-        {#if since}<span>here since {since}</span>{/if}
-        {#if presenceLabel}
-          {#if since}<span aria-hidden="true">·</span>{/if}
-          <span class="atm-presence atm-presence--{m.presence}">{presenceLabel}</span>
+{#if data.preview}
+  <p class="atm-profile-preview">
+    <span>Previewing as a visitor</span>
+    <span aria-hidden="true">·</span>
+    <a href={editingHref}>Back to editing</a>
+  </p>
+{/if}
+
+<!-- The owner's skin applies from here down; the site header and crumbs keep the forum's look. -->
+<article class="atm-profile" style={data.look.style}>
+  <header class="atm-profile__head {data.look.banner ? 'atm-profile__head--banner' : ''}">
+    {#if data.look.banner}
+      <div class="atm-profile__banner" style={data.look.banner.style}></div>
+    {:else if invite}
+      <a class="atm-profile__banner atm-profile__banner--empty" href="/settings/page#banner">Add a banner</a>
+    {/if}
+    <div class="atm-profile__cover">
+      <div class="atm-profile__avatar">
+        <Avatar seed={m.did} profile={p} size={100} presence={m.presence} ring alt={name} />
+      </div>
+      <div class="atm-profile__id">
+        <div class="atm-profile__nameline">
+          <h1 class="atm-profile__name">{name}</h1>
+          <span class="atm-profile__handle">
+            <code>@{m.handle}</code>{#if p?.pronouns}<span aria-hidden="true"> · </span>{p.pronouns}{/if}
+          </span>
+        </div>
+        {#if headline}
+          <p class="atm-profile__headline">“{headline}”</p>
+        {:else if invite}
+          <a class="atm-profile__headline atm-profile__invite" href="/settings/page#headline">Add a headline…</a>
+        {/if}
+        {#if currently}
+          <p class="atm-profile__currently"><span class="atm-profile__currently-label">currently ▸</span> {currently}</p>
+        {:else if invite}
+          <a class="atm-profile__currently atm-profile__invite" href="/settings/page#headline"><span class="atm-profile__currently-label">currently ▸</span> what are you up to?</a>
+        {/if}
+        <div class="atm-profile__meta">
+          {#if since}<span>here since {since}</span>{/if}
+          {#if presenceLabel}
+            {#if since}<span aria-hidden="true">·</span>{/if}
+            <span class="atm-presence atm-presence--{m.presence}">{presenceLabel}</span>
+          {/if}
+          {#if memberSince}
+            <span aria-hidden="true">·</span>
+            <span>Member since {memberSince}</span>
+          {/if}
+        </div>
+        <StampRow stamps={data.stamps} handles={data.handles} class="atm-profile__stamps" />
+      </div>
+      <div class="atm-profile__actions">
+        {#if data.isYou}
+          <a class="atm-btn atm-btn--secondary" href="?as=visitor">View as visitor</a>
+          <a class="atm-btn atm-btn--secondary" href="/settings/stamps">Choose stamps</a>
+          <a class="atm-btn atm-btn--secondary" href="/settings/profile">Change avatar</a>
+          <a class="atm-btn atm-btn--secondary" href="/settings/profile">Edit profile</a>
+          <a class="atm-btn atm-btn--primary" href="/settings/page">Customize page</a>
+        {:else}
+          {#if data.guestbook.sign === 'sign' && data.panels.chips.includes('guestbook')}
+            <a class="atm-btn atm-btn--secondary" href="#guestbook-note">Sign guestbook</a>
+          {/if}
+          {#if m.elsewhere.bsky}
+            <a class="atm-btn atm-btn--secondary" href="https://bsky.app/profile/{m.elsewhere.bsky.handle}" target="_blank" rel="noopener">🦋 View on Bluesky</a>
+          {/if}
         {/if}
       </div>
-      {#if memberSince}
-        <div class="cover__meta">
-          <span>Member since {memberSince}</span>
-        </div>
-      {/if}
-      <StampRow stamps={data.stamps} handles={data.handles} class="cover__stamps" />
     </div>
-    <div class="cover__actions">
-      {#if data.isYou}
-        <a class="atm-btn atm-btn--secondary" href="/settings/stamps">Choose stamps</a>
-        <a class="atm-btn atm-btn--secondary" href="/settings/profile">Change avatar</a>
-        <a class="atm-btn atm-btn--primary" href="/settings/profile">Edit profile</a>
-      {:else if m.elsewhere.bsky}
-        <a class="atm-btn atm-btn--secondary" href="https://bsky.app/profile/{m.elsewhere.bsky.handle}" target="_blank" rel="noopener">🦋 View on Bluesky</a>
-      {/if}
-    </div>
+    {#if data.notices?.skinsOff}
+      <p class="atm-profile__notice">This forum shows profile pages in its own colors.</p>
+    {/if}
+    {#if data.notices?.plain}
+      <p class="atm-profile__notice">You're banned here, so your page is shown plain while the ban stands.</p>
+    {/if}
   </header>
 
-  <div class="grid">
-    <div class="col">
-      {#if data.standing}
-        <Card title="Standing">
-          {#if pending}
-            <p class="atm-ok">Saved. The change is taking a few extra seconds to show up here.</p>
-          {:else if saved}
-            <p class="atm-ok">Saved.</p>
-          {/if}
-          {#if form?.message}<p class="atm-err">{form.message}</p>{/if}
-          {#if data.standing.bans.length}
-            <ul class="standing__list">
-              {#each data.standing.bans as ban (ban.uri)}
-                <li class="standing__item">
-                  <span class="atm-chip atm-chip--danger">banned</span>
-                  <span>{boardName(ban.board)} · since {day(ban.since)}{ban.until ? ` · until ${day(ban.until)}` : ''}</span>
-                  {#if ban.reason}<span class="standing__reason">{ban.reason}</span>{/if}
-                  {#if staff}
-                    <form method="POST" action="?/unban">
-                      <input type="hidden" name="uri" value={ban.uri} />
-                      <button class="atm-btn atm-btn--ghost atm-btn--sm">lift ban</button>
-                    </form>
+  <div class="atm-profile__layout">
+    {#if data.panels.chips.length}
+      <nav class="atm-profile__chips" aria-label="Jump to panel">
+        {#each data.panels.chips as id (id)}
+          <a href="#panel-{id}">{chipLabels[id]}</a>
+        {/each}
+      </nav>
+    {/if}
+
+    <div class="atm-profile__panels">
+      {#each data.panels.panels as panel (panel.id)}
+        <ProfilePanel {panel} title={panelTitle(panel.id)}>
+          {#snippet prompt()}
+            {#if panel.id === 'about'}
+              <p>Say hi. What brought you here, what you're into, what you're working on.</p>
+              <a class="atm-btn atm-btn--secondary atm-btn--sm" href="/settings/page#about">Write your about me</a>
+            {:else if panel.id === 'pinned'}
+              <p>Start a topic, then pin your favorites here.</p>
+              <a class="atm-btn atm-btn--secondary atm-btn--sm" href="/settings/page#pins">Pin topics</a>
+            {:else if panel.id === 'stamps'}
+              <p>No stamps yet. Staff and boards hand these out, and they all sit on this shelf.</p>
+              <a href="/settings/page#panels">Hide this panel until then</a>
+            {:else if panel.id === 'regulars'}
+              <p>Fills in on its own as you reply alongside people here.</p>
+              <a href="/settings/page#panels">Hide this panel until then</a>
+            {:else if panel.id === 'activity'}
+              <p>Topics you start show up here.</p>
+              <a href="/settings/page#panels">Hide this panel until then</a>
+            {:else if panel.id === 'guestbook'}
+              <p>Let other members leave you notes.</p>
+              <a class="atm-btn atm-btn--secondary atm-btn--sm" href="/settings/page#guestbook">Open your guestbook</a>
+            {:else if panel.id === 'bluesky'}
+              <p>Your newest Bluesky posts show up here once you post there.</p>
+              <a href="/settings/page#panels">Hide this panel</a>
+            {:else if panel.id === 'signature'}
+              <p>No signature yet. Add one to show it under every post.</p>
+              <a class="atm-btn atm-btn--secondary atm-btn--sm" href="/settings/profile">Add a signature</a>
+            {/if}
+          {/snippet}
+
+          {#if panel.id === 'about'}
+            <div class="atm-profile__about"><RichText body={about} /></div>
+          {:else if panel.id === 'pinned'}
+            <ul class="atm-profile-pins">
+              {#each data.pins as pin (pin.uri)}
+                <li class="atm-profile-pin {pin.note ? `atm-profile-pin--${pin.note}` : ''}">
+                  {#if pin.title}
+                    {#if pin.boardName}<span class="atm-profile-pin__board">{pin.boardName}</span>{/if}
+                    <a class="atm-profile-pin__title" href={threadPath(pin.uri, pin.boardName ?? undefined, pin.title)}>{pin.title}</a>
+                    <span class="atm-profile-pin__meta">
+                      {#if pin.createdAt}{relTime(pin.createdAt)} · {/if}{pin.replyCount} {pin.replyCount === 1 ? 'reply' : 'replies'}
+                    </span>
+                  {:else}
+                    <span class="atm-profile-pin__title">A pinned topic</span>
+                  {/if}
+                  {#if pin.note === 'restricted'}
+                    <span class="atm-profile-pin__note">Only visible to people who can read that board.</span>
+                  {:else if pin.note === 'gone'}
+                    <span class="atm-profile-pin__note">This topic is gone. <a href="/settings/page#pins">Unpin it</a></span>
                   {/if}
                 </li>
               {/each}
             </ul>
-          {/if}
-          {#if data.standing.warnings.length}
-            <ul class="standing__list">
-              {#each data.standing.warnings as w (w.uri)}
-                <li class="standing__item">
-                  <span class="atm-chip">warning</span>
-                  <span>{day(w.createdAt)}{w.board ? ` · ${boardName(w.board)}` : ''}</span>
-                  {#if w.reason}<span class="standing__reason">{w.reason}</span>{/if}
+          {:else if panel.id === 'stamps'}
+            <ul class="atm-stamps atm-stamps--full atm-profile__shelf">
+              {#each data.shelf as entry (entry.id)}
+                <li><StampDetails {entry} handles={data.handles} size="full" /></li>
+              {/each}
+            </ul>
+            {#if data.isYou}
+              <p class="atm-profile__panel-foot"><a href="/settings/stamps">Choose which you wear</a></p>
+            {/if}
+          {:else if panel.id === 'regulars'}
+            <ul class="atm-profile-regulars">
+              {#each data.regulars as regular (regular.did)}
+                <li>
+                  <a class="atm-profile-regular" href={profileHref(regular.handle)}>
+                    <Avatar seed={regular.did} profile={regular.profile} size={56} alt="" />
+                    <span class="atm-profile-regular__handle">{regular.handle}</span>
+                  </a>
                 </li>
               {/each}
             </ul>
-          {/if}
-          {#if !data.standing.bans.length && !data.standing.warnings.length}
-            <p class="atm-empty atm-empty--bare">In good standing.</p>
-          {/if}
-          {#if data.membership}
-            <div class="standing__item standing__member">
-              {#if data.membership.accepted}
-                <span class="atm-chip atm-chip--ok">member</span>
-                <span>
-                  since {day(data.membership.since)}
-                  {#if data.sponsorText}· <SponsorLine text={data.sponsorText} handle={data.sponsorHandle} />{/if}
-                </span>
-                {#if staff && !data.isYou}
-                  <form method="POST" action="?/remove">
-                    <button class="atm-btn atm-btn--ghost atm-btn--sm">remove from forum</button>
-                  </form>
-                {/if}
-              {:else}
-                <span class="atm-chip">not a member</span>
-                {#if data.membership.since}<span>membership ended; joined {day(data.membership.since)}</span>{/if}
-              {/if}
+          {:else if panel.id === 'activity'}
+            <ul class="posts">
+              {#each m.activity.recentThreads as t}
+                {@const site = t.forum.did === data.forumDid ? null : data.forumSites[t.forum.did]}
+                {@const href = threadPath(t.uri, t.boardName, t.title)}
+                <li>
+                  <span class="atm-eyebrow">
+                    {t.forum.name ?? t.forum.did.slice(8, 24)}{#if t.boardName}<span aria-hidden="true"> · </span>{t.boardName}{/if}
+                  </span>
+                  <a class="posts__title" href={site ? `${site}${href}` : href}>{t.title}</a>
+                  <span class="posts__meta">
+                    {relTime(t.createdAt)} · {t.replyCount} {t.replyCount === 1 ? 'reply' : 'replies'}
+                  </span>
+                </li>
+              {/each}
+            </ul>
+          {:else if panel.id === 'guestbook'}
+            <Guestbook book={data.guestbook} isOwner={data.isYou} ownerName={name} profilePath={page.url.pathname} {form} {pending} />
+          {:else if panel.id === 'bluesky'}
+            <ul class="bposts">
+              {#each m.elsewhere.posts as post}
+                <li>
+                  <a class="bposts__text" href={post.url} target="_blank" rel="noopener">{post.text}</a>
+                  <span class="bposts__meta">
+                    {relTime(post.createdAt)}
+                    {#if post.replyCount}<span aria-hidden="true">·</span> {post.replyCount} {post.replyCount === 1 ? 'reply' : 'replies'}{/if}
+                    {#if post.likeCount}<span aria-hidden="true">·</span> {post.likeCount} {post.likeCount === 1 ? 'like' : 'likes'}{/if}
+                  </span>
+                </li>
+              {/each}
+            </ul>
+          {:else if panel.id === 'signature'}
+            <p class="muted sig-note">This signature appears on posts on this forum.</p>
+            <div class="atm-sig sig">
+              <RichText body={sig} />
             </div>
           {/if}
-          {#if staff && !data.isYou}
-            <details class="standing__act">
-              <summary>Warn</summary>
-              <form class="standing__form" method="POST" action="?/warn">
-                <textarea class="atm-input" name="reason" rows="2" required maxlength="1000" placeholder="What the warning is for"></textarea>
-                <select class="atm-select" name="board">
-                  <option value="">whole forum</option>
-                  {#each data.boards as b}<option value={b.uri}>{b.name}</option>{/each}
-                </select>
-                <button class="atm-btn atm-btn--sm">record warning</button>
-              </form>
-            </details>
-            <details class="standing__act">
-              <summary>Ban</summary>
-              <form class="standing__form" method="POST" action="?/ban">
-                <select class="atm-select" name="board">
-                  <option value="">whole forum</option>
-                  {#each data.boards as b}<option value={b.uri}>{b.name}</option>{/each}
-                </select>
-                <label class="standing__row">for <input class="atm-input standing__days" type="number" name="days" min="0" max="3650" placeholder="∞" /> days</label>
-                <textarea class="atm-input" name="reason" rows="2" maxlength="1000" placeholder="Reason (they'll see it)"></textarea>
-                <button class="atm-btn atm-btn--sm atm-btn--danger">ban</button>
-              </form>
-            </details>
-          {/if}
-          {#if data.stampsByHand}
-            {@const held = data.stampsByHand.filter((s) => s.held)}
-            {@const giveable = data.stampsByHand.filter((s) => !s.held)}
-            <details class="standing__act">
-              <summary>Give a stamp</summary>
-              {#if !data.stampsByHand.length}
-                <p class="atm-empty atm-empty--bare standing__note">
-                  No hand-awarded stamps yet — <a href="/admin/stamps">create one in Admin → Stamps</a>.
-                </p>
-              {:else}
-                {#if held.length}
-                  <ul class="standing__list standing__held">
-                    {#each held as s (s.uri)}
-                      <li class="standing__item">
-                        <span class="atm-chip">{s.name}</span>
-                        <form method="POST" action="?/revoke">
-                          <input type="hidden" name="stamp" value={s.uri} />
-                          <button class="atm-btn atm-btn--ghost atm-btn--sm">revoke</button>
-                        </form>
-                      </li>
-                    {/each}
-                  </ul>
-                {/if}
-                {#if giveable.length}
-                  <form class="standing__form" method="POST" action="?/award">
-                    <select class="atm-select" name="stamp" required>
-                      {#each giveable as s (s.uri)}<option value={s.uri}>{s.name}</option>{/each}
-                    </select>
-                    <button class="atm-btn atm-btn--sm">give stamp</button>
-                  </form>
-                {:else}
-                  <p class="atm-empty atm-empty--bare standing__note">They hold every hand-awarded stamp.</p>
-                {/if}
-              {/if}
-            </details>
-          {/if}
-        </Card>
-      {/if}
-      {#if data.sponsored}
-        <Card title="Sponsored">
-          {#if data.sponsored.length}
-            <ul class="standing__list">
-              {#each data.sponsored as s (s.did)}
-                <li class="standing__item">
-                  <MemberLink did={s.did} handle={s.handle}>
-                    {s.handle !== s.did ? `@${s.handle}` : s.did.slice(8, 20)}
-                  </MemberLink>
-                  <span>{s.via === 'application' ? 'approved' : 'invited'} · since {day(s.since)}</span>
-                </li>
-              {/each}
-            </ul>
-          {:else}
-            <p class="atm-empty atm-empty--bare">Hasn't sponsored anyone yet.</p>
-          {/if}
-        </Card>
-      {/if}
-      <Card title="About">
-        {#if p?.description}
-          <p class="about">{p.description}</p>
-        {:else}
-          <p class="muted">No bio yet.</p>
-        {/if}
-      </Card>
-
-      {#if m.activity.recentThreads.length}
-        <Card title="Recent topics across atmobb">
-          <ul class="posts">
-            {#each m.activity.recentThreads as t}
-              {@const site = t.forum.did === data.forumDid ? null : data.forumSites[t.forum.did]}
-              {@const href = threadPath(t.uri, t.boardName, t.title)}
-              <li>
-                <span class="atm-eyebrow">
-                  {t.forum.name ?? t.forum.did.slice(8, 24)}{#if t.boardName}<span aria-hidden="true"> · </span>{t.boardName}{/if}
-                </span>
-                <a class="posts__title" href={site ? `${site}${href}` : href}>{t.title}</a>
-                <span class="posts__meta">
-                  {relTime(t.createdAt)} · {t.replyCount} {t.replyCount === 1 ? 'reply' : 'replies'}
-                </span>
-              </li>
-            {/each}
-          </ul>
-        </Card>
-      {/if}
-
-      {#if m.elsewhere.posts.length}
-        <Card title="Recent on Bluesky">
-          <ul class="bposts">
-            {#each m.elsewhere.posts as post}
-              <li>
-                <a class="bposts__text" href={post.url} target="_blank" rel="noopener">{post.text}</a>
-                <span class="bposts__meta">
-                  {relTime(post.createdAt)}
-                  {#if post.replyCount}<span aria-hidden="true">·</span> {post.replyCount} {post.replyCount === 1 ? 'reply' : 'replies'}{/if}
-                  {#if post.likeCount}<span aria-hidden="true">·</span> {post.likeCount} {post.likeCount === 1 ? 'like' : 'likes'}{/if}
-                </span>
-              </li>
-            {/each}
-          </ul>
-        </Card>
-      {/if}
-
-      {#if sig.length}
-        <Card title="Signature">
-          <p class="muted sig-note">This signature appears on posts on this forum.</p>
-          <div class="atm-sig sig">
-            <RichText body={sig} />
-          </div>
-        </Card>
-      {/if}
+        </ProfilePanel>
+      {/each}
     </div>
 
-    <aside class="col col--rail">
-      <Card title={forumName}>
-        {#if local.lastActive}
-          <div class="standing">
-            <span class="standing__seen">active {relTime(local.lastActive)}</span>
-          </div>
-        {:else}
+    <aside class="atm-profile__side">
+      <Card title="Details">
+        {#if p?.description}<p class="about">{p.description}</p>{/if}
+        <dl class="details">
+          {#if p?.title}<dt>Title</dt><dd class="details__title">{p.title}</dd>{/if}
+          {#if since}<dt>Here since</dt><dd>{since}</dd>{/if}
+          {#if memberSince}<dt>Member since</dt><dd>{memberSince}</dd>{/if}
+          {#if local.lastActive}<dt>On {forumName}</dt><dd>active {relTime(local.lastActive)}</dd>{/if}
+        </dl>
+        {#if !local.lastActive}
           <p class="muted">
             {data.isYou ? "You haven't" : `${name} hasn't`} made any public posts on {forumName} yet.
             This atmosphere profile is shared across forums.
@@ -321,6 +334,150 @@
         </div>
       </Card>
     </aside>
+
+    {#if data.standing || data.sponsored}
+      <div class="atm-profile__staff">
+        {#if data.standing}
+          <Card title="Standing">
+            {#if pending}
+              <p class="atm-ok">Saved. The change is taking a few extra seconds to show up here.</p>
+            {:else if saved}
+              <p class="atm-ok">Saved.</p>
+            {/if}
+            {#if form?.message}<p class="atm-err">{form.message}</p>{/if}
+            {#if data.standing.bans.length}
+              <ul class="standing__list">
+                {#each data.standing.bans as ban (ban.uri)}
+                  <li class="standing__item">
+                    <span class="atm-chip atm-chip--danger">banned</span>
+                    <span>{boardName(ban.board)} · since {day(ban.since)}{ban.until ? ` · until ${day(ban.until)}` : ''}</span>
+                    {#if ban.reason}<span class="standing__reason">{ban.reason}</span>{/if}
+                    {#if staff}
+                      <form method="POST" action="?/unban">
+                        <input type="hidden" name="uri" value={ban.uri} />
+                        <button class="atm-btn atm-btn--ghost atm-btn--sm">lift ban</button>
+                      </form>
+                    {/if}
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+            {#if data.standing.warnings.length}
+              <ul class="standing__list">
+                {#each data.standing.warnings as w (w.uri)}
+                  <li class="standing__item">
+                    <span class="atm-chip">warning</span>
+                    <span>{day(w.createdAt)}{w.board ? ` · ${boardName(w.board)}` : ''}</span>
+                    {#if w.reason}<span class="standing__reason">{w.reason}</span>{/if}
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+            {#if !data.standing.bans.length && !data.standing.warnings.length}
+              <p class="atm-empty atm-empty--bare">In good standing.</p>
+            {/if}
+            {#if data.membership}
+              <div class="standing__item standing__member">
+                {#if data.membership.accepted}
+                  <span class="atm-chip atm-chip--ok">member</span>
+                  <span>
+                    since {day(data.membership.since)}
+                    {#if data.sponsorText}· <SponsorLine text={data.sponsorText} handle={data.sponsorHandle} />{/if}
+                  </span>
+                  {#if staff && !data.isYou}
+                    <form method="POST" action="?/remove">
+                      <button class="atm-btn atm-btn--ghost atm-btn--sm">remove from forum</button>
+                    </form>
+                  {/if}
+                {:else}
+                  <span class="atm-chip">not a member</span>
+                  {#if data.membership.since}<span>membership ended; joined {day(data.membership.since)}</span>{/if}
+                {/if}
+              </div>
+            {/if}
+            {#if staff && !data.isYou}
+              <details class="standing__act">
+                <summary>Warn</summary>
+                <form class="standing__form" method="POST" action="?/warn">
+                  <textarea class="atm-input" name="reason" rows="2" required maxlength="1000" placeholder="What the warning is for"></textarea>
+                  <select class="atm-select" name="board">
+                    <option value="">whole forum</option>
+                    {#each data.boards as b}<option value={b.uri}>{b.name}</option>{/each}
+                  </select>
+                  <button class="atm-btn atm-btn--sm">record warning</button>
+                </form>
+              </details>
+              <details class="standing__act">
+                <summary>Ban</summary>
+                <form class="standing__form" method="POST" action="?/ban">
+                  <select class="atm-select" name="board">
+                    <option value="">whole forum</option>
+                    {#each data.boards as b}<option value={b.uri}>{b.name}</option>{/each}
+                  </select>
+                  <label class="standing__row">for <input class="atm-input standing__days" type="number" name="days" min="0" max="3650" placeholder="∞" /> days</label>
+                  <textarea class="atm-input" name="reason" rows="2" maxlength="1000" placeholder="Reason (they'll see it)"></textarea>
+                  <button class="atm-btn atm-btn--sm atm-btn--danger">ban</button>
+                </form>
+              </details>
+            {/if}
+            {#if data.stampsByHand}
+              {@const held = data.stampsByHand.filter((s) => s.held)}
+              {@const giveable = data.stampsByHand.filter((s) => !s.held)}
+              <details class="standing__act">
+                <summary>Give a stamp</summary>
+                {#if !data.stampsByHand.length}
+                  <p class="atm-empty atm-empty--bare standing__note">
+                    No hand-awarded stamps yet — <a href="/admin/stamps">create one in Admin → Stamps</a>.
+                  </p>
+                {:else}
+                  {#if held.length}
+                    <ul class="standing__list standing__held">
+                      {#each held as s (s.uri)}
+                        <li class="standing__item">
+                          <span class="atm-chip">{s.name}</span>
+                          <form method="POST" action="?/revoke">
+                            <input type="hidden" name="stamp" value={s.uri} />
+                            <button class="atm-btn atm-btn--ghost atm-btn--sm">revoke</button>
+                          </form>
+                        </li>
+                      {/each}
+                    </ul>
+                  {/if}
+                  {#if giveable.length}
+                    <form class="standing__form" method="POST" action="?/award">
+                      <select class="atm-select" name="stamp" required>
+                        {#each giveable as s (s.uri)}<option value={s.uri}>{s.name}</option>{/each}
+                      </select>
+                      <button class="atm-btn atm-btn--sm">give stamp</button>
+                    </form>
+                  {:else}
+                    <p class="atm-empty atm-empty--bare standing__note">They hold every hand-awarded stamp.</p>
+                  {/if}
+                {/if}
+              </details>
+            {/if}
+          </Card>
+        {/if}
+        {#if data.sponsored}
+          <Card title="Sponsored">
+            {#if data.sponsored.length}
+              <ul class="standing__list">
+                {#each data.sponsored as s (s.did)}
+                  <li class="standing__item">
+                    <MemberLink did={s.did} handle={s.handle}>
+                      {s.handle !== s.did ? `@${s.handle}` : s.did.slice(8, 20)}
+                    </MemberLink>
+                    <span>{s.via === 'application' ? 'approved' : 'invited'} · since {day(s.since)}</span>
+                  </li>
+                {/each}
+              </ul>
+            {:else}
+              <p class="atm-empty atm-empty--bare">Hasn't sponsored anyone yet.</p>
+            {/if}
+          </Card>
+        {/if}
+      </div>
+    {/if}
   </div>
 </article>
 
@@ -338,44 +495,169 @@
   .standing__held { margin-top: var(--space-2); }
 
   @layer atmobb {
-  .profile {
+  .atm-profile-preview {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
+    margin: 0 0 var(--space-3); padding: var(--space-2) var(--space-4);
+    border: var(--border-hair) solid var(--forum-pin-edge); border-radius: var(--radius-md);
+    background: var(--forum-pin-bg); color: var(--forum-ink);
+    font: var(--type-ui);
+  }
+  .atm-profile-preview a { color: var(--forum-link); }
+
+  .atm-profile {
     border: var(--border-hair) solid var(--forum-edge);
     border-radius: var(--radius-lg);
-    background: var(--forum-surface);
+    background: var(--forum-bg);
+    color: var(--forum-ink);
     box-shadow: inset 0 1px 0 var(--forum-bevel), var(--shadow-sm);
     overflow: hidden;
   }
 
-  .cover {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-4);
-    padding: var(--space-5);
+  .atm-profile__head {
     background: var(--forum-surface);
     border-bottom: var(--border-hair) solid var(--forum-line);
   }
-  .cover__id { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
-  .cover__name { font: var(--type-page-title); color: var(--forum-ink); margin: 0; }
-  .cover__handle { font: var(--type-handle); color: var(--forum-ink-soft); }
-  .cover__meta {
+  .atm-profile__banner {
+    display: block;
+    height: 140px;
+    border-bottom: 3px solid var(--forum-accent);
+  }
+  .atm-profile__banner--empty {
+    display: flex; align-items: center; justify-content: center;
+    height: 72px;
+    border-bottom: var(--border-hair) dashed var(--forum-line-strong);
+    background: var(--forum-sunken);
+    font: var(--type-ui); color: var(--forum-link);
+  }
+  .atm-profile__cover {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--space-4);
+    padding: var(--space-5);
+  }
+  /* With a banner the avatar overlaps its lower edge. */
+  .atm-profile__head--banner .atm-profile__cover { padding-top: 0; }
+  .atm-profile__head--banner .atm-profile__avatar { margin-top: -50px; }
+  .atm-profile__avatar { flex: none; line-height: 0; }
+  .atm-profile__id { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 320px; }
+  .atm-profile__head--banner .atm-profile__id { padding-top: var(--space-3); }
+  .atm-profile__nameline { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--space-3); }
+  .atm-profile__name { font: var(--type-page-title); color: var(--forum-ink); margin: 0; }
+  .atm-profile__handle { font: var(--type-handle); color: var(--forum-ink-soft); }
+  .atm-profile__headline {
+    margin: 0;
+    font: italic var(--w-regular) var(--text-lg)/var(--lh-snug) var(--font-serif);
+    color: var(--forum-ink);
+  }
+  .atm-profile__currently { margin: 0; font: var(--type-handle); color: var(--forum-ink-soft); }
+  .atm-profile__currently-label { color: var(--forum-accent); }
+  .atm-profile__invite { align-self: flex-start; color: var(--forum-link); text-decoration: underline dotted; }
+  .atm-profile__meta {
     display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
     margin-top: var(--space-1);
     font: var(--type-meta); color: var(--forum-ink-soft);
   }
-  .cover__meta b { color: var(--forum-ink); font-weight: var(--w-semibold); }
-  .cover__stamps { margin-top: var(--space-2); }
-  .cover__actions { display: flex; gap: var(--space-2); flex: none; flex-wrap: wrap; justify-content: flex-end; }
+  .atm-profile__stamps { margin-top: var(--space-2); }
+  .atm-profile__actions { display: flex; gap: var(--space-2); flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; }
+  .atm-profile__head--banner .atm-profile__actions { padding-top: var(--space-3); }
+  .atm-profile__notice {
+    margin: 0; padding: var(--space-2) var(--space-5);
+    border-top: var(--border-hair) solid var(--forum-line);
+    font: var(--type-meta); color: var(--forum-ink-soft);
+  }
 
-  .grid {
+  /* Phone order follows the source: chips, panels, sidebar, then Standing.
+     From tablet width the sidebar moves left and Standing tops the main column. */
+  .atm-profile__layout {
     display: grid;
-    grid-template-columns: 1fr 320px;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-4);
     padding: var(--space-4) var(--space-5) var(--space-5);
-    background: var(--forum-bg);
   }
-  .col { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+  .atm-profile__panels, .atm-profile__side, .atm-profile__staff {
+    display: flex; flex-direction: column; gap: var(--space-4); min-width: 0;
+  }
+  .atm-profile__chips { display: none; }
 
-  .about { margin: 0; font: var(--type-body); color: var(--forum-ink-soft); white-space: pre-wrap; }
+  @media (min-width: 861px) {
+    .atm-profile__layout {
+      grid-template-columns: 300px minmax(0, 1fr);
+      grid-template-rows: auto 1fr;
+      grid-template-areas: 'side staff' 'side panels';
+      row-gap: 0;
+    }
+    .atm-profile__side { grid-area: side; }
+    .atm-profile__staff { grid-area: staff; margin-bottom: var(--space-4); }
+    .atm-profile__panels { grid-area: panels; align-self: start; }
+  }
+
+  @media (max-width: 640px) {
+    .atm-profile__layout { padding: var(--space-3); }
+    .atm-profile__cover { padding: var(--space-4) var(--space-3); }
+    .atm-profile__actions { width: 100%; justify-content: flex-start; }
+    .atm-profile__chips {
+      display: flex; gap: var(--space-2);
+      overflow-x: auto;
+      padding-bottom: var(--space-1);
+    }
+    .atm-profile__chips a {
+      flex: none;
+      padding: var(--space-2) var(--space-3);
+      border: var(--border-hair) solid var(--forum-line-strong); border-radius: var(--radius-round);
+      background: var(--forum-surface);
+      font: var(--type-ui); color: var(--forum-ink); text-decoration: none;
+    }
+    .atm-profile__chips a:hover { border-color: var(--forum-accent); }
+  }
+
+  .atm-profile__about { font: var(--type-body); color: var(--forum-ink); }
+  .atm-profile__panel-foot { margin: var(--space-3) 0 0; font: var(--type-meta); }
+  .atm-profile__shelf { flex-wrap: wrap; }
+
+  .atm-profile-pins {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-3);
+  }
+  .atm-profile-pin {
+    display: flex; flex-direction: column; gap: 4px;
+    padding: var(--space-3);
+    border: var(--border-hair) solid var(--forum-pin-edge); border-radius: var(--radius-sm);
+    background: var(--forum-pin-bg);
+    box-shadow: 3px 3px 0 var(--forum-line-strong);
+    rotate: -0.6deg;
+  }
+  .atm-profile-pin:nth-child(even) { rotate: 0.8deg; }
+  .atm-profile-pin--gone { rotate: none; box-shadow: none; border-style: dashed; }
+  .atm-profile-pin__board { font: var(--type-handle); letter-spacing: 0.06em; text-transform: uppercase; color: var(--forum-ink-soft); }
+  .atm-profile-pin__title { font: var(--type-thread-title); color: var(--forum-ink); text-decoration: none; }
+  a.atm-profile-pin__title:hover { color: var(--forum-link); }
+  .atm-profile-pin__meta, .atm-profile-pin__note { font: var(--type-meta); color: var(--forum-ink-soft); }
+  @media (prefers-reduced-motion: reduce) {
+    .atm-profile-pin, .atm-profile-pin:nth-child(even) { rotate: none; }
+  }
+
+  .atm-profile-regulars {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3);
+  }
+  .atm-profile-regular {
+    display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0;
+    font: var(--type-meta); color: var(--forum-ink); text-decoration: none;
+  }
+  .atm-profile-regular:hover { color: var(--forum-link); }
+  .atm-profile-regular__handle { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .details {
+    display: grid; grid-template-columns: auto 1fr; gap: var(--space-2) var(--space-3);
+    margin: 0 0 var(--space-2);
+    font: var(--type-meta); color: var(--forum-ink);
+  }
+  .details dt { color: var(--forum-ink-faint); }
+  .details dd { margin: 0; }
+  .details__title { font-family: var(--font-serif); font-style: italic; }
+
+  .about { margin: 0 0 var(--space-3); font: var(--type-body); color: var(--forum-ink-soft); white-space: pre-wrap; }
   .muted { margin: 0; font: var(--type-meta); color: var(--forum-ink-faint); }
 
   .posts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
@@ -393,9 +675,6 @@
   .sig-note { margin-bottom: var(--space-2); }
   /* inside a Card with a note above, drop the post-context top margin */
   .sig { margin-top: 0; }
-
-  .standing { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
-  .standing__seen { font: var(--type-meta); color: var(--forum-ink-faint); }
 
   .elsewhere { list-style: none; margin: 0 0 var(--space-2); padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
   .elsewhere li { display: flex; align-items: center; gap: var(--space-2); font: var(--type-meta); }
@@ -428,14 +707,6 @@
     background: var(--forum-sunken); border: var(--border-hair) solid var(--forum-line);
     border-radius: var(--radius-sm); box-shadow: var(--shadow-well);
     font: var(--type-handle); color: var(--forum-ink-soft); word-break: break-all;
-  }
-
-  @media (max-width: 860px) {
-    .grid { grid-template-columns: 1fr; }
-  }
-  @media (max-width: 560px) {
-    .cover { flex-wrap: wrap; }
-    .cover__actions { width: 100%; justify-content: flex-start; }
   }
   }
 </style>

@@ -13,6 +13,8 @@ import {
   putSpaceRecord,
   spaceUriOf,
 } from './appview';
+import { bustProfileCache } from './profiles';
+import { MAX_PINS } from '$lib/profile-page';
 
 const NS = 'app.atmobb';
 const MEMBERSHIP = `${NS}.forum.membership`;
@@ -68,45 +70,54 @@ export async function getMembership(did: string, forum: string): Promise<Members
   });
 }
 
-export async function joinForum(did: string, forum: string, wearing?: string[]): Promise<void> {
+export async function joinForum(did: string, forum: string, fields: Record<string, unknown> = {}): Promise<void> {
   const agent = await agentFor(did);
   await agent.com.atproto.repo.createRecord({
     repo: did,
     collection: MEMBERSHIP,
-    record: { $type: MEMBERSHIP, forum, ...(wearing ? { wearing } : {}), createdAt: new Date().toISOString() },
+    record: { $type: MEMBERSHIP, forum, ...fields, createdAt: new Date().toISOString() },
   });
   membershipCache.delete(did);
 }
 
-// One wearing write per did at a time: without this, two concurrent saves
+// One membership write per did at a time: without this, two concurrent saves
 // from a member with no declaration (a double submit, or a `move` right
 // after a `save`) both see none from findDeclaration and both create one,
 // leaving two membership records behind that a later Leave only clears one
 // of. Queued so a concurrent call waits for the one ahead of it and then
 // re-reads the declaration it created, instead of racing to create its own.
-const settingWearing = new Map<string, Promise<void>>();
+const patchingMembership = new Map<string, Promise<void>>();
+
+/** Fields to set, or a function of the current declaration (empty when there is none) returning them, or null to write nothing. */
+type MembershipPatch = Record<string, unknown> | ((current: Record<string, unknown>) => Record<string, unknown> | null);
 
 /**
- * Set the stamps the member wears on this forum: the `wearing` field on their
- * declaration (KTD3). Without a declaration (an open forum, never joined by
- * hand) one is created carrying the choice; leaving deletes it and the choice
- * with it. Other fields on the record are kept.
+ * Set fields on the member's declaration for this forum. Without a
+ * declaration (an open forum, never joined by hand) one is created carrying
+ * the fields; leaving deletes it and them with it. Other fields on the record
+ * are kept, and a field set to undefined is removed. A function patch reads
+ * the declaration inside the queue, so a change built on the current value
+ * can't race another write.
  */
-export function setWearing(did: string, forum: string, wearing: string[]): Promise<void> {
-  const ahead = settingWearing.get(did) ?? Promise.resolve();
+function patchMembership(did: string, forum: string, fields: MembershipPatch): Promise<void> {
+  const ahead = patchingMembership.get(did) ?? Promise.resolve();
   const write: Promise<void> = ahead
     .catch(() => {})
-    .then(() => writeWearing(did, forum, wearing))
+    .then(() => writeMembership(did, forum, fields))
     .finally(() => {
-      if (settingWearing.get(did) === write) settingWearing.delete(did);
+      if (patchingMembership.get(did) === write) patchingMembership.delete(did);
     });
-  settingWearing.set(did, write);
+  patchingMembership.set(did, write);
   return write;
 }
 
-async function writeWearing(did: string, forum: string, wearing: string[]): Promise<void> {
+async function writeMembership(did: string, forum: string, patch: MembershipPatch): Promise<void> {
   const current = await findDeclaration(did, forum);
-  if (!current) return joinForum(did, forum, wearing);
+  const fields = typeof patch === 'function' ? patch(current?.value ?? {}) : patch;
+  if (!fields) return;
+  const record: Record<string, unknown> = { ...current?.value, ...fields, $type: MEMBERSHIP };
+  for (const key of Object.keys(record)) if (record[key] === undefined) delete record[key];
+  if (!current) return joinForum(did, forum, record);
   const p = parseAtUri(current.uri);
   if (!p) throw new Error('membership record has no usable uri');
   const agent = await agentFor(did);
@@ -114,9 +125,135 @@ async function writeWearing(did: string, forum: string, wearing: string[]): Prom
     repo: did,
     collection: MEMBERSHIP,
     rkey: p.rkey,
-    record: { ...current.value, $type: MEMBERSHIP, wearing },
+    record,
   });
   membershipCache.delete(did);
+}
+
+/** Set the stamps the member wears on this forum: the `wearing` field on their declaration (KTD3). */
+export function setWearing(did: string, forum: string, wearing: string[]): Promise<void> {
+  return patchMembership(did, forum, { wearing });
+}
+
+/** The topics the member pinned to their profile page on this forum, read from their declaration. */
+export async function getPinned(did: string, forum: string): Promise<string[]> {
+  const pinned = (await findDeclaration(did, forum))?.value.pinned;
+  return Array.isArray(pinned) ? pinned.filter((uri): uri is string => typeof uri === 'string') : [];
+}
+
+// --- Guestbook --------------------------------------------------------------
+// The owner's guestbook choices live on their membership declaration for the
+// forum: whether it is open, the periods it was closed, and the entries and
+// signers they hid. The entries themselves are records in the signers' repos.
+
+const GUESTBOOK = `${NS}.actor.guestbook`;
+/** The membership lexicon's caps on the closed periods and the hidden and blocked lists. */
+const GUESTBOOK_PERIODS = 20;
+const GUESTBOOK_LIST_MAX = 500;
+/** The start of the period closing a guestbook before it was first opened, so older entries never show. */
+const BEGINNING = '1970-01-01T00:00:00.000Z';
+
+const strings = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+
+function closedPeriods(value: unknown): { from: string; to?: string }[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((period) =>
+    period && typeof period.from === 'string'
+      ? [typeof period.to === 'string' ? { from: period.from, to: period.to } : { from: period.from }]
+      : [],
+  );
+}
+
+/**
+ * Open or close the member's guestbook on this forum. Closing starts an
+ * open-ended closed period; opening ends it, or the first time records one
+ * from the beginning of time so entries signed before never show. Past the
+ * cap the oldest periods merge into one, so nothing they hid
+ * resurfaces. Asking for the state it is already in writes nothing.
+ */
+export function setGuestbookOpen(did: string, forum: string, open: boolean): Promise<void> {
+  return patchMembership(did, forum, (current) => {
+    if ((current.guestbook === true) === open) return null;
+    const now = new Date().toISOString();
+    const periods = closedPeriods(current.guestbookClosed);
+    if (open) {
+      const last = periods.at(-1);
+      // No open period to end (the first opening, or a flag cleared by hand): close the gap since the last one.
+      if (last && !last.to) last.to = now;
+      else periods.push({ from: last?.to ?? BEGINNING, to: now });
+    } else {
+      periods.push({ from: now });
+    }
+    // Merging the oldest two keeps the earliest covered instant in place. It also hides
+    // the open gap between them, so very old notes signed while it was open stop showing.
+    while (periods.length > GUESTBOOK_PERIODS) {
+      periods.splice(0, 2, { from: periods[0].from, to: periods[1].to });
+    }
+    return { guestbook: open || undefined, guestbookClosed: periods };
+  });
+}
+
+/** Add or remove one value on a guestbook list, oldest dropping off past the cap; an empty list is removed. */
+function patchGuestbookList(did: string, forum: string, field: 'guestbookHidden' | 'guestbookBlocked', value: string, add: boolean) {
+  return patchMembership(did, forum, (current) => {
+    const list = strings(current[field]);
+    if (list.includes(value) === add) return null;
+    const next = add ? [...list, value].slice(-GUESTBOOK_LIST_MAX) : list.filter((entry) => entry !== value);
+    return { [field]: next.length ? next : undefined };
+  });
+}
+
+export const hideGuestbookEntry = (did: string, forum: string, uri: string) => patchGuestbookList(did, forum, 'guestbookHidden', uri, true);
+export const unhideGuestbookEntry = (did: string, forum: string, uri: string) => patchGuestbookList(did, forum, 'guestbookHidden', uri, false);
+export const blockGuestbookSigner = (did: string, forum: string, signer: string) => patchGuestbookList(did, forum, 'guestbookBlocked', signer, true);
+export const unblockGuestbookSigner = (did: string, forum: string, signer: string) => patchGuestbookList(did, forum, 'guestbookBlocked', signer, false);
+
+export interface GuestbookSettings {
+  open: boolean;
+  hidden: string[];
+  blocked: string[];
+}
+
+/** The member's own guestbook choices on this forum, read live from their declaration. */
+export async function getGuestbookSettings(did: string, forum: string): Promise<GuestbookSettings> {
+  const value = (await findDeclaration(did, forum))?.value ?? {};
+  return { open: value.guestbook === true, hidden: strings(value.guestbookHidden), blocked: strings(value.guestbookBlocked) };
+}
+
+/** Sign `subject`'s guestbook on this forum: a record in the signer's own repo. */
+export async function signGuestbook(did: string, forum: string, subject: string, text: string): Promise<{ uri: string; cid: string }> {
+  const agent = await agentFor(did);
+  const res = await agent.com.atproto.repo.createRecord({
+    repo: did,
+    collection: GUESTBOOK,
+    record: { $type: GUESTBOOK, forum, subject, text, createdAt: new Date().toISOString() },
+  });
+  return { uri: res.data.uri, cid: res.data.cid };
+}
+
+/**
+ * When the signer last signed `subject`'s guestbook on this forum, from their
+ * own repo (newest records first), or null. One page is plenty to cover a day.
+ */
+export async function lastGuestbookEntryAt(did: string, forum: string, subject: string): Promise<string | null> {
+  const agent = await agentFor(did);
+  const res = await agent.com.atproto.repo.listRecords({ repo: did, collection: GUESTBOOK, limit: 100 });
+  let newest: string | null = null;
+  for (const record of res.data.records) {
+    const value = record.value as { forum?: unknown; subject?: unknown; createdAt?: unknown };
+    if (value.forum !== forum || value.subject !== subject || typeof value.createdAt !== 'string') continue;
+    if (!newest || value.createdAt > newest) newest = value.createdAt;
+  }
+  return newest;
+}
+
+/** Take back a guestbook entry. Only its signer can: the check is on the URI's authority. */
+export async function deleteGuestbookEntry(did: string, uri: string): Promise<void> {
+  const p = parseAtUri(uri);
+  if (!p || p.did !== did || p.collection !== GUESTBOOK) throw new Error('not your guestbook entry');
+  const agent = await agentFor(did);
+  await agent.com.atproto.repo.deleteRecord({ repo: did, collection: p.collection, rkey: p.rkey });
 }
 
 /** An access request targets a members-only board or, as an application, the forum itself. */
@@ -362,6 +499,12 @@ export interface ProfileEdit {
   website?: string;
   /** Upload an override, omit to preserve it, or pass null to follow Bluesky again. */
   avatar?: AvatarUpload | null;
+  profileSkin?: string;
+  banner?: { pattern: string; swatch: string };
+  headline?: string;
+  currently?: string;
+  about?: RichTextBlock[];
+  panels?: { id: string; hidden?: boolean }[];
 }
 
 /**
@@ -382,6 +525,12 @@ export async function saveProfile(did: string, edit: ProfileEdit, forum?: string
   if ('notifications' in edit) fields.notifications = edit.notifications;
   if ('theme' in edit) fields.theme = edit.theme || undefined;
   if ('forumThemes' in edit) fields.forumThemes = edit.forumThemes?.length ? edit.forumThemes : undefined;
+  if ('profileSkin' in edit) fields.profileSkin = edit.profileSkin || undefined;
+  if ('banner' in edit) fields.banner = edit.banner || undefined;
+  if ('headline' in edit) fields.headline = edit.headline || undefined;
+  if ('currently' in edit) fields.currently = edit.currently || undefined;
+  if ('about' in edit) fields.about = edit.about?.length ? edit.about : undefined;
+  if ('panels' in edit) fields.panels = edit.panels?.length ? edit.panels : undefined;
   if (uploaded) fields.avatar = uploaded;
   await patchActorProfile(
     did,
@@ -484,6 +633,7 @@ export async function patchActorProfile(
     profile: plainActorProfile(record),
     at: Date.now(),
   });
+  bustProfileCache(did);
 }
 
 // --- Editing and deleting your own posts -----------------------------------
@@ -577,6 +727,37 @@ export async function deletePost(did: string, uri: string): Promise<void> {
   }
   const agent = await agentFor(did);
   await agent.com.atproto.repo.deleteRecord({ repo: did, collection: ref.collection, rkey: ref.rkey });
+}
+
+// --- Profile pins -------------------------------------------------------------
+// The topics a member pins to their profile page on this forum, kept on their
+// membership record next to `wearing` because pins belong to one forum.
+
+/** Pin up to MAX_PINS of the member's own topics on this forum, in order. An empty list unpins them all. */
+export async function setPinned(did: string, forum: string, pinned: string[]): Promise<void> {
+  if (pinned.length > MAX_PINS) throw new Error(`You can pin up to ${MAX_PINS} topics.`);
+  if (new Set(pinned).size !== pinned.length) throw new Error('That topic is already pinned.');
+  await Promise.all(pinned.map((uri) => assertOwnTopicOn(did, forum, uri)));
+  await patchMembership(did, forum, { pinned: pinned.length ? pinned : undefined });
+  bustProfileCache(did);
+}
+
+/**
+ * Authorship is checked on the URI like ownPost: the authority of a public
+ * thread, the author segment of a space thread (whose authority is the forum).
+ * The forum is checked on the stored thread's board, which lives in the
+ * forum's repo.
+ */
+async function assertOwnTopicOn(did: string, forum: string, uri: string): Promise<void> {
+  const ref = postRef(uri);
+  if (!ref || ref.did !== did || ref.collection !== `${NS}.discussion.thread`) {
+    throw new Error('You can only pin your own topics.');
+  }
+  if (ref.space && !ref.space.startsWith(`at://${forum}/`)) throw new Error('You can only pin topics on this forum.');
+  const thread = await currentPost(did, ref);
+  if (typeof thread.board !== 'string' || parseAtUri(thread.board)?.did !== forum) {
+    throw new Error('You can only pin topics on this forum.');
+  }
 }
 
 // --- Poll votes -------------------------------------------------------------

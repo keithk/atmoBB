@@ -95,6 +95,10 @@
             "type": "boolean",
             "description": "Hide the board and arrival default stamps on member rails. The 'here since' line always shows. Absent means shown."
           },
+          "hideProfileSkins": {
+            "type": "boolean",
+            "description": "Show every member profile page in the forum's own colors, ignoring members' profile skins. Banner patterns and headlines still show. Absent means skins show."
+          },
           "createdAt": { "type": "string", "format": "datetime" }
         }
       }

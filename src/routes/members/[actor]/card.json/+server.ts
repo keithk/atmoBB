@@ -32,7 +32,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
     did: id.did,
     handle: id.handle,
     displayName: profile?.displayName ?? id.handle,
-    profile,
+    profile: profile ? { avatar: profile.avatar } : null,
     presence: presenceFor(id.did),
     joined: profile?.createdAt ?? null,
     bsky: bsky ? { handle: bsky.handle } : null,

@@ -42,6 +42,7 @@ export const profileRedirect = (dest: string, saved: ForumProfile) =>
       (i.forum.ogTheme ?? 'classic') === (saved.ogTheme ?? 'classic') &&
       (i.forum.hideCredit ?? false) === (saved.hideCredit ?? false) &&
       (i.forum.hideDefaultStamps === true) === (saved.hideDefaultStamps === true) &&
+      (i.forum.hideProfileSkins === true) === (saved.hideProfileSkins === true) &&
       JSON.stringify(normalizeHomepage(i.forum.homepage)) === JSON.stringify(normalizeHomepage(saved.homepage)),
   );
 

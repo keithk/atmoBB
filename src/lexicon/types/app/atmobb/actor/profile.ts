@@ -42,6 +42,24 @@ export interface Main {
   title?: string
   pronouns?: string
   website?: string
+  /** Color skin visitors see on this member's profile page. Omit to use the forum's look; forums may turn skins off. */
+  profileSkin?:
+    'classic' | 'sky' | 'bubblegum' | 'midnight' | 'forest' | (string & {})
+  banner?: Banner
+  /** Short line shown under the member's name on their profile page. */
+  headline?: string
+  /** What the member is up to right now, shown under the headline. */
+  currently?: string
+  /** Long-form About me on the profile page, separate from the short bio in description. */
+  about?: (
+    | $Typed<AppAtmobbRichtextBlock.Text>
+    | $Typed<AppAtmobbRichtextBlock.Quote>
+    | $Typed<AppAtmobbRichtextBlock.Code>
+    | $Typed<AppAtmobbRichtextBlock.Image>
+    | { $type: string }
+  )[]
+  /** Profile page panels in display order. Panels missing from the list follow in the default order; unknown ids are ignored. */
+  panels?: Panel[]
   avatarBuilder?: AvatarBuilder
   createdAt?: string
   [k: string]: unknown
@@ -76,6 +94,12 @@ export interface ForumProfile {
     | 'avatar'
     | 'title'
     | 'notifications'
+    | 'profileSkin'
+    | 'banner'
+    | 'headline'
+    | 'currently'
+    | 'about'
+    | 'panels'
     | (string & {})
   )[]
   displayName?: string
@@ -92,6 +116,19 @@ export interface ForumProfile {
     | $Typed<AppAtmobbRichtextBlock.Image>
     | { $type: string }
   )[]
+  profileSkin?:
+    'classic' | 'sky' | 'bubblegum' | 'midnight' | 'forest' | (string & {})
+  banner?: Banner
+  headline?: string
+  currently?: string
+  about?: (
+    | $Typed<AppAtmobbRichtextBlock.Text>
+    | $Typed<AppAtmobbRichtextBlock.Quote>
+    | $Typed<AppAtmobbRichtextBlock.Code>
+    | $Typed<AppAtmobbRichtextBlock.Image>
+    | { $type: string }
+  )[]
+  panels?: Panel[]
 }
 
 const hashForumProfile = 'forumProfile'
@@ -102,6 +139,58 @@ export function isForumProfile<V>(v: V) {
 
 export function validateForumProfile<V>(v: V) {
   return validate<ForumProfile & V>(v, id, hashForumProfile)
+}
+
+/** A CSS-drawn banner: a pattern over a color swatch. */
+export interface Banner {
+  $type?: 'app.atmobb.actor.profile#banner'
+  pattern?: 'plain' | 'stars' | 'scanlines' | 'checker' | (string & {})
+  swatch?:
+    | 'coral'
+    | 'rust'
+    | 'plum'
+    | 'berry'
+    | 'navy'
+    | 'teal'
+    | 'pine'
+    | 'slate'
+    | (string & {})
+}
+
+const hashBanner = 'banner'
+
+export function isBanner<V>(v: V) {
+  return is$typed(v, id, hashBanner)
+}
+
+export function validateBanner<V>(v: V) {
+  return validate<Banner & V>(v, id, hashBanner)
+}
+
+export interface Panel {
+  $type?: 'app.atmobb.actor.profile#panel'
+  id:
+    | 'about'
+    | 'pinned'
+    | 'stamps'
+    | 'regulars'
+    | 'activity'
+    | 'guestbook'
+    | 'bluesky'
+    | 'signature'
+    | (string & {})
+  /** Hidden from visitors. Absent means shown. */
+  hidden?: boolean
+}
+
+const hashPanel = 'panel'
+
+export function isPanel<V>(v: V) {
+  return is$typed(v, id, hashPanel)
+}
+
+export function validatePanel<V>(v: V) {
+  return validate<Panel & V>(v, id, hashPanel)
 }
 
 export interface ForumTheme {

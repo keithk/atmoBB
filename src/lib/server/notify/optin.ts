@@ -58,7 +58,7 @@ export function canRetryTurnOn(member: MemberNotifyState | null, nowMs: number):
 
 // A refusal to mint the token means the session's consent predates the
 // permission set; anything else is the PDS being unreachable.
-function isConsentRefusal(err: unknown): boolean {
+export function isConsentRefusal(err: unknown): boolean {
   const text = [
     err instanceof Error ? err.message : String(err),
     typeof (err as { error?: unknown })?.error === 'string' ? (err as { error: string }).error : '',

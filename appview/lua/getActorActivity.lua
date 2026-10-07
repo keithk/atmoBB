@@ -16,6 +16,8 @@ function handle()
     error("missing required parameter: forum")
   end
 
+  -- public_threads and the replies' window below are duplicated verbatim in
+  -- getRegulars.lua; keep in sync (thread-queries.integration.test.ts checks).
   local rows = db.raw([[
     WITH public_threads AS (
       SELECT s.thread_uri, s.board_uri, s.author_did, s.title, s.created_at,

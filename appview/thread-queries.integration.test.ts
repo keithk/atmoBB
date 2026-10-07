@@ -787,3 +787,188 @@ run('moderation log SQL integration', () => {
     expect((await log()).map((row) => row.record.action)).toEqual(['awardStamp', 'revokeStamp', 'awardStamp', 'warn', 'acceptMember']);
   });
 });
+
+/**
+ * The getRegulars statement, plus the public-thread CTE and reply window it
+ * copies from getActorActivity.lua, from both scripts.
+ */
+function regularsQueries() {
+  const regulars = source('./lua/getRegulars.lua');
+  const activity = source('./lua/getActorActivity.lua');
+  const publicThreads = (text: string) => capture(text, /(WITH public_threads AS \([\s\S]*?\n {4}\)),/, 'public threads CTE')[0];
+  const replyWindow = (text: string) =>
+    capture(text, /(AND \(NOT EXISTS \(\s*SELECT 1 FROM atmobb_forum_gating g\s*WHERE g\.forum_did = split_part\(t\.board_uri[\s\S]*?r\.created_at < w\.until\)\)\))/, 'reply window')[0];
+  return {
+    regulars: statement(regulars, 'shared_threads', 'regulars'),
+    copies: { publicThreads: publicThreads(regulars), replyWindow: replyWindow(regulars) },
+    originals: { publicThreads: publicThreads(activity), replyWindow: replyWindow(activity) },
+  };
+}
+
+// Regulars: the members someone replies alongside most, counted in shared
+// public threads on one forum over the last 180 days.
+run('regulars SQL integration', () => {
+  const sql = postgres(DATABASE_URL!, { max: 1 });
+  const queries = regularsQueries();
+  const OWNER = 'did:plc:owner';
+  // One clock for the whole suite, so equal ages make equal timestamps.
+  const now = Date.now();
+  const daysAgo = (days: number) => new Date(now - days * 86_400_000).toISOString();
+  const regulars = async (actor: string, forum = F) => {
+    const rows = await sql.unsafe(queries.regulars, [
+      actor, `${NS}.forum.board`, `${NS}.discussion.thread`, `${NS}.discussion.reply`,
+      `${NS}.forum.profile`, forum, `${NS}.actor.profile`,
+    ]);
+    return rows.map((row) => [row.did, row.shared_threads]);
+  };
+  const thread = async (rkey: string, author: string, board = BOARD, hidden = false) => {
+    const uri = `at://${author}/${NS}.discussion.thread/${rkey}`;
+    await sql`INSERT INTO happyview_records ${sql({
+      uri, did: author, collection: `${NS}.discussion.thread`, rkey, record: threadRecord(board, rkey), cid: `c-${rkey}`, created_at: daysAgo(30),
+    })}`;
+    await sql`INSERT INTO atmobb_thread_stats ${sql({
+      thread_uri: uri, board_uri: board, author_did: author, title: rkey, created_at: daysAgo(30),
+      reply_count: 0, last_activity: daysAgo(30), last_reply_did: null, hidden, locked: false, locked_at: null, pinned: false,
+    })}`;
+    return uri;
+  };
+  let replies = 0;
+  const reply = (did: string, thread: string, days = 5) => {
+    const rkey = `reg-${(replies += 1)}`;
+    return sql`INSERT INTO happyview_records ${sql({
+      uri: `at://${did}/${NS}.discussion.reply/${rkey}`, did, collection: `${NS}.discussion.reply`, rkey,
+      record: JSON.stringify({ thread: { uri: thread } }), cid: `c-${rkey}`, created_at: daysAgo(days),
+    })}`;
+  };
+
+  beforeAll(async () => {
+    await fixtures(sql);
+    // Five threads someone else started, where the owner replied in each.
+    const shared = [];
+    for (const n of [1, 2, 3, 4, 5]) shared.push(await thread(`shared-${n}`, 'did:plc:starter'));
+    for (const uri of shared) await reply(OWNER, uri);
+    for (const uri of shared) await reply('did:plc:five', uri, 6);
+    for (const uri of shared.slice(0, 2)) await reply('did:plc:two', uri, 4);
+    await reply('did:plc:one', shared[2]);
+    // A fan who answers every thread the owner starts, where the owner never replies.
+    for (const n of [1, 2, 3, 4, 5]) {
+      const own = await thread(`own-${n}`, OWNER);
+      for (let i = 0; i < 4; i += 1) await reply('did:plc:fan', own);
+    }
+    // Shared threads that don't read publicly: hidden, and on a space board.
+    for (const uri of [await thread('hushed', 'did:plc:starter', BOARD, true), await thread('spaced', 'did:plc:starter', PRIVATE)]) {
+      await reply(OWNER, uri);
+      await reply('did:plc:shadow', uri);
+    }
+    await reply('did:plc:shadow', shared[3]);
+    // Banned forum-wide from the start, and banned after replying.
+    for (const did of ['did:plc:banned', 'did:plc:latebanned']) {
+      for (const uri of shared.slice(0, 3)) await reply(did, uri, 10);
+    }
+    await sql`INSERT INTO atmobb_bans ${sql({ uri: 'ban-late', forum_did: F, did: 'did:plc:latebanned', board_uri: null, since: daysAgo(1), until: null })}`;
+    // Replied alongside the owner, but more than 180 days ago.
+    for (const uri of shared.slice(0, 3)) await reply('did:plc:longago', uri, 200);
+  });
+  afterAll(() => sql.end());
+
+  it('copies the public-thread filter and reply window from getActorActivity verbatim', () => {
+    expect(queries.copies.publicThreads).toBe(queries.originals.publicThreads);
+    expect(queries.copies.replyWindow).toBe(queries.originals.replyWindow);
+  });
+
+  it('ranks partners by shared threads and leaves out one-thread partners and reply-only fans', async () => {
+    expect(await regulars(OWNER)).toEqual([['did:plc:five', 5], ['did:plc:two', 2]]);
+  });
+
+  it('gives a reply-only fan no shared threads with the owner, from either side', async () => {
+    expect(await regulars('did:plc:fan')).toEqual([]);
+  });
+
+  it('skips hidden threads, space boards, banned partners and replies older than 180 days', async () => {
+    const dids = (await regulars(OWNER)).map(([did]) => did);
+    for (const excluded of ['did:plc:shadow', 'did:plc:banned', 'did:plc:latebanned', 'did:plc:longago', 'did:plc:one', 'did:plc:fan']) {
+      expect(dids).not.toContain(excluded);
+    }
+  });
+
+  it('counts threads only on the asked forum, never on a delisted one, and drops partners a closed gate shuts out', async () => {
+    const peerThreads = [
+      await thread('peer-a', 'did:plc:peer-author', PEER), await thread('peer-b', 'did:plc:peer-author', PEER),
+    ];
+    const delistedThreads = [
+      await thread('del-a', 'did:plc:delisted-author', DELISTED), await thread('del-b', 'did:plc:delisted-author', DELISTED),
+    ];
+    for (const uri of [...peerThreads, ...delistedThreads]) {
+      await reply('did:plc:wanderer', uri);
+      await reply('did:plc:pal', uri, 3);
+      await reply('did:plc:outsider', uri, 2);
+    }
+    expect(await regulars('did:plc:wanderer', 'did:plc:delisted')).toEqual([]);
+    expect(await regulars('did:plc:wanderer', 'did:plc:peer')).toEqual([['did:plc:outsider', 2], ['did:plc:pal', 2]]);
+    expect(await regulars('did:plc:wanderer')).toEqual([]);
+
+    // The peer forum closes its doors after these replies; only a member it let in stays.
+    await sql`INSERT INTO atmobb_forum_gating ${sql({ action_uri: 'gate-peer', forum_did: 'did:plc:peer', gated_since: daysAgo(1), opened_at: null, mode: 'apply' })}`;
+    await sql`INSERT INTO atmobb_member_windows ${sql({ action_uri: 'accept-pal', forum_did: 'did:plc:peer', did: 'did:plc:pal', since: daysAgo(1), until: null, sponsor: null, via: 'founding' })}`;
+    expect(await regulars('did:plc:wanderer', 'did:plc:peer')).toEqual([['did:plc:pal', 2]]);
+  });
+
+  it('returns at most six, breaking ties by the latest shared reply and then by DID', async () => {
+    const busy = [await thread('busy-a', 'did:plc:starter'), await thread('busy-b', 'did:plc:starter')];
+    for (const uri of busy) await reply('did:plc:busy', uri);
+    const partners: [string, number][] = [
+      ['did:plc:p1', 1], ['did:plc:p2', 2], ['did:plc:p3', 3], ['did:plc:p4', 4],
+      ['did:plc:p5b', 5], ['did:plc:p5a', 5], ['did:plc:p7', 7],
+    ];
+    for (const [did, days] of partners) for (const uri of busy) await reply(did, uri, days);
+    expect(await regulars('did:plc:busy')).toEqual([
+      ['did:plc:p1', 2], ['did:plc:p2', 2], ['did:plc:p3', 2], ['did:plc:p4', 2], ['did:plc:p5a', 2], ['did:plc:p5b', 2],
+    ]);
+  });
+});
+
+// Pinned topics: the profile-page pins getStamps reads from a member's newest
+// membership declaration for the forum.
+run('pinned topics SQL integration', () => {
+  const sql = postgres(DATABASE_URL!, { max: 1 });
+  const pinnedSql = statement(source('./lua/getStamps.lua'), "->'pinned'", 'pinned topics');
+  const topic = (rkey: string) => `at://did:plc:author/${NS}.discussion.thread/${rkey}`;
+  const pinned = async (did: string, forum = F) =>
+    (await sql.unsafe(pinnedSql, [did, forum])).map((row) => row.uri);
+  let declarations = 0;
+  const declaration = (did: string, forum: string, value: object, indexed: string) => {
+    const rkey = `pin-${(declarations += 1)}`;
+    return sql`INSERT INTO happyview_records ${sql({
+      uri: `at://${did}/${NS}.forum.membership/${rkey}`, did, collection: `${NS}.forum.membership`, rkey,
+      record: JSON.stringify({ forum, ...value }), cid: `c-${rkey}`, created_at: indexed,
+    })}`;
+  };
+
+  beforeAll(async () => {
+    await fixtures(sql);
+    // The newer declaration by createdAt was indexed first; a later one is for another forum.
+    await declaration('did:plc:pinner', F, { pinned: [topic('old')], createdAt: '2026-01-01T00:00:00Z' }, '2026-03-01T00:00:00Z');
+    await declaration('did:plc:pinner', F, { pinned: [topic('new')], createdAt: '2026-02-01T00:00:00Z' }, '2026-01-01T00:00:00Z');
+    await declaration('did:plc:pinner', 'did:plc:peer', { pinned: [topic('peer')], createdAt: '2026-12-01T00:00:00Z' }, '2026-12-01T00:00:00Z');
+    await declaration('did:plc:mixed', F, {
+      pinned: [topic('z'), 5, null, topic('a'), { uri: topic('obj') }, topic('m'), topic('b'), topic('c')],
+      createdAt: '2026-01-01T00:00:00Z',
+    }, '2026-01-01T00:00:00Z');
+    await declaration('did:plc:scalar', F, { pinned: topic('lone'), createdAt: '2026-01-01T00:00:00Z' }, '2026-01-01T00:00:00Z');
+  });
+  afterAll(() => sql.end());
+
+  it('reads the newest declaration for the forum by createdAt and ignores other forums', async () => {
+    expect(await pinned('did:plc:pinner')).toEqual([topic('new')]);
+    expect(await pinned('did:plc:pinner', 'did:plc:peer')).toEqual([topic('peer')]);
+  });
+
+  it('keeps the first four strings in their pinned order and skips everything else', async () => {
+    expect(await pinned('did:plc:mixed')).toEqual([topic('z'), topic('a'), topic('m'), topic('b')]);
+  });
+
+  it('returns nothing for a non-array pinned value or a member with no declaration', async () => {
+    expect(await pinned('did:plc:scalar')).toEqual([]);
+    expect(await pinned('did:plc:nobody')).toEqual([]);
+  });
+});

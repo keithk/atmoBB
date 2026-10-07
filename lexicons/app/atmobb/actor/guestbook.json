@@ -1,0 +1,21 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.actor.guestbook",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A guestbook entry: a short note signed on a member's profile page on one forum. Lives in the signer's own repo — signing is an act of the signer, taking it back is deleting this record. The profile owner decides what shows through their membership record.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["forum", "subject", "text", "createdAt"],
+        "properties": {
+          "forum": { "type": "string", "format": "did" },
+          "subject": { "type": "string", "format": "did", "description": "The member whose guestbook this entry is signed in." },
+          "text": { "type": "string", "description": "Plain text; no rich text.", "maxLength": 3000, "maxGraphemes": 300 },
+          "createdAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    }
+  }
+}

@@ -1,4 +1,7 @@
-export const PROFILE_FIELDS = ['displayName', 'description', 'pronouns', 'website', 'signature', 'avatar', 'title', 'notifications'] as const;
+export const PROFILE_FIELDS = [
+  'displayName', 'description', 'pronouns', 'website', 'signature', 'avatar', 'title', 'notifications',
+  'profileSkin', 'banner', 'headline', 'currently', 'about', 'panels',
+] as const;
 export type ProfileField = typeof PROFILE_FIELDS[number];
 
 export interface ForumProfileOverride {

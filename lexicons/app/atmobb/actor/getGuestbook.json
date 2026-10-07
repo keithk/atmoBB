@@ -1,0 +1,48 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.actor.getGuestbook",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "The entries signed in one member's guestbook on one forum, newest first by index time. Nothing while the owner keeps it closed or is banned; entries indexed while it was closed, by signers banned or shut out by a closed gate, or within 24 hours of the same signer's previous entry never show. With includeHidden, entries hidden by staff or the owner, or from a signer the owner blocked, come back flagged instead of dropped.",
+      "parameters": {
+        "type": "params",
+        "required": ["forum", "subject"],
+        "properties": {
+          "forum": { "type": "string", "format": "did" },
+          "subject": { "type": "string", "format": "did" },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 50, "default": 20 },
+          "cursor": { "type": "string" },
+          "includeHidden": { "type": "boolean", "default": false, "description": "Return hidden entries, flagged. For the owner and staff." },
+          "viewer": { "type": "string", "format": "did", "description": "Report whether the owner blocked this signer, as viewerBlocked." }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["entries", "open"],
+          "properties": {
+            "entries": { "type": "array", "items": { "type": "ref", "ref": "#entry" } },
+            "cursor": { "type": "string" },
+            "open": { "type": "boolean", "description": "Whether the guestbook takes entries now: the owner turned it on and is not banned forum-wide." },
+            "viewerBlocked": { "type": "boolean", "description": "Only with viewer: whether the owner blocked that signer. False while the guestbook is closed." }
+          }
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "required": ["uri", "cid", "author", "text", "createdAt", "indexedAt"],
+      "properties": {
+        "uri": { "type": "string", "format": "at-uri" },
+        "cid": { "type": "string", "format": "cid", "description": "For a strongRef, as a staff hide names it." },
+        "author": { "type": "string", "format": "did" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "datetime", "description": "The signer's own timestamp." },
+        "indexedAt": { "type": "string", "format": "datetime", "description": "When the appview indexed the entry; ordering and every time rule use this." },
+        "hidden": { "type": "string", "knownValues": ["owner", "staff", "blocked"], "description": "Only with includeHidden: why the entry is hidden. staff: a forum hide. owner: the owner hid it. blocked: the owner blocked its signer." }
+      }
+    }
+  }
+}

@@ -1,7 +1,7 @@
 -- xrpc.query:app.atmobb.forum.getStamps
 -- A forum's stamps: the admin-defined records (minus any firstPostInBoard
 -- stamp whose board is gone) and the generated network set. With actor, also
--- that member's tray and the ids they wear, in order.
+-- that member's tray, the ids they wear, in order, and the topics they pinned.
 
 -- Profiles created before this moment hold the network's "early days" stamp.
 -- Two months after stamps shipped: room for the first wave to arrive, and
@@ -247,6 +247,30 @@ function handle()
     for i, entry in ipairs(member.worn) do worn[i] = entry.id end
     result.tray = member.tray
     result.worn = worn
+
+    -- The topics the member pinned to their profile page, from their newest
+    -- membership declaration: the first four strings, in their order. The
+    -- app checks authorship and readability before showing any of them.
+    local pin_rows = db.raw([[
+      WITH newest AS (
+        SELECT (d.record::jsonb)->'pinned' AS pinned
+        FROM happyview_records d
+        WHERE d.did = $1 AND d.collection = 'app.atmobb.forum.membership'
+          AND (d.record::jsonb)->>'forum' = $2
+        ORDER BY COALESCE((d.record::jsonb)->>'createdAt', d.created_at::text) DESC, d.uri DESC
+        LIMIT 1
+      )
+      SELECT e.value #>> '{}' AS uri
+      FROM newest n,
+        jsonb_array_elements(CASE WHEN jsonb_typeof(n.pinned) = 'array' THEN n.pinned ELSE '[]'::jsonb END)
+          WITH ORDINALITY e(value, pos)
+      WHERE jsonb_typeof(e.value) = 'string'
+      ORDER BY e.pos
+      LIMIT 4
+    ]], { params.actor, forum })
+    local pinned = toarray({})
+    for i, row in ipairs(pin_rows) do pinned[i] = row.uri end
+    result.pinned = pinned
   end
   return result
 end

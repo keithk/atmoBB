@@ -17,8 +17,42 @@
             "maxLength": 6,
             "items": { "type": "string", "maxLength": 300 }
           },
+          "pinned": {
+            "type": "array",
+            "description": "At-uris of the member's own topics on this forum, pinned to their profile page in order.",
+            "maxLength": 4,
+            "items": { "type": "string", "format": "at-uri" }
+          },
+          "guestbook": { "type": "boolean", "description": "Whether the member's guestbook on this forum is open for signing. Absent means closed." },
+          "guestbookClosed": {
+            "type": "array",
+            "description": "Periods the guestbook was closed; an entry indexed during one never shows. Turning the guestbook on records the end of the current closed period (or, the first time, a period from the beginning of time to now); turning it off starts a new one. Past 20, the oldest periods merge into one, so nothing they covered resurfaces.",
+            "maxLength": 20,
+            "items": { "type": "ref", "ref": "#closedPeriod" }
+          },
+          "guestbookHidden": {
+            "type": "array",
+            "description": "At-uris of guestbook entries the member hid.",
+            "maxLength": 500,
+            "items": { "type": "string", "format": "at-uri" }
+          },
+          "guestbookBlocked": {
+            "type": "array",
+            "description": "Signers the member blocked from their guestbook; none of their entries show.",
+            "maxLength": 500,
+            "items": { "type": "string", "format": "did" }
+          },
           "createdAt": { "type": "string", "format": "datetime" }
         }
+      }
+    },
+    "closedPeriod": {
+      "type": "object",
+      "description": "A span the guestbook was closed. With no end it is closed still.",
+      "required": ["from"],
+      "properties": {
+        "from": { "type": "string", "format": "datetime" },
+        "to": { "type": "string", "format": "datetime" }
       }
     }
   }

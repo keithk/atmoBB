@@ -5,7 +5,8 @@ export interface ProfileCard {
   did: string;
   handle: string;
   displayName: string;
-  profile: Record<string, unknown> | null;
+  /** Only the avatar blob the card draws; the rest of the profile record stays off this endpoint. */
+  profile: { avatar?: unknown } | null;
   presence: 'online' | 'idle' | 'offline';
   /** ISO date the member's atmosphere profile was created ("here since"), or null if unknown. */
   joined: string | null;

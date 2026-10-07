@@ -83,6 +83,8 @@ export interface ForumProfile {
   membership?: ForumMembershipSettings;
   /** Hide the "powered by atmobb" footer badge. Absent means shown. */
   hideCredit?: boolean;
+  /** Show member profile pages in the forum's own colors. Absent means members' skins show. */
+  hideProfileSkins?: boolean;
   [k: string]: unknown;
 }
 
@@ -485,6 +487,60 @@ export const getLatestThreads = (
 export const getMemberActivity = (actor: string, forum = FORUM_DID()) =>
   xrpc<MemberActivity>('GET', `${NS}.actor.getActivity`, { params: { actor, forum } });
 
+/** Up to six members `actor` replies alongside most on `forum`, most shared threads first. */
+export interface Regulars {
+  regulars: { did: string; profile?: ActorProfile }[];
+}
+
+export const getRegulars = (forum: string, actor: string) =>
+  xrpc<Regulars>('GET', `${NS}.actor.getRegulars`, { params: { forum, actor } });
+
+/** Why a guestbook entry is hidden; only returned with includeHidden. */
+export type GuestbookHidden = 'owner' | 'staff' | 'blocked';
+
+export interface GuestbookEntry {
+  uri: string;
+  cid: string;
+  author: string;
+  text: string;
+  /** The signer's own timestamp. */
+  createdAt: string;
+  /** When the appview indexed the entry; ordering and the time rules use this. */
+  indexedAt: string;
+  hidden?: GuestbookHidden;
+}
+
+/** The entries in `subject`'s guestbook on `forum`, newest first. */
+export interface Guestbook {
+  entries: GuestbookEntry[];
+  cursor?: string;
+  /** Whether it takes entries now: the owner turned it on and isn't banned forum-wide. */
+  open: boolean;
+  /** Present when `viewer` was given: whether the owner blocked them. */
+  viewerBlocked?: boolean;
+}
+
+/**
+ * `includeHidden` returns hidden entries flagged instead of dropping them:
+ * pass it only when the viewer is the owner or staff. `viewer` asks whether
+ * the owner blocked that signer.
+ */
+export const getGuestbook = (
+  forum: string,
+  subject: string,
+  opts: { limit?: number; cursor?: string; includeHidden?: boolean; viewer?: string } = {},
+) =>
+  xrpc<Guestbook>('GET', `${NS}.actor.getGuestbook`, {
+    params: {
+      forum,
+      subject,
+      limit: String(opts.limit ?? 20),
+      ...(opts.cursor ? { cursor: opts.cursor } : {}),
+      ...(opts.includeHidden ? { includeHidden: 'true' } : {}),
+      ...(opts.viewer ? { viewer: opts.viewer } : {}),
+    },
+  });
+
 export interface Staff {
   staff: {
     uri: string;
@@ -653,6 +709,8 @@ export interface Stamps {
   /** Present when `actor` was given. */
   tray?: TrayEntry[];
   worn?: string[];
+  /** Present when `actor` was given: the topic at-uris they pinned to their profile page, unverified. */
+  pinned?: string[];
 }
 
 export const getStamps = (forum = FORUM_DID(), actor?: string) =>
