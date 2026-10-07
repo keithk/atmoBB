@@ -4,19 +4,34 @@ const repo = vi.hoisted(() => ({
   getRecord: vi.fn(),
   putRecord: vi.fn(),
   uploadBlob: vi.fn(),
+  listRecords: vi.fn(),
+  createRecord: vi.fn(),
 }));
+const space = vi.hoisted(() => ({ getSpaceRecord: vi.fn() }));
+const profiles = vi.hoisted(() => ({ bustProfileCache: vi.fn() }));
 
 vi.mock('./atproto-oauth', () => ({
   agentFor: async () => ({ com: { atproto: { repo } } }),
 }));
 
-import { getOwnAvatarProfile, saveProfile } from './pds';
+vi.mock('./appview', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./appview')>()),
+  getSpaceRecord: space.getSpaceRecord,
+}));
+
+vi.mock('./profiles', () => profiles);
+
+import { getOwnAvatarProfile, saveProfile, setPinned, setWearing } from './pds';
 import { profileForForum } from '$lib/profile-overrides';
 
 beforeEach(() => {
   repo.getRecord.mockReset();
   repo.putRecord.mockReset();
   repo.uploadBlob.mockReset();
+  repo.listRecords.mockReset();
+  repo.createRecord.mockReset();
+  space.getSpaceRecord.mockReset();
+  profiles.bustProfileCache.mockReset();
 });
 
 describe('profile avatars', () => {
@@ -128,5 +143,123 @@ describe('profile avatars', () => {
       extensionField: 'keep this too',
     });
     expect(repo.uploadBlob).not.toHaveBeenCalled();
+  });
+
+  it('saves personal page fields per forum, clears About me on one forum only, and busts the profile cache', async () => {
+    const about = [{ $type: 'app.atmobb.richtext.block#text', text: 'Account about' }];
+    let existing: Record<string, unknown> = { headline: 'Account headline', about };
+    repo.getRecord.mockImplementation(async () => ({ data: { value: existing } }));
+    repo.putRecord.mockImplementation(async ({ record }) => { existing = record; });
+    const did = 'did:plc:personal-page';
+    await saveProfile(did, { headline: 'Friends headline' }, 'did:plc:friends');
+    expect(existing.forumProfiles).toEqual([{ forum: 'did:plc:friends', fields: ['headline'], headline: 'Friends headline' }]);
+    expect(profileForForum(existing, 'did:plc:friends').headline).toBe('Friends headline');
+    expect(profileForForum(existing, 'did:plc:other').headline).toBe('Account headline');
+    await saveProfile(did, { about: [] }, 'did:plc:friends');
+    expect(profileForForum(existing, 'did:plc:friends')).not.toHaveProperty('about');
+    expect(profileForForum(existing, 'did:plc:other').about).toEqual(about);
+    expect(existing.about).toEqual(about);
+    expect(profiles.bustProfileCache).toHaveBeenCalledWith(did);
+  });
+
+  it('saves every personal page field on the account and keeps fields other apps wrote', async () => {
+    let existing: Record<string, unknown> = { displayName: 'Keith', elsewhere: 'keep' };
+    repo.getRecord.mockImplementation(async () => ({ data: { value: existing } }));
+    repo.putRecord.mockImplementation(async ({ record }) => { existing = record; });
+    const page = {
+      profileSkin: 'scrapbook',
+      banner: { pattern: 'stripes', swatch: 'sunset' },
+      headline: 'Hello',
+      currently: 'Reading',
+      about: [{ $type: 'app.atmobb.richtext.block#text', text: 'About me' }],
+      panels: [{ id: 'stamps' }, { id: 'activity', hidden: true }],
+    };
+    await saveProfile('did:plc:skin', page);
+    expect(existing).toMatchObject({ ...page, displayName: 'Keith', elsewhere: 'keep' });
+    await saveProfile('did:plc:skin', { profileSkin: '', headline: '', currently: '', about: [], panels: [], banner: undefined });
+    for (const key of Object.keys(page)) expect(existing).not.toHaveProperty(key);
+    expect(existing).toMatchObject({ displayName: 'Keith', elsewhere: 'keep' });
+  });
+});
+
+describe('membership pins', () => {
+  const forum = 'did:plc:friends';
+  const board = `at://${forum}/app.atmobb.forum.board/general`;
+  const thread = (did: string, rkey: string) => `at://${did}/app.atmobb.discussion.thread/${rkey}`;
+  const spaceThread = (did: string, rkey: string) =>
+    `at://${forum}/space/app.atmobb.forum.privateBoard/secret/${did}/app.atmobb.discussion.thread/${rkey}`;
+
+  /** A member's PDS holding membership records and their threads, all on `board` unless listed in `elsewhere`. */
+  function fakePds(memberships: Record<string, unknown>[] = [], elsewhere: string[] = []) {
+    const records = memberships.map((value, i) => ({ uri: `at://did:plc:x/app.atmobb.forum.membership/m${i}`, value }));
+    repo.listRecords.mockImplementation(async () => {
+      await Promise.resolve();
+      return { data: { records: [...records] } };
+    });
+    repo.createRecord.mockImplementation(async ({ record }) => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      records.push({ uri: `at://did:plc:x/app.atmobb.forum.membership/m${records.length}`, value: record });
+      return { data: {} };
+    });
+    repo.putRecord.mockImplementation(async ({ rkey, record }) => {
+      const at = records.findIndex((r) => r.uri.endsWith(`/${rkey}`));
+      records[at] = { ...records[at], value: record };
+    });
+    repo.getRecord.mockImplementation(async ({ repo: did, rkey }) => ({
+      data: { value: { board: elsewhere.includes(rkey) ? 'at://did:plc:elsewhere/app.atmobb.forum.board/b' : board, author: did } },
+    }));
+    space.getSpaceRecord.mockImplementation(async () => ({ value: { board } }));
+    return records;
+  }
+
+  it('creates the membership record carrying the pins when there is none', async () => {
+    const did = 'did:plc:pin-new';
+    const records = fakePds();
+    await setPinned(did, forum, [thread(did, 't1')]);
+    expect(records).toHaveLength(1);
+    expect(records[0].value).toMatchObject({ $type: 'app.atmobb.forum.membership', forum, pinned: [thread(did, 't1')] });
+  });
+
+  it('keeps wearing when pinning, and keeps pins when wearing changes', async () => {
+    const did = 'did:plc:pin-wearing';
+    const records = fakePds([{ $type: 'app.atmobb.forum.membership', forum, wearing: ['atmobb:arrival'], createdAt: 'then' }]);
+    await setPinned(did, forum, [thread(did, 't1')]);
+    expect(records[0].value).toMatchObject({ wearing: ['atmobb:arrival'], pinned: [thread(did, 't1')], createdAt: 'then' });
+    await setWearing(did, forum, ['atmobb:early-days']);
+    expect(records[0].value).toMatchObject({ wearing: ['atmobb:early-days'], pinned: [thread(did, 't1')] });
+    await setPinned(did, forum, []);
+    expect(records[0].value).not.toHaveProperty('pinned');
+    expect(records[0].value).toMatchObject({ wearing: ['atmobb:early-days'] });
+    expect(profiles.bustProfileCache).toHaveBeenCalledWith(did);
+  });
+
+  it("rejects another member's thread, a thread on another forum, a reply, duplicates and more than four pins", async () => {
+    const did = 'did:plc:pin-owner';
+    fakePds([], ['away']);
+    await expect(setPinned(did, forum, [thread('did:plc:someone-else', 't1')])).rejects.toThrow();
+    await expect(setPinned(did, forum, [spaceThread('did:plc:someone-else', 't1')])).rejects.toThrow();
+    await expect(setPinned(did, forum, [thread(did, 'away')])).rejects.toThrow();
+    await expect(setPinned(did, forum, [`at://${did}/app.atmobb.discussion.reply/r1`])).rejects.toThrow();
+    await expect(setPinned(did, forum, [thread(did, 't1'), thread(did, 't1')])).rejects.toThrow();
+    await expect(setPinned(did, forum, ['t1', 't2', 't3', 't4', 't5'].map((rkey) => thread(did, rkey)))).rejects.toThrow();
+    expect(repo.createRecord).not.toHaveBeenCalled();
+    expect(repo.putRecord).not.toHaveBeenCalled();
+  });
+
+  it("accepts the owner's own members-only thread and four pins", async () => {
+    const did = 'did:plc:pin-space';
+    const records = fakePds();
+    const pins = [spaceThread(did, 's1'), thread(did, 't2'), thread(did, 't3'), thread(did, 't4')];
+    await setPinned(did, forum, pins);
+    expect(records[0].value).toMatchObject({ pinned: pins });
+    expect(space.getSpaceRecord).toHaveBeenCalledWith(did, `at://${forum}/space/app.atmobb.forum.privateBoard/secret`, did, 'app.atmobb.discussion.thread', 's1');
+  });
+
+  it('leaves one membership record after two concurrent pin saves', async () => {
+    const did = 'did:plc:pin-race';
+    const records = fakePds();
+    await Promise.all([setPinned(did, forum, [thread(did, 't1')]), setPinned(did, forum, [thread(did, 't2')])]);
+    expect(records).toHaveLength(1);
+    expect(records[0].value).toMatchObject({ pinned: [thread(did, 't2')] });
   });
 });

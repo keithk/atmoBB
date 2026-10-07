@@ -34,4 +34,14 @@ describe('forum profile resolution', () => {
     expect(profileForForum(null, 'did:plc:friends')).toBeNull();
     expect(profileForForum({ forumProfiles: [null, { forum: 'did:plc:friends' }] }, 'did:plc:friends')).toEqual({ forumProfiles: [null, { forum: 'did:plc:friends' }] });
   });
+
+  it('resolves the personal page fields per forum', () => {
+    const about = [{ $type: 'app.atmobb.richtext.block#text', text: 'Account about' }];
+    const value = { headline: 'Account headline', about, profileSkin: 'scrapbook', forumProfiles: [
+      { forum: 'did:plc:friends', fields: ['headline', 'about'], headline: 'Friends headline' },
+    ] };
+    expect(profileForForum(value, 'did:plc:friends')).toMatchObject({ headline: 'Friends headline', profileSkin: 'scrapbook' });
+    expect(profileForForum(value, 'did:plc:friends')).not.toHaveProperty('about');
+    expect(profileForForum(value, 'did:plc:software')).toMatchObject({ headline: 'Account headline', about });
+  });
 });

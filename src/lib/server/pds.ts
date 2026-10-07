@@ -13,6 +13,7 @@ import {
   putSpaceRecord,
   spaceUriOf,
 } from './appview';
+import { bustProfileCache } from './profiles';
 
 const NS = 'app.atmobb';
 const MEMBERSHIP = `${NS}.forum.membership`;
@@ -68,45 +69,47 @@ export async function getMembership(did: string, forum: string): Promise<Members
   });
 }
 
-export async function joinForum(did: string, forum: string, wearing?: string[]): Promise<void> {
+export async function joinForum(did: string, forum: string, fields: Record<string, unknown> = {}): Promise<void> {
   const agent = await agentFor(did);
   await agent.com.atproto.repo.createRecord({
     repo: did,
     collection: MEMBERSHIP,
-    record: { $type: MEMBERSHIP, forum, ...(wearing ? { wearing } : {}), createdAt: new Date().toISOString() },
+    record: { $type: MEMBERSHIP, forum, ...fields, createdAt: new Date().toISOString() },
   });
   membershipCache.delete(did);
 }
 
-// One wearing write per did at a time: without this, two concurrent saves
+// One membership write per did at a time: without this, two concurrent saves
 // from a member with no declaration (a double submit, or a `move` right
 // after a `save`) both see none from findDeclaration and both create one,
 // leaving two membership records behind that a later Leave only clears one
 // of. Queued so a concurrent call waits for the one ahead of it and then
 // re-reads the declaration it created, instead of racing to create its own.
-const settingWearing = new Map<string, Promise<void>>();
+const patchingMembership = new Map<string, Promise<void>>();
 
 /**
- * Set the stamps the member wears on this forum: the `wearing` field on their
- * declaration (KTD3). Without a declaration (an open forum, never joined by
- * hand) one is created carrying the choice; leaving deletes it and the choice
- * with it. Other fields on the record are kept.
+ * Set fields on the member's declaration for this forum. Without a
+ * declaration (an open forum, never joined by hand) one is created carrying
+ * the fields; leaving deletes it and them with it. Other fields on the record
+ * are kept, and a field set to undefined is removed.
  */
-export function setWearing(did: string, forum: string, wearing: string[]): Promise<void> {
-  const ahead = settingWearing.get(did) ?? Promise.resolve();
+function patchMembership(did: string, forum: string, fields: Record<string, unknown>): Promise<void> {
+  const ahead = patchingMembership.get(did) ?? Promise.resolve();
   const write: Promise<void> = ahead
     .catch(() => {})
-    .then(() => writeWearing(did, forum, wearing))
+    .then(() => writeMembership(did, forum, fields))
     .finally(() => {
-      if (settingWearing.get(did) === write) settingWearing.delete(did);
+      if (patchingMembership.get(did) === write) patchingMembership.delete(did);
     });
-  settingWearing.set(did, write);
+  patchingMembership.set(did, write);
   return write;
 }
 
-async function writeWearing(did: string, forum: string, wearing: string[]): Promise<void> {
+async function writeMembership(did: string, forum: string, fields: Record<string, unknown>): Promise<void> {
   const current = await findDeclaration(did, forum);
-  if (!current) return joinForum(did, forum, wearing);
+  const record: Record<string, unknown> = { ...current?.value, ...fields, $type: MEMBERSHIP };
+  for (const key of Object.keys(record)) if (record[key] === undefined) delete record[key];
+  if (!current) return joinForum(did, forum, record);
   const p = parseAtUri(current.uri);
   if (!p) throw new Error('membership record has no usable uri');
   const agent = await agentFor(did);
@@ -114,9 +117,14 @@ async function writeWearing(did: string, forum: string, wearing: string[]): Prom
     repo: did,
     collection: MEMBERSHIP,
     rkey: p.rkey,
-    record: { ...current.value, $type: MEMBERSHIP, wearing },
+    record,
   });
   membershipCache.delete(did);
+}
+
+/** Set the stamps the member wears on this forum: the `wearing` field on their declaration (KTD3). */
+export function setWearing(did: string, forum: string, wearing: string[]): Promise<void> {
+  return patchMembership(did, forum, { wearing });
 }
 
 /** An access request targets a members-only board or, as an application, the forum itself. */
@@ -362,6 +370,12 @@ export interface ProfileEdit {
   website?: string;
   /** Upload an override, omit to preserve it, or pass null to follow Bluesky again. */
   avatar?: AvatarUpload | null;
+  profileSkin?: string;
+  banner?: { pattern: string; swatch: string };
+  headline?: string;
+  currently?: string;
+  about?: RichTextBlock[];
+  panels?: { id: string; hidden?: boolean }[];
 }
 
 /**
@@ -382,6 +396,12 @@ export async function saveProfile(did: string, edit: ProfileEdit, forum?: string
   if ('notifications' in edit) fields.notifications = edit.notifications;
   if ('theme' in edit) fields.theme = edit.theme || undefined;
   if ('forumThemes' in edit) fields.forumThemes = edit.forumThemes?.length ? edit.forumThemes : undefined;
+  if ('profileSkin' in edit) fields.profileSkin = edit.profileSkin || undefined;
+  if ('banner' in edit) fields.banner = edit.banner || undefined;
+  if ('headline' in edit) fields.headline = edit.headline || undefined;
+  if ('currently' in edit) fields.currently = edit.currently || undefined;
+  if ('about' in edit) fields.about = edit.about?.length ? edit.about : undefined;
+  if ('panels' in edit) fields.panels = edit.panels?.length ? edit.panels : undefined;
   if (uploaded) fields.avatar = uploaded;
   await patchActorProfile(
     did,
@@ -484,6 +504,7 @@ export async function patchActorProfile(
     profile: plainActorProfile(record),
     at: Date.now(),
   });
+  bustProfileCache(did);
 }
 
 // --- Editing and deleting your own posts -----------------------------------
@@ -577,6 +598,39 @@ export async function deletePost(did: string, uri: string): Promise<void> {
   }
   const agent = await agentFor(did);
   await agent.com.atproto.repo.deleteRecord({ repo: did, collection: ref.collection, rkey: ref.rkey });
+}
+
+// --- Profile pins -------------------------------------------------------------
+// The topics a member pins to their profile page on this forum, kept on their
+// membership record next to `wearing` because pins belong to one forum.
+
+export const MAX_PINS = 4;
+
+/** Pin up to MAX_PINS of the member's own topics on this forum, in order. An empty list unpins them all. */
+export async function setPinned(did: string, forum: string, pinned: string[]): Promise<void> {
+  if (pinned.length > MAX_PINS) throw new Error(`You can pin up to ${MAX_PINS} topics.`);
+  if (new Set(pinned).size !== pinned.length) throw new Error('That topic is already pinned.');
+  await Promise.all(pinned.map((uri) => assertOwnTopicOn(did, forum, uri)));
+  await patchMembership(did, forum, { pinned: pinned.length ? pinned : undefined });
+  bustProfileCache(did);
+}
+
+/**
+ * Authorship is checked on the URI like ownPost: the authority of a public
+ * thread, the author segment of a space thread (whose authority is the forum).
+ * The forum is checked on the stored thread's board, which lives in the
+ * forum's repo.
+ */
+async function assertOwnTopicOn(did: string, forum: string, uri: string): Promise<void> {
+  const ref = postRef(uri);
+  if (!ref || ref.did !== did || ref.collection !== `${NS}.discussion.thread`) {
+    throw new Error('You can only pin your own topics.');
+  }
+  if (ref.space && !ref.space.startsWith(`at://${forum}/`)) throw new Error('You can only pin topics on this forum.');
+  const thread = await currentPost(did, ref);
+  if (typeof thread.board !== 'string' || parseAtUri(thread.board)?.did !== forum) {
+    throw new Error('You can only pin topics on this forum.');
+  }
 }
 
 // --- Poll votes -------------------------------------------------------------
