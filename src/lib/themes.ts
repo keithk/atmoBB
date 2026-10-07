@@ -252,7 +252,42 @@ export function themeTokens(theme: ForumTheme): Record<string, string> {
 export function themeInlineStyle(theme: ForumTheme): string {
   return Object.entries(themeTokens(theme))
     .map(([name, value]) => `${name}:${value}`)
+    .concat(`color-scheme:${themePreset(theme).dark ? 'dark' : 'light'}`)
     .join(';');
+}
+
+// The :root values (tokens/colors.css and tokens/spacing.css) of every
+// non-`--forum-*` token a preset overrides; themes.test.ts checks none is missing.
+const UTILITY_DEFAULTS: Record<string, string> = {
+  '--ok-1': '#2f7d55',
+  '--ok-bg': '#e0efe4',
+  '--warn-1': '#b06f13',
+  '--warn-bg': '#f6ecd6',
+  '--danger-1': '#b23b2c',
+  '--danger-bg': '#f6ded9',
+  '--info-1': '#2f6fb0',
+  '--info-bg': '#e2edf7',
+  '--shadow-sm': '0 1px 0 rgba(33, 28, 22, 0.04), 0 1px 2px rgba(33, 28, 22, 0.06)',
+  '--shadow-md': '0 1px 2px rgba(33, 28, 22, 0.06), 0 4px 10px rgba(33, 28, 22, 0.08)',
+  '--shadow-lg': '0 6px 24px rgba(33, 28, 22, 0.14)',
+};
+
+/**
+ * Inline `style` for a member's profile skin. Unlike the admin preview, the
+ * profile body can sit inside a page the viewer has re-themed, so it also
+ * pins every utility token a preset might change (light skins get the :root
+ * defaults back) and re-derives `--focus-ring`, which :root resolves against
+ * the page accent rather than the skin's.
+ */
+export function profileSkinStyle(theme: ForumTheme): string {
+  const utilities = Object.entries({ ...UTILITY_DEFAULTS, ...themePreset(theme).tokens })
+    .filter(([name]) => !name.startsWith('--forum-'))
+    .map(([name, value]) => `${name}:${value}`);
+  return [
+    themeInlineStyle(theme),
+    ...utilities,
+    '--focus-ring:0 0 0 3px color-mix(in oklch, var(--forum-accent) 40%, transparent)',
+  ].join(';');
 }
 
 /** Stylesheet text. Explicit mode emits Classic too, so personal choices override owner tokens. */
