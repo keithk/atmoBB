@@ -948,13 +948,41 @@ export const deleteSpaceRecord = (asDid: string, space: string, collection: stri
     body: { space, collection, rkey },
   });
 
+/**
+ * Authorize one logical read, binding all its operations to this viewer and space.
+ * Keep the reader local to that read; creating another reader rechecks membership.
+ */
+export async function createSpaceReader(asDid: string, space: string) {
+  await requireSpaceRead(space, asDid);
+  const sessionCookie = mintSessionCookie(asDid);
+  return {
+    async listRepos(): Promise<string[]> {
+      const repos = await spaceList<{ did: string }>(
+        'com.atproto.space.listRepos', 'repos', { space, limit: '100' }, sessionCookie,
+      );
+      return repos.map((r) => r.did);
+    },
+    listRecords<T = unknown>(repo: string, collection: string, limit = 100, includeValues = false) {
+      return spaceList<SpaceRecordRef<T>>(
+        'com.atproto.space.listRecords', 'records',
+        { space, repo, collection, limit: String(limit), includeValues: String(includeValues) },
+        sessionCookie,
+      );
+    },
+    getRecord<T = unknown>(repo: string, collection: string, rkey: string) {
+      return xrpc<{ uri: string; cid: string; value: T }>('GET', 'com.atproto.space.getRecord', {
+        params: { space, repo, collection, rkey },
+        sessionCookie,
+      });
+    },
+  };
+}
+
+export type SpaceReader = Awaited<ReturnType<typeof createSpaceReader>>;
+
 /** Authors (DIDs) that have written into the space, read as `asDid`. */
 export async function listSpaceRepos(asDid: string, space: string): Promise<string[]> {
-  await requireSpaceRead(space, asDid);
-  const repos = await spaceList<{ did: string }>(
-    'com.atproto.space.listRepos', 'repos', { space, limit: '100' }, mintSessionCookie(asDid),
-  );
-  return repos.map((r) => r.did);
+  return (await createSpaceReader(asDid, space)).listRepos();
 }
 
 /** One author's records of a collection in the space, read as `asDid`. listRecords without `repo` returns only the caller's own — so we always pass repo. */
@@ -966,12 +994,7 @@ export async function listSpaceRecords<T = unknown>(
   limit = 100,
   includeValues = false,
 ): Promise<SpaceRecordRef<T>[]> {
-  await requireSpaceRead(space, asDid);
-  return spaceList<SpaceRecordRef<T>>(
-    'com.atproto.space.listRecords', 'records',
-    { space, repo, collection, limit: String(limit), includeValues: String(includeValues) },
-    mintSessionCookie(asDid),
-  );
+  return (await createSpaceReader(asDid, space)).listRecords<T>(repo, collection, limit, includeValues);
 }
 
 /** Full record body from the space, read as `asDid`. */
@@ -982,11 +1005,7 @@ export const getSpaceRecord = async <T = unknown>(
   collection: string,
   rkey: string,
 ) => {
-  await requireSpaceRead(space, asDid);
-  return xrpc<{ uri: string; cid: string; value: T }>('GET', 'com.atproto.space.getRecord', {
-    params: { space, repo, collection, rkey },
-    sessionCookie: mintSessionCookie(asDid),
-  });
+  return (await createSpaceReader(asDid, space)).getRecord<T>(repo, collection, rkey);
 };
 
 

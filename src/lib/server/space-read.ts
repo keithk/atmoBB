@@ -1,7 +1,6 @@
 import {
-  listSpaceRepos,
-  listSpaceRecords,
-  getSpaceRecord,
+  createSpaceReader,
+  type SpaceReader,
   THREAD_NSID,
   REPLY_NSID,
   parseSpaceUri,
@@ -75,12 +74,12 @@ async function stampsFor(dids: string[]): Promise<Record<string, TrayEntry[]>> {
   return Object.fromEntries(entries);
 }
 
-/** Every thread and reply record in a space, read as `viewer` (must be a member). */
+/** Every thread and reply record in a space, using this logical read's authorization. */
 async function gatherSpace(
-  viewer: string,
+  reader: SpaceReader,
   space: string,
 ): Promise<{ threads: Gathered<ThreadValue>[]; replies: Gathered<ReplyValue>[] }> {
-  const authors = await listSpaceRepos(viewer, space);
+  const authors = await reader.listRepos();
   const threads: Gathered<ThreadValue>[] = [];
   const replies: Gathered<ReplyValue>[] = [];
 
@@ -89,7 +88,7 @@ async function gatherSpace(
     collection: string,
     into: Gathered<V>[],
   ): Promise<void> {
-    const refs = await listSpaceRecords<V>(viewer, space, author, collection, 100, true);
+    const refs = await reader.listRecords<V>(author, collection, 100, true);
     await Promise.all(
       refs.map(async (ref) => {
         if (Object.hasOwn(ref, 'value')) {
@@ -97,7 +96,7 @@ async function gatherSpace(
           return;
         }
         try {
-          const rec = await getSpaceRecord<V>(viewer, space, author, collection, ref.rkey);
+          const rec = await reader.getRecord<V>(author, collection, ref.rkey);
           into.push({ uri: rec.uri, cid: rec.cid, author, value: rec.value });
         } catch (e) {
           // The pinned engine uses "Record not found"; unrelated 404s still fail.
@@ -140,7 +139,8 @@ export async function readSpaceBoardThreads(
   boardMeta: BoardThreads['board'],
   options: ThreadFilters & { offset?: number; limit?: number } = {},
 ): Promise<BoardThreads> {
-  const { threads, replies } = await gatherSpace(viewer, space);
+  const reader = await createSpaceReader(viewer, space);
+  const { threads, replies } = await gatherSpace(reader, space);
   const agg = replyAggregates(replies);
   const filtered = threads.filter((t) => {
     if (options.q && !t.value.title.toLowerCase().includes(options.q.toLowerCase())) return false;
@@ -204,16 +204,17 @@ export async function readSpaceThreadPage(viewer: string, threadUri: string): Pr
   const p = parseSpaceUri(threadUri);
   if (!p) return { replies: [], replyCount: 0 };
 
+  const reader = await createSpaceReader(viewer, p.space);
   let head: Gathered<ThreadValue>;
   try {
-    const rec = await getSpaceRecord<ThreadValue>(viewer, p.space, p.author, THREAD_NSID, p.rkey);
+    const rec = await reader.getRecord<ThreadValue>(p.author, THREAD_NSID, p.rkey);
     head = { uri: rec.uri, cid: rec.cid, author: p.author, value: rec.value };
   } catch (e) {
     if (missingRecord(e)) return { replies: [], replyCount: 0 };
     throw e;
   }
 
-  const { replies } = await gatherSpace(viewer, p.space);
+  const { replies } = await gatherSpace(reader, p.space);
 
   const mine = replies
     .filter((r) => r.value.thread?.uri === threadUri)

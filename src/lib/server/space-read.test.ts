@@ -9,11 +9,12 @@ import { readSpaceBoardThreads, readSpaceThreadPage } from './space-read';
 
 const space = 'at://did:plc:forum/space/thread/board';
 let inline = true;
+let canRead = true;
 let failure: { error: string; status: number } | undefined;
 const fetch = vi.fn(async (url: URL, init?: RequestInit) => {
   if (url.pathname.endsWith('getStamps')) return Response.json({ tray: [], worn: [] });
   if (url.pathname.endsWith('listMembers')) {
-    return Response.json({ members: [{ did: 'did:plc:viewer', read: true, write: true }] });
+    return Response.json({ members: [{ did: 'did:plc:viewer', read: canRead, write: true }] });
   }
   expect((init?.headers as Record<string, string>).cookie).toContain(encodeURIComponent('session:did:plc:viewer'));
   const params = url.searchParams;
@@ -47,6 +48,7 @@ function add(author: string, kind: 'thread' | 'reply', key: string, value: Recor
 beforeEach(() => {
   records.clear();
   inline = true;
+  canRead = true;
   failure = undefined;
   fetch.mockClear();
   vi.stubGlobal('fetch', fetch);
@@ -98,12 +100,14 @@ describe('permissioned board lists', () => {
     expect(page.threads[0]).toMatchObject({ title: 'Topic 104', replyCount: 1, lastReplyBy: 'did:plc:reply104' });
     expect(page.board).toMatchObject({ threadCount: 105, replyCount: 105 });
     expect(fetch.mock.calls.some(([url]) => url.pathname.endsWith('getRecord'))).toBe(false);
+    expect(fetch.mock.calls.filter(([url]) => url.pathname.endsWith('listMembers'))).toHaveLength(1);
   });
 
   it('falls back only for absent values and skips a named vanished record', async () => {
     inline = false;
     add('did:plc:owner', 'thread', 'one', { board: 'at://board', title: 'Fallback' });
     expect((await readSpaceBoardThreads('did:plc:viewer', space, undefined)).threads[0].title).toBe('Fallback');
+    expect(fetch.mock.calls.filter(([url]) => url.pathname.endsWith('listMembers'))).toHaveLength(1);
     failure = { error: 'RecordNotFound', status: 400 };
     expect((await readSpaceBoardThreads('did:plc:viewer', space, undefined)).threads).toEqual([]);
     failure = { error: 'Record not found', status: 404 };
@@ -122,6 +126,45 @@ describe('permissioned board lists', () => {
     expect(page.replies[0]).toMatchObject({ cid: 'r0', value: { parent: { uri, cid: 'one' } } });
     expect(page.replies.at(-1)?.cid).toBe('r104');
     expect(fetch.mock.calls.filter(([url]) => url.pathname.endsWith('getRecord'))).toHaveLength(1);
+    expect(fetch.mock.calls.filter(([url]) => url.pathname.endsWith('listMembers'))).toHaveLength(1);
+  });
+
+  it.each(['board', 'thread'])('rechecks permissions on each %s read and denies revoked access before reading records', async (kind) => {
+    const uri = add('did:plc:owner', 'thread', 'one', { board: 'at://board', title: 'Private' });
+    const read = () => kind === 'board'
+      ? readSpaceBoardThreads('did:plc:viewer', space, undefined)
+      : readSpaceThreadPage('did:plc:viewer', uri);
+    await read();
+    fetch.mockClear();
+    canRead = false;
+    await expect(read()).rejects.toMatchObject({ status: 403 });
+    expect(fetch.mock.calls.map(([url]) => url.pathname)).toEqual(['/xrpc/com.atproto.simplespace.listMembers']);
+  });
+
+  it('does not reuse authorization for a different viewer or space', async () => {
+    await readSpaceBoardThreads('did:plc:viewer', space, undefined);
+    fetch.mockClear();
+    await expect(readSpaceBoardThreads('did:plc:other', space, undefined)).rejects.toMatchObject({ status: 403 });
+    canRead = false;
+    await expect(readSpaceBoardThreads('did:plc:viewer', `${space}-other`, undefined)).rejects.toMatchObject({ status: 403 });
+    expect(fetch.mock.calls.map(([url]) => [url.pathname, url.searchParams.get('space')])).toEqual([
+      ['/xrpc/com.atproto.simplespace.listMembers', space],
+      ['/xrpc/com.atproto.simplespace.listMembers', `${space}-other`],
+    ]);
+  });
+
+  it('completes membership pagination before any read and propagates later-page failures', async () => {
+    const realFetch = fetch.getMockImplementation()!;
+    const requests = vi.fn(async (url: URL, init?: RequestInit) => {
+      if (!url.pathname.endsWith('listMembers')) return realFetch(url, init);
+      return url.searchParams.has('cursor')
+        ? Response.json({ error: 'InternalServerError' }, { status: 500 })
+        : Response.json({ members: [{ did: 'did:plc:viewer', read: true, write: true }], cursor: 'next' });
+    });
+    vi.stubGlobal('fetch', requests);
+    await expect(readSpaceBoardThreads('did:plc:viewer', space, undefined)).rejects.toMatchObject({ status: 500 });
+    expect(requests.mock.calls).toHaveLength(2);
+    expect(requests.mock.calls.every(([url]) => url.pathname.endsWith('listMembers'))).toBe(true);
   });
 
   it('does not fetch a replacement for an explicitly present invalid inline value', async () => {
