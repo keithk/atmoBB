@@ -24,19 +24,25 @@ HV=${HV:-http://127.0.0.1:3000}
 PG_EXEC=${PG_EXEC-"docker compose exec -T postgres"}
 NS=app.atmobb
 
+# Bound every admin request so a stalled Happyview cannot hold setup forever.
+# Preserve curl's failure status: callers must stop before maintenance ends.
+admin_request() {
+  curl --connect-timeout 10 --max-time 60 "$@"
+}
+
 echo "== Happyview spaces and authenticated PDS proxy"
 # These are server feature gates, not an SDK migration trigger. Never change
 # the service DID or signing keys while configuring an existing installation.
 for setting in feature.spaces_enabled feature.spaces_pds_migration; do
-  curl --fail --silent --show-error -X PUT "$HV/admin/settings/$setting" \
+  admin_request --fail --silent --show-error -X PUT "$HV/admin/settings/$setting" \
     -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
     -d '{"value":"true"}' >/dev/null
 done
 # Keep the operator's allow/block policy; only change the routing destination.
-proxy=$(curl --fail --silent --show-error "$HV/admin/settings/xrpc-proxy" \
+proxy=$(admin_request --fail --silent --show-error "$HV/admin/settings/xrpc-proxy" \
   -H "Authorization: Bearer $TOKEN")
 proxy=$(printf '%s' "$proxy" | jq -e '.routing = "serviceproxy"')
-curl --fail --silent --show-error -X PUT "$HV/admin/settings/xrpc-proxy" \
+admin_request --fail --silent --show-error -X PUT "$HV/admin/settings/xrpc-proxy" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d "$proxy" >/dev/null
 
@@ -176,7 +182,7 @@ for nsid in \
   $NS.poll.vote
 do
   printf '%s: ' "$nsid"
-  response=$(curl --fail-with-body --silent --show-error -X POST "$HV/admin/network-lexicons" \
+  response=$(admin_request --fail-with-body --silent --show-error -X POST "$HV/admin/network-lexicons" \
     -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
     -d "{\"nsid\":\"$nsid\"}")
   printf '%.120s\n' "$response"
@@ -187,7 +193,7 @@ upload_lex() {
   file=$1; extra=$2
   body=$(jq -n --slurpfile lex "$file" "{lexicon_json: \$lex[0]} + $extra")
   printf '%s: ' "$(basename "$file")"
-  response=$(curl --fail-with-body --silent --show-error -X POST "$HV/admin/lexicons" \
+  response=$(admin_request --fail-with-body --silent --show-error -X POST "$HV/admin/lexicons" \
     -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
     -d "$body")
   printf '%.120s\n' "$response"
@@ -219,7 +225,7 @@ upload_script() {
   body=$(jq -n --rawfile code "appview/lua/$file" --arg id "$trigger" \
     '{id: $id, body: $code}')
   printf '%s: ' "$trigger"
-  response=$(curl --fail-with-body --silent --show-error -X POST "$HV/admin/scripts" \
+  response=$(admin_request --fail-with-body --silent --show-error -X POST "$HV/admin/scripts" \
     -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
     -d "$body")
   printf '%.60s\n' "$response"
