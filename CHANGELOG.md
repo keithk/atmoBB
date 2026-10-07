@@ -4,15 +4,27 @@ Versions follow [Semantic Versioning](https://semver.org) with the operator's
 workload in mind; [Releasing](docs/releasing.md) spells out what each level
 means. Every entry names the Happyview release it was tested against.
 
-## Unreleased
+## 0.6.0
 
-HappyView 2.16.0. Release acceptance is incomplete: direct-engine read-denial assertions fail, and SDK-driven native PDS migration is unsupported.
+HappyView 2.16.0. Upgrades from HappyView 2.14 require a backup before forward-only database migrations. Members must sign in again, and administrators must reconnect the dedicated forum account.
 
+- Maintenance mode closes both the forum and HappyView public hosts during updates. A protected operator console shows progress and recovery controls while the app is offline; failed updates keep maintenance active until setup and health checks pass.
+- Stamp collections have a compact browsing and detail view, with clearer controls for choosing which stamps to wear.
+- Long posts have expandable previews so a large post does not crowd out the rest of a discussion.
 - Application OAuth uses the unmodified HappyView Node SDK with browser-bound one-time transactions, callback identity checks, separate member/forum storage, and bounded DNS-pinned network requests. Login and forum connection populate `happyview-oauth-v1`; the app does not convert other credential stores.
 - Private-space operations use separate policies and membership flags, resolve actual space authorities, paginate complete lists, and consume inline record values. atmoBB checks read permission before list/record calls.
 - Private boards include access in their initial record. Local privacy changes and posting share a lock. Deleting a private board requires confirmation even when its public index count is zero.
 - Setup configures public OAuth and PDS service-proxy routing. Upgrades stop application writes before backups and leave the app stopped if setup fails. `./atmobb configure-oauth` provisions or repairs the public client.
 - Extensions use forum-purpose credentials, per-install collection restrictions, and separate forum consent. Private-board bindings are prohibited.
+- Setup admin requests have bounded connection and total deadlines. Private-board reads share one authorization check within each logical read, and private-post edits resolve board access before writing.
+
+### Operator requirements and limitations
+
+- Existing installations need maintenance-capable host updater and proxy configuration before managed updates. Do not use the full installer to bootstrap this support against an unbacked-up HappyView database: it can start the new engine. Follow an operator-controlled maintenance, backup, migration, OAuth provisioning, setup, and health-check sequence.
+- Fresh installations provision the public OAuth client through the installer. Existing installations without a compatible public client need explicit `./atmobb configure-oauth` provisioning before setup can succeed; confidential clients are not silently converted.
+- SDK-driven native PDS migration is unsupported. Private polyfill records remain in HappyView's database and require database backups.
+- HappyView 2.16's direct list endpoints disclose records to retained members with `read=false`. atmoBB guards its own reads; remove membership to revoke access at the engine. The direct-engine denial smoke assertions remain failing and are not counted as passing acceptance checks.
+- Live OAuth token expiry and refresh-token rotation are not yet verified.
 
 ## 0.5.2
 
