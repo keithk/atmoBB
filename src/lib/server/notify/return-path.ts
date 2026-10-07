@@ -18,6 +18,9 @@ const JOIN = /^\/join\/[a-z2-7]{26}$/;
 // Latest, a board (optionally paged), or the apply page.
 const HOME = /^\/(latest|apply)?$/;
 const BOARD = /^\/b\/(did:[a-z0-9:.-]+\/)?[A-Za-z0-9._~-]+(\?page=\d{1,4})?$/;
+// A member profile, by handle or URL-encoded DID: signing its guestbook sends
+// a signed-out visitor through login and back, once more after re-consent.
+const MEMBER = /^\/members\/(?:[A-Za-z0-9._-]|%3[Aa])+(\?reconsented=1)?$/;
 
 export function safeReturnPath(raw: unknown): string | null {
   if (typeof raw !== 'string' || !raw.startsWith('/')) return null;
@@ -30,7 +33,8 @@ export function safeReturnPath(raw: unknown): string | null {
     NOTIFICATION_OPEN.test(raw) ||
     JOIN.test(raw) ||
     HOME.test(raw) ||
-    BOARD.test(raw)
+    BOARD.test(raw) ||
+    MEMBER.test(raw)
   )
     return raw;
   return null;
