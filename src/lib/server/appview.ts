@@ -1,4 +1,5 @@
 import { env } from '$env/dynamic/private';
+import { createHash } from 'node:crypto';
 import type { RichTextBlock } from '$lib/richtext/bbcode';
 import { mintSessionCookie } from './happyview-session';
 import { parseAtUri } from '$lib/appview-paths';
@@ -113,8 +114,11 @@ export interface Origin {
 export type BoardAccess = { $type?: string; space?: string };
 
 /** The backing permissioned-space URI if this board is members-only, else null. */
-export function spaceOfBoard(access?: BoardAccess): string | null {
-  return access && typeof access.space === 'string' ? access.space : null;
+export function spaceOfBoard(access?: unknown): string | null {
+  if (!access || typeof access !== 'object' || Array.isArray(access)) return null;
+  const ref = access as BoardAccess;
+  return (ref.$type === undefined || ref.$type === `${NS}.forum.board#space`) &&
+    typeof ref.space === 'string' && ref.space.length > 0 ? ref.space : null;
 }
 
 export interface BoardIndex {
@@ -337,8 +341,8 @@ export interface ThreadPage {
   cursor?: string;
 }
 
-class AppviewError extends Error {
-  constructor(public status: number, message: string) {
+export class AppviewError extends Error {
+  constructor(public status: number, message: string, public error?: string) {
     super(message);
   }
 }
@@ -380,7 +384,8 @@ async function xrpc<T>(
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new AppviewError(res.status, (data as { error?: string; message?: string }).message ?? (data as { error?: string }).error ?? `appview error ${res.status}`);
+    const failure = data as { error?: string; message?: string };
+    throw new AppviewError(res.status, failure.message ?? failure.error ?? `appview error ${res.status}`, failure.error);
   }
   resolveProfiles(data, opts.params?.forum ?? FORUM_DID());
   return data as T;
@@ -687,14 +692,48 @@ export const getMembers = (cursor?: string, limit = 50, forum = FORUM_DID()) =>
 // Space records live inside Happyview, gated by membership — off the public
 // firehose, so none of the stats/Lua read path above applies to them. We act as
 // a given DID by minting that member's happyview_session cookie (see
-// ./happyview-session). The forum account is each space's authority.
+// ./happyview-session). The forum account is the creator; Happyview may be
+// the URI authority. The two identities are not interchangeable.
 
-/** The space type NSID backing every private board; one space per board, keyed by the board's rkey. */
+/** The space type NSID backing every private board. */
 export const SPACE_TYPE = `${NS}.forum.privateBoard`;
 
-/** at:// URI of the space backing the board with this rkey in the forum's repo. */
-export const spaceUriFor = (boardRkey: string, forumDid = FORUM_DID()) =>
-  `at://${forumDid}/space/${SPACE_TYPE}/${boardRkey}`;
+/** Instance-wide space keys include the forum, since different repos can reuse an rkey. */
+export const spaceKeyFor = (boardRkey: string, forumDid = FORUM_DID()) =>
+  `board-${createHash('sha256').update(`at://${forumDid}/${NS}.forum.board/${boardRkey}`).digest('hex')}`;
+
+function spaceCoordinates(uri: unknown): { type: string; key: string } | null {
+  if (typeof uri !== 'string') return null;
+  const parts = uri.split('/');
+  if (parts.length !== 6 || parts[0] !== 'at:' || parts[1] !== '' ||
+    !parts[2].startsWith('did:') || parts[3] !== 'space' || !parts[4] || !parts[5]) return null;
+  return { type: parts[4], key: parts[5] };
+}
+
+async function authoritativeBoard(uri: string, did: string, rkey: string): Promise<Record<string, unknown>> {
+  if (did === FORUM_DID()) {
+    const { getForumRecord } = await import('./forum-repo');
+    const record = await getForumRecord(`${NS}.forum.board`, rkey);
+    if (!record) throw new Error('Board not found');
+    return record.value;
+  }
+  // Mounted boards belong to another PDS. Reuse the existing bounded,
+  // DNS-pinned public-read transport; never forward our session credentials.
+  const { resolveDidDocument, pdsServiceEndpoint, outboundFetch } = await import('./extensions/outbound');
+  const endpoint = pdsServiceEndpoint(await resolveDidDocument(did), did);
+  if (!endpoint) throw new Error('Could not resolve the board author PDS');
+  const url = new URL(`${endpoint.replace(/\/+$/, '')}/xrpc/com.atproto.repo.getRecord`);
+  url.searchParams.set('repo', did);
+  url.searchParams.set('collection', `${NS}.forum.board`);
+  url.searchParams.set('rkey', rkey);
+  const response = await outboundFetch(url.toString(), { maxBytes: 256 * 1024, timeoutMs: 5_000 });
+  if (response.status !== 200) throw new Error(`Could not read the board from its PDS (${response.status})`);
+  const record = JSON.parse(new TextDecoder().decode(response.body));
+  if (record?.uri !== uri || !record.value || typeof record.value !== 'object' || Array.isArray(record.value)) {
+    throw new Error('Invalid board record');
+  }
+  return record.value;
+}
 
 /**
  * The space URI a space *record* lives in, or null for a public record. Space
@@ -735,87 +774,145 @@ export function parseSpaceUri(uri: string): ParsedSpaceRecord | null {
 /**
  * The permissioned-space URI backing a board, or null if the board is public.
  *
- * A board is private iff its space exists, so we ask Happyview directly rather
- * than reading the board record's `access` from the index — the index lags the
- * firehose and its `getRecord` is unreliable for our records, so a private
- * board could read as public and route the post to the author's PUBLIC repo,
- * leaking it. This check is authoritative and firehose-independent. It runs as
- * the board's forum (the space authority, which can always see its own space).
- *
- * Fails closed: only a genuine 404 (no space) counts as public. Any other error
- * is ambiguous and rethrown, so a transient failure blocks the write instead of
- * silently leaking a private post.
+ * Read the creator's complete space inventory, independent of the lagging public
+ * index. New spaces use the instance's authority, so guessing a URI and treating
+ * its 404 as public could disclose a post. Only a complete, valid inventory
+ * without a matching owned space means public. Any failed or ambiguous lookup
+ * blocks the write. The bare board rkey also matches spaces made before 2.16.
  */
 export async function getBoardAccess(boardUri: string): Promise<string | null> {
   const p = parseAtUri(boardUri);
-  if (!p) return null;
-  const space = spaceUriFor(p.rkey, p.did);
-  try {
-    await xrpc('GET', 'com.atproto.space.getSpace', {
-      params: { space },
-      sessionCookie: mintSessionCookie(p.did),
-    });
-    return space;
-  } catch (e) {
-    if (e instanceof AppviewError && e.status === 404) return null;
-    throw e;
+  if (!p || p.collection !== `${NS}.forum.board`) throw new Error('Invalid board URI');
+  const board = await authoritativeBoard(boardUri, p.did, p.rkey);
+  const declaredSpace = spaceOfBoard(board.access);
+  const explicitPublic = board.access && typeof board.access === 'object' &&
+    (board.access as BoardAccess).$type === `${NS}.forum.board#public` &&
+    (board.access as BoardAccess).space === undefined;
+  if (board.access !== undefined && !declaredSpace && !explicitPublic) throw new Error('Invalid board access configuration');
+  if (declaredSpace && spaceCoordinates(declaredSpace)?.type !== SPACE_TYPE) {
+    throw new Error('Invalid board space URI');
   }
+  const spaces = await spaceList<{ uri: string; isOwner: boolean }>(
+    'com.atproto.space.listSpaces', 'spaces',
+    { spaceType: SPACE_TYPE, limit: '100' }, mintSessionCookie(p.did),
+  );
+  const key = spaceKeyFor(p.rkey, p.did);
+  const matches = new Set<string>();
+  for (const space of spaces) {
+    const coordinates = spaceCoordinates(space?.uri);
+    if (!coordinates || typeof space.isOwner !== 'boolean') throw new Error('Invalid space inventory');
+    if (space.isOwner && coordinates.type === SPACE_TYPE &&
+      (space.uri === declaredSpace || coordinates.key === key || coordinates.key === p.rkey)) matches.add(space.uri);
+  }
+  if (matches.size > 1) throw new Error('Multiple owned spaces match this board; repair its access configuration');
+  if (declaredSpace && !matches.has(declaredSpace)) throw new Error('The private board space is unavailable');
+  return matches.values().next().value ?? null;
 }
 
 export type SpaceAccess = 'write' | 'read' | 'read_self';
 export interface SpaceMember {
   did: string;
-  access: SpaceAccess;
+  read: boolean;
+  write: boolean;
+  /** Display compatibility only; authorization must use the independent flags. */
+  access: SpaceAccess | null;
   isDelegation: boolean;
 }
-export interface SpaceRecordRef {
+export interface SpaceRecordRef<T = unknown> {
   cid: string;
   collection: string;
   rkey: string;
+  value?: T;
 }
 
 const forumCookie = () => mintSessionCookie(FORUM_DID());
+
+/** Exhaust a space list or fail: partial lists must never imply absence. */
+async function spaceList<T>(
+  nsid: string,
+  key: 'spaces' | 'members' | 'repos' | 'records',
+  params: Record<string, string>,
+  sessionCookie: string,
+): Promise<T[]> {
+  const items: T[] = [];
+  const seen = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    if (seen.size >= 1_000) throw new Error(`Too many ${nsid} pages; cannot determine a complete list`);
+    const page = await xrpc<Partial<Record<typeof key, T[]>> & { cursor?: string | null }>('GET', nsid, {
+      params: { ...params, ...(cursor ? { cursor } : {}) },
+      sessionCookie,
+    });
+    if (!Array.isArray(page[key])) throw new Error(`Invalid ${nsid} response: missing ${key}`);
+    items.push(...page[key]!);
+    cursor = page.cursor ?? undefined;
+    if (cursor !== undefined && (typeof cursor !== 'string' || !cursor || seen.has(cursor))) {
+      throw new Error(`Invalid ${nsid} pagination cursor`);
+    }
+    if (cursor) seen.add(cursor);
+  } while (cursor);
+  return items;
+}
 
 /** Create the space for a board, authored by the forum account (auto write-member). Returns its URI. */
 export async function createSpace(
   boardRkey: string,
   opts: { displayName?: string; description?: string } = {},
 ): Promise<string> {
+  const skey = spaceKeyFor(boardRkey);
   const res = await xrpc<{ uri: string }>('POST', 'com.atproto.simplespace.createSpace', {
     sessionCookie: forumCookie(),
-    body: { type: SPACE_TYPE, skey: boardRkey, mintPolicy: 'member-list', ...opts },
+    body: {
+      spaceType: SPACE_TYPE, skey, ...opts,
+      readPolicy: { $type: 'com.atproto.simplespace.defs#memberListPolicy' },
+      writePolicy: { $type: 'com.atproto.simplespace.defs#memberListPolicy' },
+    },
   });
+  const coordinates = spaceCoordinates(res.uri);
+  if (coordinates?.type !== SPACE_TYPE || coordinates.key !== skey) {
+    throw new Error('Invalid createSpace response: unexpected space URI');
+  }
   return res.uri;
 }
 
 export const deleteSpace = (space: string) =>
   xrpc('POST', 'com.atproto.simplespace.deleteSpace', { sessionCookie: forumCookie(), body: { space } });
 
-export const addSpaceMember = (space: string, did: string, access: SpaceAccess = 'write') =>
-  xrpc('POST', 'com.atproto.simplespace.addMember', {
+export async function addSpaceMember(space: string, did: string, access: SpaceAccess = 'write') {
+  // putMember cannot express own-record-only reads; never broaden a legacy grant.
+  if (access === 'read_self') throw new Error('read_self is not supported by putMember');
+  return xrpc('POST', 'com.atproto.simplespace.putMember', {
     sessionCookie: forumCookie(),
-    body: { space, did, access, isDelegation: false },
+    body: { space, did, read: true, write: access === 'write', isDelegation: false },
   });
+}
 
 export const removeSpaceMember = (space: string, did: string) =>
   xrpc('POST', 'com.atproto.simplespace.removeMember', { sessionCookie: forumCookie(), body: { space, did } });
 
 export async function listSpaceMembers(space: string): Promise<SpaceMember[]> {
-  const res = await xrpc<{ members: { did: string; access: SpaceAccess; is_delegation?: boolean }[] }>(
-    'GET',
-    'com.atproto.simplespace.listMembers',
-    { params: { space }, sessionCookie: forumCookie() },
+  const members = await spaceList<{ did: string; read: boolean; write: boolean }>(
+    'com.atproto.simplespace.listMembers', 'members', { space, limit: '100' }, forumCookie(),
   );
-  return (res.members ?? []).map((m) => ({ did: m.did, access: m.access, isDelegation: !!m.is_delegation }));
+  return members.map((m) => ({
+    did: m.did, read: m.read === true, write: m.write === true,
+    access: m.write === true ? 'write' : m.read === true ? 'read' : null,
+    // listMembers returns resolved individuals, not delegation entries.
+    isDelegation: false,
+  }));
 }
 
-/** Whether `did` can read/write the space (any membership level counts). */
+/** Whether `did` has read permission. Lookup failures are not absence. */
 export async function isSpaceMember(space: string, did: string): Promise<boolean> {
-  try {
-    const members = await listSpaceMembers(space);
-    return members.some((m) => m.did === did);
-  } catch {
-    return false;
+  const members = await listSpaceMembers(space);
+  return members.some((m) => m.did === did && m.read);
+}
+
+async function requireSpaceRead(space: string, did: string): Promise<void> {
+  // Real 2.16 list endpoints return values to members with read=false. Check
+  // the independent read flag before any app-mediated record/repo read.
+  if (!(await isSpaceMember(space, did))) {
+    throw new AppviewError(403, 'You do not have read access to this space.', 'Forbidden');
   }
 }
 
@@ -851,42 +948,65 @@ export const deleteSpaceRecord = (asDid: string, space: string, collection: stri
     body: { space, collection, rkey },
   });
 
+/**
+ * Authorize one logical read, binding all its operations to this viewer and space.
+ * Keep the reader local to that read; creating another reader rechecks membership.
+ */
+export async function createSpaceReader(asDid: string, space: string) {
+  await requireSpaceRead(space, asDid);
+  const sessionCookie = mintSessionCookie(asDid);
+  return {
+    async listRepos(): Promise<string[]> {
+      const repos = await spaceList<{ did: string }>(
+        'com.atproto.space.listRepos', 'repos', { space, limit: '100' }, sessionCookie,
+      );
+      return repos.map((r) => r.did);
+    },
+    listRecords<T = unknown>(repo: string, collection: string, limit = 100, includeValues = false) {
+      return spaceList<SpaceRecordRef<T>>(
+        'com.atproto.space.listRecords', 'records',
+        { space, repo, collection, limit: String(limit), includeValues: String(includeValues) },
+        sessionCookie,
+      );
+    },
+    getRecord<T = unknown>(repo: string, collection: string, rkey: string) {
+      return xrpc<{ uri: string; cid: string; value: T }>('GET', 'com.atproto.space.getRecord', {
+        params: { space, repo, collection, rkey },
+        sessionCookie,
+      });
+    },
+  };
+}
+
+export type SpaceReader = Awaited<ReturnType<typeof createSpaceReader>>;
+
 /** Authors (DIDs) that have written into the space, read as `asDid`. */
 export async function listSpaceRepos(asDid: string, space: string): Promise<string[]> {
-  const res = await xrpc<{ repos: { did: string }[] }>('GET', 'com.atproto.space.listRepos', {
-    params: { space },
-    sessionCookie: mintSessionCookie(asDid),
-  });
-  return (res.repos ?? []).map((r) => r.did);
+  return (await createSpaceReader(asDid, space)).listRepos();
 }
 
 /** One author's records of a collection in the space, read as `asDid`. listRecords without `repo` returns only the caller's own — so we always pass repo. */
-export async function listSpaceRecords(
+export async function listSpaceRecords<T = unknown>(
   asDid: string,
   space: string,
   repo: string,
   collection: string,
   limit = 100,
-): Promise<SpaceRecordRef[]> {
-  const res = await xrpc<{ records: SpaceRecordRef[] }>('GET', 'com.atproto.space.listRecords', {
-    params: { space, repo, collection, limit: String(limit) },
-    sessionCookie: mintSessionCookie(asDid),
-  });
-  return res.records ?? [];
+  includeValues = false,
+): Promise<SpaceRecordRef<T>[]> {
+  return (await createSpaceReader(asDid, space)).listRecords<T>(repo, collection, limit, includeValues);
 }
 
 /** Full record body from the space, read as `asDid`. */
-export const getSpaceRecord = <T = unknown>(
+export const getSpaceRecord = async <T = unknown>(
   asDid: string,
   space: string,
   repo: string,
   collection: string,
   rkey: string,
-) =>
-  xrpc<{ uri: string; cid: string; value: T }>('GET', 'com.atproto.space.getRecord', {
-    params: { space, repo, collection, rkey },
-    sessionCookie: mintSessionCookie(asDid),
-  });
+) => {
+  return (await createSpaceReader(asDid, space)).getRecord<T>(repo, collection, rkey);
+};
 
 
 export { parseAtUri, threadPath, boardPath } from '$lib/appview-paths';

@@ -118,10 +118,21 @@ bun run check
 bun run dev
 ```
 
-Open **http://127.0.0.1:5173** and log in. Atproto's loopback OAuth exception means you don't have to register a client first.
+Open **http://127.0.0.1:5173**. Before logging in, configure HappyView's public API client. The AT Protocol localhost exception handles PDS client metadata; HappyView also requires API-client registration.
+
+In another shell with `HAPPYVIEW_API_KEY` exported, read the app's exact client ID and register it:
+
+```sh
+export ATMOBB_APP_URL=http://127.0.0.1:5173
+export HAPPYVIEW_OAUTH_CLIENT_ID="$(curl --fail --silent --show-error \
+  http://127.0.0.1:5173/oauth-client-metadata.json | jq -er .client_id)"
+node appview/oauth-client.mjs configure
+```
+
+Persist the printed `HAPPYVIEW_CLIENT_KEY` and the exact `HAPPYVIEW_OAUTH_CLIENT_ID` in the app's local environment, then restart the dev server and log in. Do not copy the admin API key into the client-key setting. The development client ID includes its scope ceiling, so changing active plugin collections requires updating both the registered development client and this environment value; mismatches fail explicitly instead of breaking token refresh later. HTTPS deployments keep a stable hosted metadata URL.
 
 > [!TIP]
-> Use `127.0.0.1`, not `localhost`. The OAuth redirect URI is IPv4 loopback, and `localhost` can resolve to `::1`. When that happens the callback breaks, and the error message will not help you figure out why.
+> Use `127.0.0.1`, not `localhost`. The OAuth redirect URI is IPv4 loopback, and `localhost` can resolve to `::1`, which breaks the callback.
 
 ### Real-account warning
 

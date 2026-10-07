@@ -26,6 +26,8 @@ Usage: ./atmobb <command> [options]
   upgrade-happyview  Back up, then move Happyview to the version this bundle
                      pins, wait for its migrations, and reapply setup.
   backfill           Index history from the network and rebuild counts.
+  configure-oauth    Create/recover the public OAuth client, or explicitly
+                     synchronize its ceiling, callback URL, and allowed Origin.
   backup [DIR]       pg_dump, OAuth state, and .env into DIR
                      (default ./backups/<timestamp>).
   status             Container state and the running atmobb version.
@@ -210,6 +212,18 @@ prepare_target() {
     -p 'JSON.stringify({version:require("./package.json").version,happyview:process.env.HAPPYVIEW_EXPECTED_VERSION})')
   printf '%s' "$metadata" | jq -e '.version | strings | select(length > 0)' >/dev/null
   printf '%s' "$metadata" | jq -e '.happyview | strings | select(length > 0)' >/dev/null
+  expected_hv=$(printf '%s' "$metadata" | jq -er .happyview)
+  check_happyview_upgrade "metadata:$expected_hv"
+  if [ "$target_kind" = manual ]; then
+    [ "$guard_running" = "$expected_hv" ] ||
+      die "running Happyview differs from the app image metadata; refusing an unsafe recovery target"
+  else
+    prepared_pin=$(printf '%s' "$config" | jq -er '.services.happyview.image')
+    check_happyview_upgrade "$prepared_pin"
+    prepared_tag=${prepared_pin%@*}
+    [ "${prepared_tag##*:}" = "$expected_hv" ] ||
+      die "Happyview pin differs from the prepared app image metadata"
+  fi
   target_commit=${commit:-}
   if [ "$target_kind" = manual ] && [ -f "$RECOVERY/target.json" ] &&
     cmp -s "$prepared/atmobb.image" "$RECOVERY/atmobb.image" &&
@@ -611,6 +625,8 @@ EOF
   fi
 
   echo "== configuring Happyview and starting atmobb"
+  cmd_configure_oauth
+  run_setup
   compose up -d
   cmd_status
 
@@ -636,6 +652,7 @@ cmd_upgrade() {
   [ -f "$ENV_FILE" ] || die "no .env here; run ./atmobb install first"
   [ ! -e "$MARKER" ] || die "maintenance is active; run maintenance recover"
   require_maintenance_bundle "$BUNDLE_DIR"
+  check_happyview_upgrade "$(pinned_image happyview)"
   echo "== pulling images"
   compose pull
   pinned=$(pinned_image happyview)
@@ -654,6 +671,45 @@ EOF
   resume_target
 }
 
+check_happyview_upgrade() {
+  need python3 curl jq
+  # Recovery runs immutable IDs, so Docker's image reference cannot tell us
+  # the running version. Query only this instance, never its public proxy.
+  # A new update requires a live version; an interrupted update instead resumes
+  # its already-verified durable target through maintenance recover.
+  guard_host=$(env_value HAPPYVIEW_HOST)
+  valid_hostname "$guard_host" ||
+    die "Happyview version guard: no valid Happyview hostname is configured"
+  guard_response=$(curl --silent --fail --connect-timeout 2 --max-time 5 \
+    -H "Host: $guard_host" "http://127.0.0.1:$HAPPYVIEW_PORT/config") ||
+    die "Happyview version guard: cannot fetch the local running version; recover maintenance before updating"
+  guard_running=$(printf '%s' "$guard_response" | jq -er '.version | strings') ||
+    die "Happyview version guard: cannot verify the running version"
+  python3 - "$guard_running" "$1" <<'PY' || exit 1
+import re
+import sys
+
+def version(value):
+    match = re.fullmatch(r"([0-9]+)\.([0-9]+)\.([0-9]+)", value)
+    if not match:
+        raise ValueError("cannot determine a pinned numeric version")
+    return tuple(map(int, match.groups()))
+
+try:
+    current = version(sys.argv[1])
+    target_tag = re.search(r":([0-9]+\.[0-9]+\.[0-9]+)$", sys.argv[2].split("@", 1)[0])
+    if not target_tag:
+        raise ValueError("target image has no numeric tag")
+    target = version(target_tag.group(1))
+except ValueError:
+    sys.exit("Happyview version guard: cannot verify the running or target version. No containers are changed.")
+if target < current:
+    old = ".".join(map(str, current))
+    new = ".".join(map(str, target))
+    sys.exit(f"Happyview version guard: refusing downgrade {old} -> {new}. Database migrations are forward-only; use a compatible release.")
+PY
+}
+
 cmd_upgrade_happyview() {
   need jq curl python3
   ASSUME_YES=0
@@ -663,6 +719,7 @@ cmd_upgrade_happyview() {
   running=$(running_image happyview)
   [ ! -e "$MARKER" ] || die "maintenance is active; run maintenance recover"
   require_maintenance_bundle "$BUNDLE_DIR"
+  check_happyview_upgrade "$pinned"
   cat <<EOF
 
 Happyview:  ${running:-not running}  ->  $pinned
@@ -685,6 +742,16 @@ EOF
 cmd_backfill() {
   [ -f "$ENV_FILE" ] || die "no .env here; run ./atmobb install first"
   compose run --rm --no-deps setup sh appview/backfill.sh
+}
+
+cmd_configure_oauth() {
+  [ -f "$ENV_FILE" ] || die "no .env here; run ./atmobb install first"
+  output=$(compose run --rm --no-deps setup node appview/oauth-client.mjs configure) ||
+    die "OAuth client configuration failed; app credentials were not changed"
+  key=$(printf '%s\n' "$output" | sed -n 's/^HAPPYVIEW_CLIENT_KEY=//p')
+  case "$key" in hvc_*) ;; *) die "OAuth setup did not return a public client key" ;; esac
+  set_env HAPPYVIEW_CLIENT_KEY "$key"
+  echo "== public OAuth client configured; HAPPYVIEW_CLIENT_KEY saved"
 }
 
 cmd_backup() {
@@ -720,6 +787,16 @@ cmd_status() {
     printf 'atmobb %s (expects Happyview %s)\n' \
       "$(printf '%s' "$version" | jq -r .version)" "$(printf '%s' "$version" | jq -r .happyview)" ||
     echo "atmobb is not answering on 127.0.0.1:$APP_PORT yet"
+}
+
+run_setup() {
+  # Compose up can return success even when a one-shot container exits nonzero.
+  # Inspect it before starting any application writes. On failure leave the app
+  # stopped: the migrated database cannot safely be served by the old image.
+  compose up --no-deps --force-recreate setup
+  setup_id=$(compose ps -a -q setup)
+  [ -n "$setup_id" ] && [ "$($DOCKER inspect --format '{{.State.ExitCode}}' "$setup_id")" = 0 ] ||
+    die "the Happyview setup container did not finish successfully; inspect docker compose logs setup"
 }
 
 # Called only by the root-owned updater daemon. Preparation (downloads, pulls,
@@ -775,6 +852,7 @@ cmd_internal_update() {
       *:compose.caddy.yml) stage_compose="$stage_compose -f $work/bundle/compose.caddy.yml" ;;
       *:compose.hosting.yml) stage_compose="$stage_compose -f $work/bundle/compose.hosting.yml" ;;
     esac
+    check_happyview_upgrade "$($stage_compose config --format json | jq -er '.services.happyview.image')"
     $stage_compose pull
     commit=
   else
@@ -795,6 +873,7 @@ cmd_internal_update() {
     version=$(jq -er .version "$work/source/package.json")
     happyview=$(sed -n 's/^ARG HAPPYVIEW_VERSION=//p' "$work/source/Dockerfile")
     [ -n "$happyview" ] || die "main has no Happyview version pin"
+    check_happyview_upgrade "ghcr.io/gamesgamesgamesgamesgames/happyview:$happyview"
     image="atmobb-main:$commit"
     echo "== building $image before changing the running stack"
     $DOCKER build --build-arg "HAPPYVIEW_VERSION=$happyview" -t "$image" "$work/source"
@@ -814,6 +893,8 @@ cmd_internal_update() {
     $stage_compose pull postgres happyview
     [ "$compose_files" != compose.yml:compose.caddy.yml ] || $stage_compose pull caddy
   fi
+  # Check the actual staged Compose pin too, not only main's Dockerfile argument.
+  check_happyview_upgrade "$($stage_compose config --format json | jq -er '.services.happyview.image')"
   echo "ATMOBB_TARGET_VERSION=$version"
   echo "ATMOBB_TARGET_COMMIT=$commit"
 
@@ -846,11 +927,13 @@ case "$command" in
   upgrade) cmd_upgrade "$@" ;;
   upgrade-happyview) cmd_upgrade_happyview "$@" ;;
   backfill) cmd_backfill "$@" ;;
+  configure-oauth) cmd_configure_oauth "$@" ;;
   backup) cmd_backup "$@" >/dev/null ;;
   status) cmd_status ;;
   maintenance) cmd_maintenance "$@" ;;
   logs) compose logs "$@" ;;
   _update) cmd_internal_update "$@" ;;
+  _check-happyview-upgrade) check_happyview_upgrade "${1:?supply the target image}" ;;
   help|-h|--help) usage ;;
   *) die "unknown command: $command (try ./atmobb help)" ;;
 esac

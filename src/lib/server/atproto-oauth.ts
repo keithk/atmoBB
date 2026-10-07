@@ -1,14 +1,7 @@
-import {
-  NodeOAuthClient,
-  requestLocalLock,
-  type NodeSavedSession,
-  type NodeSavedState,
-} from '@atproto/oauth-client-node';
 import { Agent } from '@atproto/api';
 import { env } from '$env/dynamic/private';
-import { mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
-import { join } from 'node:path';
 import { extensionScope, scopeStatus, type ScopeStatus } from './extensions/scopes';
+import { OAuthConfigurationError, SecureHappyViewOAuth, type OAuthPurpose } from './happyview-oauth';
 
 // Blob scopes are requested directly: they can't be bundled into a permission
 // set. Members upload images; the forum account can also own custom webfonts.
@@ -50,36 +43,7 @@ export const oauthScope = () => withExtensions(OAUTH_BASE_SCOPE);
 
 const appUrl = () => env.ATMOBB_APP_URL ?? 'http://127.0.0.1:5173';
 
-// File-backed persistence: .data/ in dev, the deploy platform's persistent
-// volume (DATA_DIR=/data) in production. A real database store can replace
-// this when the platform grows one.
-class FileStore<T> {
-  private dir: string;
-  constructor(name: string) {
-    this.dir = join(process.env.DATA_DIR ?? '.data', name);
-    mkdirSync(this.dir, { recursive: true });
-  }
-  private file(key: string) {
-    return join(this.dir, encodeURIComponent(key) + '.json');
-  }
-  async get(key: string): Promise<T | undefined> {
-    const f = this.file(key);
-    if (!existsSync(f)) return undefined;
-    return JSON.parse(readFileSync(f, 'utf8')) as T;
-  }
-  async set(key: string, value: T): Promise<void> {
-    writeFileSync(this.file(key), JSON.stringify(value));
-  }
-  async del(key: string): Promise<void> {
-    const f = this.file(key);
-    if (existsSync(f)) unlinkSync(f);
-  }
-}
-
-// The client is built from client metadata, which changes with the
-// extension scopes (in dev the loopback client_id embeds the scope), so it's
-// rebuilt whenever the scope it was built with goes stale.
-let client: { instance: NodeOAuthClient; scope: string } | null = null;
+let client: { instance: SecureHappyViewOAuth; key: string } | null = null;
 
 // In production (https app URL) the client_id is the hosted metadata document,
 // which the /oauth-client-metadata.json route serves. In dev it's the atproto
@@ -106,16 +70,28 @@ export function clientMetadata() {
   };
 }
 
-export function oauthClient(): NodeOAuthClient {
+export function oauthClient(): SecureHappyViewOAuth {
   const metadata = clientMetadata();
-  if (client?.scope === metadata.scope) return client.instance;
-  const instance = new NodeOAuthClient({
-    clientMetadata: metadata,
-    stateStore: new FileStore<NodeSavedState>('oauth-state'),
-    sessionStore: new FileStore<NodeSavedSession>('oauth-sessions'),
-    requestLock: requestLocalLock,
-  });
-  client = { instance, scope: metadata.scope };
+  const clientKey = env.HAPPYVIEW_CLIENT_KEY?.trim();
+  if (!clientKey) throw new OAuthConfigurationError('OAuth requires HAPPYVIEW_CLIENT_KEY. Configure the public HappyView API client key and reconnect; do not use an admin key.');
+  const registeredClientId = env.HAPPYVIEW_OAUTH_CLIENT_ID;
+  if (appUrl().startsWith('http://') && !registeredClientId) {
+    throw new OAuthConfigurationError('Local OAuth requires HAPPYVIEW_OAUTH_CLIENT_ID matching clientMetadata().client_id and the HappyView API client registration. Preserve the localhost loopback ID; do not register an HTTP metadata URL.');
+  }
+  if (registeredClientId && registeredClientId !== metadata.client_id) {
+    throw new OAuthConfigurationError('HAPPYVIEW_OAUTH_CLIENT_ID does not match the current OAuth metadata client_id. Update the HappyView API client registration and environment together before starting login.');
+  }
+  const options = {
+    instanceUrl: (env.HAPPYVIEW_URL ?? 'http://127.0.0.1:3000').replace(/\/+$/, ''),
+    appUrl: appUrl(), clientId: metadata.client_id, clientKey,
+    redirectUri: metadata.redirect_uris[0],
+    dataDir: process.env.DATA_DIR ?? '.data',
+    forumDid: () => env.ATMOBB_FORUM_DID ?? 'did:plc:atmobbdevforum',
+  };
+  const key = JSON.stringify(options);
+  if (client?.key === key) return client.instance;
+  const instance = new SecureHappyViewOAuth(options);
+  client = { instance, key };
   return instance;
 }
 
@@ -125,12 +101,17 @@ export function oauthClient(): NodeOAuthClient {
  * Throws when the account has no session.
  */
 export async function forumScopeStatus(forumDid: string): Promise<ScopeStatus> {
-  const session = await oauthClient().restore(forumDid, false);
-  const { scope } = await session.getTokenInfo(false);
-  return scopeStatus(scope);
+  const session = await oauthClient().restore(forumDid, false, 'forum');
+  const { scope } = session.getTokenInfo();
+  return scopeStatus(scope ?? '');
 }
 
-export async function agentFor(did: string): Promise<Agent> {
-  const session = await oauthClient().restore(did);
+export async function agentFor(did: string, purpose?: OAuthPurpose): Promise<Agent> {
+  const session = await oauthClient().restore(did, false, purpose);
   return new Agent(session);
+}
+
+/** Authenticated as-DID fetch to this instance only; never accepts an external URL. */
+export function happyViewFetch(did: string, path: string, init?: RequestInit, purpose?: OAuthPurpose) {
+  return oauthClient().fetch(did, path, init, purpose);
 }

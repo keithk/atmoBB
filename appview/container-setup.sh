@@ -53,4 +53,5 @@ EOF
 fi
 echo "== Happyview $running matches this release"
 
+node appview/oauth-client.mjs verify
 HV="$HV" PG_EXEC="" sh appview/setup.sh

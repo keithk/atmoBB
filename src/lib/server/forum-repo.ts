@@ -41,7 +41,7 @@ export async function createForumRecord(
 ): Promise<{ uri: string }> {
   const record = { $type: collection, createdAt: new Date().toISOString(), ...value };
   if (forumWriteMode() === 'index') return indexPut(collection, tid(), record);
-  const agent = await agentFor(FORUM_DID());
+  const agent = await agentFor(FORUM_DID(), 'forum');
   const res = await agent.com.atproto.repo.createRecord({
     repo: FORUM_DID(),
     collection,
@@ -61,7 +61,7 @@ export async function createForumRecordAsGiven(
     if (rkey && (await getForumRecord(collection, rkey))) throw new Error('Record already exists');
     return indexPut(collection, rkey ?? tid(), record);
   }
-  const agent = await agentFor(FORUM_DID());
+  const agent = await agentFor(FORUM_DID(), 'forum');
   const res = await agent.com.atproto.repo.createRecord({
     repo: FORUM_DID(),
     collection,
@@ -83,7 +83,7 @@ export async function createForumRecords(
     for (const record of records) await indexPut(collection, tid(), record);
     return;
   }
-  const agent = await agentFor(FORUM_DID());
+  const agent = await agentFor(FORUM_DID(), 'forum');
   for (let i = 0; i < records.length; i += 200) {
     await agent.com.atproto.repo.applyWrites({
       repo: FORUM_DID(),
@@ -103,7 +103,7 @@ export async function putForumRecord(
 ): Promise<{ uri: string; cid: string }> {
   const record = { $type: collection, ...value };
   if (forumWriteMode() === 'index') return indexPut(collection, rkey, record);
-  const agent = await agentFor(FORUM_DID());
+  const agent = await agentFor(FORUM_DID(), 'forum');
   const res = await agent.com.atproto.repo.putRecord({
     repo: FORUM_DID(),
     collection,
@@ -118,7 +118,7 @@ export async function uploadForumBlob(bytes: Uint8Array, encoding: string) {
   if (forumWriteMode() === 'index') {
     throw new Error('font uploads require a real forum account and PDS');
   }
-  const agent = await agentFor(FORUM_DID());
+  const agent = await agentFor(FORUM_DID(), 'forum');
   const uploaded = await agent.com.atproto.repo.uploadBlob(bytes, { encoding });
   return uploaded.data.blob;
 }
@@ -139,7 +139,7 @@ export async function listForumRecords(
       value: typeof row.record === 'string' ? JSON.parse(row.record) : row.record,
     }));
   }
-  const agent = await agentFor(FORUM_DID());
+  const agent = await agentFor(FORUM_DID(), 'forum');
   const records: { uri: string; cid: string; value: ForumRecordValue }[] = [];
   let cursor: string | undefined;
   do {
@@ -162,7 +162,7 @@ export async function getForumRecord(
     if (!row) return null;
     return { uri: row.uri, cid: row.cid, value: typeof row.record === 'string' ? JSON.parse(row.record) : row.record };
   }
-  const agent = await agentFor(FORUM_DID());
+  const agent = await agentFor(FORUM_DID(), 'forum');
   try {
     const res = await agent.com.atproto.repo.getRecord({ repo: FORUM_DID(), collection, rkey });
     return { uri: res.data.uri, cid: res.data.cid ?? '', value: res.data.value as ForumRecordValue };
@@ -181,7 +181,7 @@ export async function deleteForumRecord(uri: string): Promise<void> {
     await db`DELETE FROM happyview_records WHERE uri = ${uri}`;
     return;
   }
-  const agent = await agentFor(FORUM_DID());
+  const agent = await agentFor(FORUM_DID(), 'forum');
   await agent.com.atproto.repo.deleteRecord({
     repo: FORUM_DID(),
     collection: p.collection,

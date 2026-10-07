@@ -1,5 +1,6 @@
 import { jsonToLex } from '@atproto/api';
 import { agentFor } from './atproto-oauth';
+import { withBoardWrite } from './board-write-lock';
 import { parseAtUri } from '$lib/appview-paths';
 import { PROFILE_FIELDS, forumProfileOverride, type ForumProfileOverride, type ProfileField } from '$lib/profile-overrides';
 import { planUnwatch, planWatch, watchesForForum, type Watch } from '$lib/watch';
@@ -255,6 +256,13 @@ export function assertNoImages(body: RichTextBlock[]): void {
 export async function createThread(
   did: string,
   input: { board: string; title: string; body: RichTextBlock[]; tags?: string[]; poll?: Poll; via?: string },
+): Promise<{ uri: string; cid: string }> {
+  return withBoardWrite(input.board, () => writeThread(did, input));
+}
+
+async function writeThread(
+  did: string,
+  input: Parameters<typeof createThread>[1],
 ): Promise<{ uri: string; cid: string }> {
   const record = {
     $type: `${NS}.discussion.thread`,

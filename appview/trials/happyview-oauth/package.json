@@ -1,0 +1,13 @@
+{
+  "name": "atmobb-happyview-oauth-trial",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test characterize.mjs"
+  },
+  "dependencies": {
+    "@atproto/api": "0.20.42",
+    "@happyview/oauth-client": "1.4.2",
+    "@happyview/oauth-client-node": "1.0.1"
+  }
+}

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { OAuthSession } from '@atproto/oauth-client-node';
+import type { HappyViewSession } from '@happyview/oauth-client';
 const state = vi.hoisted(() => ({ env: {} as Record<string, string | undefined> }));
 vi.mock('$env/dynamic/private', () => ({ env: state.env }));
 import { MEMBER_SCOPE, MODERATION_SCOPE, STAMP_SCOPE, clientMetadata, forumScopeStatus, oauthClient, oauthScope, sysopScope } from './atproto-oauth';
@@ -32,6 +32,8 @@ async function writeInstalls(installs: { state: 'active' | 'disabled'; collectio
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'atmobb-oauth-test-'));
   vi.stubEnv('DATA_DIR', directory);
+  state.env.HAPPYVIEW_CLIENT_KEY = 'public-test-client';
+  state.env.ATMOBB_APP_URL = 'https://forum.example';
   await writeInstalls([]);
   await refreshExtensionScopes();
 });
@@ -102,23 +104,43 @@ describe('forum OAuth scopes', () => {
     expect(MEMBER_SCOPE).toBe(MEMBER_SCOPE_BEFORE_EXTENSIONS);
   });
 
-  it('rebuilds the OAuth client when the scope changes, so the loopback client_id carries the new scopes', async () => {
+  it('rebuilds the OAuth adapter when the loopback metadata scope changes', async () => {
+    state.env.ATMOBB_APP_URL = 'http://127.0.0.1:5173';
+    state.env.HAPPYVIEW_OAUTH_CLIENT_ID = clientMetadata().client_id;
     const before = oauthClient();
     expect(oauthClient()).toBe(before);
-    expect(decodeURIComponent(before.clientMetadata.client_id)).not.toContain(`repo:${GAME}`);
+    expect(decodeURIComponent(clientMetadata().client_id)).not.toContain(`repo:${GAME}`);
 
     await writeInstalls([{ state: 'active', collections: [GAME] }]);
     await refreshExtensionScopes();
+    expect(() => oauthClient()).toThrow('does not match');
+    state.env.HAPPYVIEW_OAUTH_CLIENT_ID = clientMetadata().client_id;
     const after = oauthClient();
     expect(after).not.toBe(before);
-    const clientId = new URL(after.clientMetadata.client_id);
+    const clientId = new URL(clientMetadata().client_id);
     expect(clientId.searchParams.get('scope')?.split(' ')).toContain(`repo:${GAME}`);
-    expect(after.clientMetadata.scope?.split(' ')).toContain(`repo:${GAME}`);
+    expect(clientMetadata().scope.split(' ')).toContain(`repo:${GAME}`);
+  });
+
+  it('requires the public HappyView client key for OAuth but not public metadata', () => {
+    delete state.env.HAPPYVIEW_CLIENT_KEY;
+    expect(() => oauthClient()).toThrow('HAPPYVIEW_CLIENT_KEY');
+    expect(clientMetadata().scope).toBe(OAUTH_SCOPE_BEFORE_EXTENSIONS);
+  });
+
+  it('requires an explicit matching loopback registration for local OAuth', () => {
+    state.env.ATMOBB_APP_URL = 'http://127.0.0.1:5173';
+    expect(() => oauthClient()).toThrow('Local OAuth requires HAPPYVIEW_OAUTH_CLIENT_ID');
+    state.env.HAPPYVIEW_OAUTH_CLIENT_ID = 'http://127.0.0.1:5173/oauth-client-metadata.json';
+    expect(() => oauthClient()).toThrow('does not match');
+    state.env.HAPPYVIEW_OAUTH_CLIENT_ID = clientMetadata().client_id;
+    expect(() => oauthClient()).not.toThrow();
+    expect(clientMetadata().client_id).toMatch(/^http:\/\/localhost\?/);
   });
 
   it("asks for a reconnect when the forum session lacks a newly approved collection, and is ok once it's granted", async () => {
     let granted = `${SYSOP_SCOPE_BEFORE_EXTENSIONS} repo:${GAME} ${BINDING_SCOPE}`;
-    const session = { getTokenInfo: async () => ({ scope: granted }) } as unknown as OAuthSession;
+    const session = { getTokenInfo: () => ({ scope: granted }) } as unknown as HappyViewSession;
 
     await writeInstalls([{ state: 'active', collections: [GAME, ORDER] }]);
     await refreshExtensionScopes();

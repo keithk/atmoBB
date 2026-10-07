@@ -4,6 +4,7 @@ import hmac
 import fcntl
 import json
 import os
+import shutil
 import socket
 import subprocess
 import tempfile
@@ -273,6 +274,168 @@ printf '{"installedVersion":"2.0.0","installedCommit":null,"backup":"/backup/one
                 break
             time.sleep(0.02)
         self.assertEqual(finished["status"], "succeeded")
+
+
+class UpgradeOrderingTest(unittest.TestCase):
+    def run_upgrade(self, managed, fail_setup=False, running="2.14.0", target="2.16.0", channel="main", fail_config=False, staged_target=None):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            binaries = root / "bin"
+            binaries.mkdir()
+            data = root / "oauth"
+            data.mkdir()
+            (root / ".env").write_text(
+                f"ATMOBB_DATA_DIR={data}\nATMOBB_UPDATER_TOKEN=fixture\n"
+                "APP_HOST=forum.example\nHAPPYVIEW_HOST=hv.example\n")
+            release = Path(__file__).resolve().parent
+            shutil.copy(release / "compose.yml", root / "compose.yml")
+            shutil.copy(release / "atmobb", root / "atmobb")
+            source = root / "source"
+            (source / "infra").mkdir(parents=True)
+            shutil.copytree(release, source / "infra" / "release")
+            (source / "docs").mkdir()
+            (source / "docs" / "self-hosting.md").write_text("fixture")
+            (source / "LICENSE").write_text("fixture")
+            (source / "package.json").write_text('{"version":"0.5.0"}')
+            (source / "Dockerfile").write_text(f"ARG HAPPYVIEW_VERSION={target}\n")
+            with tarfile.open(root / "archive.tar.gz", "w:gz") as archive:
+                archive.add(source, arcname="source")
+            with tarfile.open(root / "bundle.tar.gz", "w:gz") as archive:
+                archive.add(source / "infra" / "release", arcname="atmobb-0.5.0")
+            (binaries / "docker").write_text("""#!/usr/bin/env python3
+import json, os, pathlib, sys
+args = sys.argv[1:]
+root = pathlib.Path(os.environ['FIXTURE_ROOT'])
+with (root / 'docker.log').open('a') as log: log.write(' '.join(args) + '\\n')
+if args == ['compose', 'version', '--short']: print('2.39.4')
+elif args[:1] == ['inspect']:
+    if 'ExitCode' in args[2]: print('1' if os.environ['FAIL_SETUP'] == '1' else '0')
+    else: print('sha256:' + args[-1].removesuffix('-id'))
+elif args[:2] == ['image', 'inspect']:
+    ref = args[-1]
+    print('sha256:happyview' if '/happyview:' in ref else
+          'sha256:postgres' if ref == 'postgres:16' else 'sha256:atmobb')
+elif args[:1] == ['run']:
+    print(json.dumps({'version':'0.5.0', 'happyview':os.environ['TARGET_HV']}))
+elif args[:1] == ['compose']:
+    if 'config' in args:
+        print(json.dumps({'services': {'happyview': {'image': 'ghcr.io/gamesgamesgamesgamesgames/happyview:' + os.environ['STAGED_HV']},
+          'atmobb': {'image': 'atmobb-main:' + '0' * 40 if os.environ['MANAGED'] == '1' else 'ghcr.io/keithk/atmobb:0.5.0'},
+          'setup': {'image': 'ghcr.io/keithk/atmobb:0.5.0'}, 'postgres': {'image':'postgres:16'}}}))
+    elif 'ps' in args and '-q' in args: print(('atmobb' if args[-1] == 'setup' else args[-1]) + '-id')
+    elif 'up' in args and 'happyview' in args: (root / 'migrated').touch()
+""")
+            (binaries / "curl").write_text("""#!/usr/bin/env python3
+import hashlib, json, os, pathlib, shutil, sys
+args = sys.argv[1:]
+root = pathlib.Path(os.environ['FIXTURE_ROOT'])
+with (root / 'docker.log').open('a') as log: log.write('curl ' + ' '.join(args) + '\\n')
+if '-o' in args:
+    out = pathlib.Path(args[args.index('-o') + 1])
+    if out.name == 'commit.json': out.write_text(json.dumps({'sha': '0' * 40}))
+    elif out.name == 'release.json': out.write_text(json.dumps({'tag_name':'v0.5.0','assets':[
+        {'name':'atmobb-0.5.0.tar.gz','browser_download_url':'https://fixture/bundle'},
+        {'name':'SHA256SUMS','browser_download_url':'https://fixture/sums'}]}))
+    elif out.name == 'SHA256SUMS': out.write_text(hashlib.sha256((root / 'bundle.tar.gz').read_bytes()).hexdigest() + '  atmobb-0.5.0.tar.gz\\n')
+    elif out.name == 'atmobb-0.5.0.tar.gz': shutil.copy(root / 'bundle.tar.gz', out)
+    else: shutil.copy(root / 'archive.tar.gz', out)
+elif '--dump-header' in args:
+    pathlib.Path(args[args.index('--dump-header') + 1]).write_text('HTTP/2 503\\r\\nX-Atmobb-Maintenance: 1\\r\\n')
+    print('503', end='')
+elif any('/config' in a for a in args):
+    if os.environ['FAIL_CONFIG'] == '1': sys.exit(22)
+    assert 'Host: hv.example' in args
+    assert any(a.startswith('http://127.0.0.1:') for a in args)
+    print(json.dumps({'version':os.environ['TARGET_HV'] if (root / 'migrated').exists() else os.environ['RUNNING_HV']}))
+else: print(json.dumps({'version':'0.5.0','happyview':os.environ['TARGET_HV']}))
+""")
+            (binaries / "id").write_text('#!/bin/sh\necho 0\n')
+            (binaries / "sudo").write_text('#!/bin/sh\nexec "$@"\n')
+            (binaries / "chown").write_text('#!/bin/sh\nexit 0\n')
+            (binaries / "stat").write_text(f'#!/bin/sh\necho "{os.getuid()}:{os.getgid()}"\n')
+            for binary in binaries.iterdir():
+                binary.chmod(0o755)
+            env = {**os.environ, "PATH": f"{binaries}:{os.environ['PATH']}",
+                   "FIXTURE_ROOT": str(root), "MANAGED": str(int(managed)),
+                   "RUNNING_HV": running, "TARGET_HV": target,
+                   "STAGED_HV": staged_target or target,
+                   "FAIL_SETUP": str(int(fail_setup)), "ATMOBB_BUNDLE_DIR": str(root),
+                   "FAIL_CONFIG": str(int(fail_config)),
+                   "ATMOBB_UPDATER_STATE_DIR": str(root / "state"),
+                   "ATMOBB_MAINTENANCE_DIR": str(root / "public"),
+                   "ATMOBB_HOST_UPDATE_LOCK": str(root / "host.lock"),
+                   "ATMOBB_UPDATER_LIB_DIR": str(root / "lib"),
+                   "ATMOBB_UPDATER_INTERNAL": "fixture"}
+            command = ["_update", channel] if managed else ["upgrade-happyview", "--yes"]
+            result = subprocess.run(["sh", str(release / "atmobb"), *command],
+                                    env=env, capture_output=True, text=True)
+            result.maintenance_active = (root / "public" / "active").exists()
+            return result, (root / "docker.log").read_text().splitlines()
+
+    def test_downgrade_and_unknown_versions_never_stop_or_replace_the_app(self):
+        for managed, channel in ((False, "main"), (True, "main"), (True, "stable")):
+            for running, target in [("2.16.0", "2.14.0"), ("2.16.0", "latest"), ("unknown", "2.16.0")]:
+                with self.subTest(managed=managed, channel=channel, running=running, target=target):
+                    result, calls = self.run_upgrade(managed, running=running, target=target, channel=channel)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("Happyview version guard", result.stderr)
+                    self.assertFalse(any(" stop " in call or "pg_dump" in call or
+                                         "up " in call or "build " in call or " pull" in call for call in calls))
+                    self.assertFalse(result.maintenance_active)
+
+    def test_failed_local_config_fetch_never_prepares_or_changes_containers(self):
+        for managed, channel in ((False, "main"), (True, "main"), (True, "stable")):
+            with self.subTest(managed=managed, channel=channel):
+                result, calls = self.run_upgrade(managed, channel=channel, fail_config=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Happyview version guard", result.stderr)
+                self.assertFalse(result.maintenance_active)
+                self.assertFalse(any(" stop " in call or "pg_dump" in call or
+                                     "up " in call or "build " in call or " pull" in call for call in calls))
+
+    def test_same_and_newer_numeric_versions_are_allowed(self):
+        for running in ("2.16.0", "2.9.0"):
+            with self.subTest(running=running):
+                result, _ = self.run_upgrade(True, running=running, channel="stable")
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_actual_main_compose_pin_cannot_downgrade_after_safe_build_arg(self):
+        result, calls = self.run_upgrade(True, running="2.16.0", target="2.16.0", staged_target="2.14.0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("refusing downgrade", result.stderr)
+        self.assertTrue(any("build " in call for call in calls))
+        self.assertFalse(any(" stop " in call or "pg_dump" in call or " up " in call for call in calls))
+        self.assertFalse(result.maintenance_active)
+
+    def test_prepare_stop_backup_migrate_setup_then_start(self):
+        for managed in (False, True):
+            with self.subTest(managed=managed):
+                result, calls = self.run_upgrade(managed)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                def position(fragment):
+                    return next(i for i, call in enumerate(calls) if fragment in call)
+                self.assertLess(position("/config"), position("pull"))
+                self.assertLess(position("pull"), position("stop --timeout 60 atmobb happyview"))
+                self.assertLess(position("stop --timeout 60 atmobb happyview"), position("pg_dump"))
+                migration = "up -d postgres happyview"
+                self.assertLess(position("pg_dump"), position(migration))
+                self.assertLess(position(migration), position("up --no-deps --force-recreate --exit-code-from setup setup"))
+                self.assertLess(position("up --no-deps --force-recreate --exit-code-from setup setup"), position("inspect --format {{.State.ExitCode}}"))
+                start = "up -d --no-deps atmobb"
+                self.assertGreater(max(i for i, call in enumerate(calls) if call == start or call.endswith(start)),
+                                   position("inspect --format {{.State.ExitCode}}"))
+                self.assertIn("ATMOBB_BACKUP=", result.stdout)
+                self.assertFalse(result.maintenance_active)
+
+    def test_failed_setup_leaves_app_stopped(self):
+        for managed in (False, True):
+            with self.subTest(managed=managed):
+                result, calls = self.run_upgrade(managed, fail_setup=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("target setup did not finish successfully", result.stderr)
+                self.assertTrue(any("stop --timeout 60 atmobb happyview" in call for call in calls))
+                self.assertTrue(result.maintenance_active)
+                self.assertFalse(any(call.endswith("up -d --no-deps atmobb") for call in calls))
 
 
 class InstanceConfigTest(unittest.TestCase):

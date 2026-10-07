@@ -171,6 +171,10 @@ export interface OutboundFetchOptions {
   body?: string | Uint8Array;
   maxBytes?: number;
   timeoutMs?: number;
+  /** Default retains extension fetch behavior. OAuth must never forward a redirected body/proof. */
+  redirect?: 'follow' | 'error';
+  /** Optional total budget including DNS and every redirect, not just each socket. */
+  totalTimeoutMs?: number;
 }
 
 export interface OutboundFetchResult {
@@ -228,6 +232,12 @@ function performRequest(
     const req = requestFn(options, (res) => {
       const status = res.statusCode ?? 0;
       const headers = flattenHeaders(res.headers);
+      if (status >= 300 && status < 400 && opts.redirect === 'error') {
+        settleReject(new OutboundFetchError('RedirectNotAllowed', 'Redirects are not allowed for this request'));
+        res.destroy();
+        req.destroy();
+        return;
+      }
       if (status >= 300 && status < 400 && headers.location) {
         res.resume(); // discard the redirect body, we're not returning it
         settleResolve({ redirectTo: headers.location });
@@ -266,11 +276,21 @@ function performRequest(
 export async function outboundFetch(inputUrl: string, opts: OutboundFetchOptions = {}): Promise<OutboundFetchResult> {
   const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const deadline = opts.totalTimeoutMs === undefined ? undefined : performance.now() + opts.totalTimeoutMs;
+  const remaining = () => {
+    if (deadline === undefined) return timeoutMs;
+    const budget = Math.min(timeoutMs, Math.ceil(deadline - performance.now()));
+    if (!Number.isFinite(budget) || budget <= 0) throw new OutboundFetchError('Timeout', 'Outbound request deadline expired');
+    return budget;
+  };
   let current = inputUrl;
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect++) {
     const url = parseAndValidateUrl(current);
-    const address = await resolveVettedAddress(url.hostname);
-    const outcome = await performRequest(url, address, opts, maxBytes, timeoutMs);
+    const dnsBudget = remaining();
+    const address = deadline === undefined
+      ? await resolveVettedAddress(url.hostname)
+      : await boundedResolution(url.hostname, dnsBudget);
+    const outcome = await performRequest(url, address, opts, maxBytes, remaining());
     if ('redirectTo' in outcome) {
       if (redirect === MAX_REDIRECTS) {
         throw new OutboundFetchError('TooManyRedirects', `Exceeded ${MAX_REDIRECTS} redirects fetching ${inputUrl}`);
@@ -281,6 +301,21 @@ export async function outboundFetch(inputUrl: string, opts: OutboundFetchOptions
     return outcome;
   }
   throw new OutboundFetchError('TooManyRedirects', `Exceeded ${MAX_REDIRECTS} redirects fetching ${inputUrl}`);
+}
+
+/** A late DNS result cannot resume the caller or open a connection after timeout. */
+async function boundedResolution(hostname: string, timeoutMs: number): Promise<string> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      resolveVettedAddress(hostname),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new OutboundFetchError('Timeout', 'DNS resolution deadline expired')), timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // --- DID document resolution (bounded LRU cache, TTL) -----------------------

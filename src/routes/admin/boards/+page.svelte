@@ -112,10 +112,14 @@
                     </form>
                     <form class="edit__danger" method="POST" action="?/deleteBoard">
                       <input type="hidden" name="uri" value={board.uri} />
-                      {#if board.threadCount > 0}
+                      {#if board.value.access?.space || board.threadCount > 0}
                         <label class="edit__really">
                           <input type="checkbox" name="really" />
-                          I understand that {board.threadCount} {board.threadCount === 1 ? 'thread' : 'threads'} will no longer have a board.
+                          {#if board.value.access?.space}
+                            I understand that deleting this board deletes its private space and every thread and reply inside it.
+                          {:else}
+                            I understand that {board.threadCount} {board.threadCount === 1 ? 'thread' : 'threads'} will no longer have a board.
+                          {/if}
                         </label>
                       {/if}
                       <button class="atm-btn atm-btn--ghost atm-btn--sm">delete board</button>

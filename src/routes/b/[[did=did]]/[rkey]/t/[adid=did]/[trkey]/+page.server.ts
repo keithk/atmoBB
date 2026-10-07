@@ -4,7 +4,7 @@ import {
   boardUri,
   FORUM_DID,
   getBoardThreads,
-  spaceUriFor,
+  getBoardAccess,
   isSpaceMember,
   THREAD_NSID,
   resolveHandle,
@@ -30,9 +30,10 @@ import { parseThreadTags } from '$lib/thread-tags';
 const QUOTE = 'app.atmobb.richtext.block#quote';
 const LIMIT = 25;
 
-function threadRef(params: { did?: string; rkey: string; adid: string; trkey: string }) {
+async function threadRef(params: { did?: string; rkey: string; adid: string; trkey: string }) {
   const forumDid = params.did ?? FORUM_DID();
-  const space = spaceUriFor(params.rkey, forumDid);
+  const space = await getBoardAccess(boardUri(params.rkey, forumDid));
+  if (!space) error(404, 'Members-only board not found.');
   const uri = `${space}/${params.adid}/${THREAD_NSID}/${params.trkey}`;
   const boardPath = `/b/${params.did ? `${params.did}/` : ''}${params.rkey}`;
   return { space, uri, boardPath };
@@ -65,7 +66,7 @@ async function notifyReply(record: Parameters<typeof createReply>[1], replyUri: 
 
 export const load: PageServerLoad = async ({ params, locals, url, isDataRequest, setHeaders }) => {
   handleNotifyVisit({ url, isDataRequest, locals, setHeaders });
-  const { space, uri, boardPath } = threadRef(params);
+  const { space, uri, boardPath } = await threadRef(params);
   // Membership gates the whole page; non-members bounce to the locked board.
   if (!locals.user || !(await isSpaceMember(space, locals.user.did))) {
     redirect(303, boardPath);
@@ -150,7 +151,7 @@ export const load: PageServerLoad = async ({ params, locals, url, isDataRequest,
 export const actions: Actions = {
   reply: async ({ params, request, locals }) => {
     if (!locals.user) return fail(401, { message: 'Log in to reply.' });
-    const { space, uri } = threadRef(params);
+    const { space, uri } = await threadRef(params);
     if (!(await isSpaceMember(space, locals.user.did))) {
       return fail(403, { message: 'Only members of this board can reply.' });
     }
@@ -200,6 +201,7 @@ export const actions: Actions = {
     if (title !== undefined && !title) return fail(400, { message: 'Enter a title for your thread.' });
     if (parsedTags?.error) return fail(400, { message: parsedTags.error });
     if (title === undefined && !body) return fail(400, { message: 'Write something, or delete the post instead.' });
+    const { boardPath } = await threadRef(params);
     try {
       await updatePost(locals.user.did, target, {
         title,
@@ -209,7 +211,6 @@ export const actions: Actions = {
     } catch (e) {
       return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t save your changes. Try again.' });
     }
-    const { boardPath } = threadRef(params);
     redirect(303, `${boardPath}/t/${params.adid}/${params.trkey}?saved=1#post-${target.split('/').pop()}`);
   },
 
@@ -217,7 +218,7 @@ export const actions: Actions = {
     if (!locals.user) return fail(401, { message: 'Log in to delete.' });
     const form = await request.formData();
     const target = String(form.get('uri') ?? '');
-    const { uri, boardPath } = threadRef(params);
+    const { uri, boardPath } = await threadRef(params);
     try {
       await deletePost(locals.user.did, target);
     } catch (e) {

@@ -4,6 +4,16 @@ Versions follow [Semantic Versioning](https://semver.org) with the operator's
 workload in mind; [Releasing](docs/releasing.md) spells out what each level
 means. Every entry names the Happyview release it was tested against.
 
+## Unreleased
+
+HappyView 2.16.0. Release acceptance is incomplete: direct-engine read-denial assertions fail, and SDK-driven native PDS migration is unsupported.
+
+- Application OAuth uses the unmodified HappyView Node SDK with browser-bound one-time transactions, callback identity checks, separate member/forum storage, and bounded DNS-pinned network requests. Login and forum connection populate `happyview-oauth-v1`; the app does not convert other credential stores.
+- Private-space operations use separate policies and membership flags, resolve actual space authorities, paginate complete lists, and consume inline record values. atmoBB checks read permission before list/record calls.
+- Private boards include access in their initial record. Local privacy changes and posting share a lock. Deleting a private board requires confirmation even when its public index count is zero.
+- Setup configures public OAuth and PDS service-proxy routing. Upgrades stop application writes before backups and leave the app stopped if setup fails. `./atmobb configure-oauth` provisions or repairs the public client.
+- Extensions use forum-purpose credentials, per-install collection restrictions, and separate forum consent. Private-board bindings are prohibited.
+
 ## 0.5.2
 
 Happyview remains pinned to 2.14.0. No backfill is required.

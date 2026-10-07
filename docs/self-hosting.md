@@ -87,10 +87,10 @@ It shows the resolved DIDs and settings before changing anything, then:
 
 On an existing release-bundle installation, rerun the same `./atmobb install` command and options to install or refresh Admin → Updates. The command is rerunnable: it preserves `.env`, generated secrets, OAuth state, the Happyview operator key, and database data.
 
-`./atmobb help` lists the other commands: `upgrade`, `upgrade-happyview`, `backfill`, `backup`, `status`, `logs`. Anything else is plain `docker compose` in that directory.
+`./atmobb help` lists the other commands: `upgrade`, `upgrade-happyview`, `configure-oauth`, `backfill`, `backup`, `status`, `logs`. Anything else is plain `docker compose` in that directory.
 
 > [!NOTE]
-> Both image tags in `compose.yml` are pinned by the release. Do not edit them by hand or replace them with `latest`; the setup job refuses to start the app against a Happyview version this release was not tested with. [Upgrades](#upgrades) covers moving between versions.
+> Both image tags in `compose.yml` are pinned by the release. Do not edit them by hand or replace them with `latest`; the setup job refuses to start the app when HappyView does not match the required version. [Upgrades](#upgrades) covers moving between versions.
 
 ### From source
 
@@ -113,7 +113,7 @@ Run the installer as your normal login user:
 
 Happyview defaults to `hv.<app-host>`. Use `--happyview-host hv.example.net` to choose a different hostname, or run the script without arguments for interactive prompts. `--help` lists every option.
 
-The installer will show the resolved DIDs and deployment settings before it changes anything. It then:
+The installer shows the resolved DIDs and deployment settings before it changes anything. It then:
 
 1. installs locked dependencies, type-checks, and builds atmobb;
 2. creates root-only config under `/etc/atmobb` and OAuth storage under `/var/lib/atmobb`;
@@ -125,7 +125,7 @@ The installer will show the resolved DIDs and deployment settings before it chan
 It doesn't install operating-system packages or touch DNS. If it stops on a failed check, fix that problem and run the same command again. It keeps generated credentials instead of rotating them.
 
 > [!NOTE]
-> Happyview is pinned to `ghcr.io/gamesgamesgamesgamesgames/happyview:2.14.0`. Do not replace the pin with `latest`: upgrades can run forward-only database migrations. Back up Postgres before changing the tag.
+> Happyview is pinned to `ghcr.io/gamesgamesgamesgamesgames/happyview:2.16.0`. Do not replace the pin with `latest`: upgrades can run forward-only database migrations. Back up Postgres before changing the tag. The app image must require the same HappyView version. See [HappyView](happyview.md) for supported authentication paths and native-migration limitations.
 
 ## 2. Connect the forum account
 
@@ -174,9 +174,9 @@ It backfills every record collection, waits for completion, then rebuilds counts
 ## 4. Enable private boards (optional)
 
 > [!CAUTION]
-> Happyview permissioned spaces are experimental and off by default. Private-board content lives only in your Postgres volume. It is not in anyone's atproto repo and cannot be recovered by backfill. Set up and test off-server backups first.
+> Happyview permissioned spaces are experimental. atmoBB setup enables them, so set up and test off-server backups before using private boards. Polyfill content lives in your Postgres volume and cannot be recovered by public backfill. SDK-driven PDS migration is unsupported; see [HappyView](happyview.md).
 
-Once backups work, enable spaces over the loopback-only admin API. Read the operator key from `.env` in the bundle directory, or from `/etc/atmobb/happyview-admin.env` on a source install:
+Setup enables spaces over the loopback-only admin API. To reapply that setting manually after checking backups, read the operator key from `.env` in the bundle directory, or from `/etc/atmobb/happyview-admin.env` on a source install:
 
 ```sh
 HAPPYVIEW_API_KEY="$(sed -n 's/^HAPPYVIEW_API_KEY=//p' /srv/atmobb/.env)"
@@ -289,12 +289,14 @@ Read the release notes first. Every release states the Happyview version it runs
 
 **Admin updates for a release-bundle installation.** Open **Admin → Updates** as a forum admin and choose **update to latest stable release**. The restricted host updater:
 
-1. resolves the latest published release, downloads its bundle and checksum, verifies the bundle, and pulls its pinned prebuilt images;
-2. leaves the running containers untouched if download or pull preparation fails;
-3. enables maintenance on both public hostnames, verifies the gate, stops application writes, and backs up Postgres, OAuth state, `.env`, and Compose/Caddy configuration before any migration or activation;
+1. resolves the latest published release, verifies its bundle and checksum, checks HappyView version compatibility, and pulls its pinned prebuilt images;
+2. leaves the running containers and maintenance state untouched if preparation fails;
+3. enables maintenance on both public hostnames, verifies the gate, stops application and HappyView writes, and backs up Postgres, OAuth state, `.env`, and Compose/Caddy configuration before any migration or activation;
 4. activates the prepared bundle, starts its pinned Happyview version, and waits for startup migrations;
-5. force-runs the release's setup job so new lexicons, Lua queries, and derived-table setup are applied before atmobb starts;
+5. force-runs the release's setup job and verifies its image and exit status before atmobb starts;
 6. starts atmobb and removes maintenance only after its target HTTP version, required containers, running images, Happyview version, and setup exit status all match.
+
+CLI and admin updates reject a lower HappyView version before enabling maintenance or stopping services. The running version comes from the local HappyView configuration endpoint; the target requires a numeric version pin. An unknown version requires manual review. Recovery checks the saved immutable image identities rather than assuming a running container has a version tag.
 
 Starting an update opens the protected `/_atmobb/` operator console. It shows
 persisted progress, the bounded update log, maintenance state, and recovery
@@ -320,7 +322,7 @@ cd /srv/atmobb
 sudo journalctl -u atmobb-updater -n 200 --no-pager
 ```
 
-A preparation failure leaves the previous containers and maintenance state
+A preparation failure leaves the running containers and maintenance state
 unchanged. A failure after maintenance begins keeps the forum closed, including
 across updater restarts. Use **Recover and reopen** in the operator console or
 `sudo ./atmobb maintenance recover` after inspecting the failure. Recovery reapplies
@@ -397,7 +399,7 @@ That pulls the new atmobb image, reruns setup, and restarts the app. If the new 
 sudo ./atmobb upgrade-happyview
 ```
 
-which takes a backup, shows the version change, asks for confirmation, recreates only Happyview, waits for its migrations to finish, then reapplies setup and restarts the app. Happyview migrations are forward-only: once they run, you cannot go back down a version, which is why the backup comes first. Afterwards `./atmobb status` shows the running version.
+The command shows the version change, asks for confirmation, pulls the required images, stops app writes, and takes a backup. It starts HappyView, waits for migrations, and force-runs setup. Only successful setup permits the app to restart. The command also reapplies setup when the running HappyView version matches the pin. `./atmobb status` shows the running version.
 
 If you bring the stack up with a mismatched pair some other way, the setup job refuses to start the app and prints both versions. Nothing serves until you fix the pin or run `upgrade-happyview`.
 
@@ -453,7 +455,8 @@ Relevant app environment variables:
 | `ATMOBB_UPDATER_TOKEN` | Generated by the bundle installer. Authenticates the app to the fixed-action host updater over its local Unix socket. |
 | `DATA_DIR` | Persistent OAuth state, the forum's atmo.pub signing key, members' notification state, the invite links of a gated forum (`invites.json`), and everything under `extensions/` (see [Extensions](#extensions) below). Losing it disconnects every account, makes the forum a new sender so members approve it again, voids every unredeemed invite, and drops every extension install along with its private data. |
 | `HAPPYVIEW_SESSION_SECRET` | Copy of Happyview's session secret for private boards. Must be at least 32 bytes; in production the app refuses to start with a weak one, and treats a weak `ATMOBB_COOKIE_SECRET` the same way. |
-| `HAPPYVIEW_CLIENT_KEY` | Optional app identity for Happyview rate limiting. |
+| `HAPPYVIEW_CLIENT_KEY` | Required public HappyView OAuth API-client key (`hvc_…`), provisioned by `./atmobb configure-oauth`. Never use the admin key here. |
+| `HAPPYVIEW_OAUTH_CLIENT_ID` | Optional exact metadata-ID check for HTTPS. Required for HTTP development, where it must match the app's localhost exception and the registered HappyView client. |
 | `ATMOBB_AVATAR_BUILDER_URL` | Optional. Links an external avatar builder from profile settings. |
 
 Rotating the Happyview session secret requires changing both environment files and restarting Happyview and atmobb. Rotating the Postgres password requires changing the database role and its environment together; editing only the env file locks Happyview out.

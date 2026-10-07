@@ -1,8 +1,8 @@
-import { redirect } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { Agent } from '@atproto/api';
 import { oauthClient } from '$lib/server/atproto-oauth';
-import { setSessionCookie } from '$lib/server/session';
+import { sessionDid, setSessionCookie } from '$lib/server/session';
 import { FORUM_DID } from '$lib/server/appview';
 import { invalidateForumSession, invalidateStaff } from '$lib/server/admin';
 import { safeReturnPath } from '$lib/server/notify/return-path';
@@ -10,21 +10,21 @@ import { safeReturnPath } from '$lib/server/notify/return-path';
 const NS = 'app.atmobb';
 
 export const GET: RequestHandler = async ({ url, cookies }) => {
-  const { session, state } = await oauthClient().callback(url.searchParams);
+  let result;
+  try {
+    result = await oauthClient().callback(url.searchParams, cookies, sessionDid(cookies));
+  } catch {
+    // Do not reflect upstream token bodies, callback codes, or SDK errors.
+    error(400, 'Login could not be verified. Return to login or forum connect and start again.');
+  }
+  const { session, context } = result;
 
-  // The connect-forum flow authorizes the FORUM account (state carries the
-  // sysop who started it). It must not become the browser's login; it just
-  // parks the session in the store for agentFor(forumDid) writes.
-  if (state?.startsWith('forum-connect:')) {
-    if (session.did !== FORUM_DID()) {
-      try {
-        await oauthClient().revoke(session.did);
-      } catch {
-        // best effort; an unused stray session is harmless
-      }
-      redirect(303, '/admin/connect?error=wrong-account');
-    }
-    const connector = state.slice('forum-connect:'.length);
+  // The wrapper checks browser, initiating personal user, issuer and account
+  // before registration. Recheck context before granting forum administration.
+  if (context.purpose === 'forum') {
+    if (session.did !== FORUM_DID() || context.forumDid !== FORUM_DID()
+      || context.connector !== sessionDid(cookies)) error(400, 'Forum connection context changed.');
+    const connector = context.connector;
     const agent = new Agent(session);
     // Bootstrap: whoever connected the forum account controls it — make
     // their personal DID an admin, unless a grant already exists.
@@ -54,8 +54,6 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
   }
 
   setSessionCookie(cookies, session.did);
-  // A login started with a return path (the notifications re-consent flow)
-  // goes back there; the state is re-validated, never trusted as-is.
-  const next = state?.startsWith('next:') ? safeReturnPath(state.slice('next:'.length)) : null;
+  const next = safeReturnPath(context.next);
   redirect(303, next ?? '/');
 };

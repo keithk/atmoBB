@@ -64,12 +64,15 @@ elif a[0] == "inspect":
             print(json.load(open(images))["services"][a[-1]]["image"])
         else: print("sha256:"+a[-1])
     else: print("sha256:"+a[-1].split(":")[-1])
-elif a[:2] == ["image", "inspect"]: print("sha256:"+a[-1].split(":")[-1])
+elif a[:2] == ["image", "inspect"]:
+    print("sha256:happyview" if a[-1] == "fixture:2.14.0" else "sha256:"+a[-1].split(":")[-1])
 elif a[0] == "run": print('{"version":"1.2.3","happyview":"2.14.0"}')
 elif a[0] == "build":
     if os.environ.get("FAIL_PREP"): sys.exit(1)
 elif a[0] == "compose":
-    if "config" in a: print(json.dumps({"services":{s:{"image":"fixture:"+s} for s in ["atmobb","happyview","setup","postgres"]}}))
+    if "config" in a:
+        print(json.dumps({"services":{s:{"image":"fixture:"+("2.14.0" if s == "happyview" else s)}
+                                     for s in ["atmobb","happyview","setup","postgres"]}}))
     elif "pull" in a:
         if os.environ.get("FAIL_PREP"): sys.exit(1)
     elif "ps" in a: print(a[-1])
@@ -91,7 +94,11 @@ elif url.startswith("https://"):
         header="" if os.environ.get("MISSING_HEADER") else "X-Atmobb-Maintenance: 1\r\n"
         open(a[a.index("--dump-header")+1],"w").write("HTTP/2 503\r\n"+header+"\r\n")
     print("200" if os.environ.get("FAIL_GATE") else "503",end="")
-elif "/config" in url: print('{"version":"2.14.0"}')
+elif "/config" in url:
+    import json
+    if os.environ.get("FAIL_CONFIG"): sys.exit(22)
+    assert "Host: hv.example" in a and url.startswith("http://127.0.0.1:")
+    print(json.dumps({"version":os.environ.get("RUNNING_HV","2.14.0")}))
 else:
     import json
     print(json.dumps({"version":os.environ.get("WRONG_VERSION","1.2.3"),"happyview":"2.14.0"}))
@@ -123,6 +130,24 @@ else:
         self.run_cli("maintenance", "off")
         self.assertFalse(self.marker.exists())
         self.assertNotIn("remove-orphans", self.log.read_text())
+
+    def test_numeric_guard_with_immutable_running_image(self):
+        for current, target, allowed in (
+            ("2.16.0", "2.16.0", True),
+            ("2.9.0", "2.16.0", True),
+            ("2.16.0", "2.14.0", False),
+            ("unknown", "2.16.0", False),
+            ("2.16.0", "latest", False),
+        ):
+            with self.subTest(current=current, target=target):
+                self.run_cli("_check-happyview-upgrade", f"fixture:{target}",
+                             ok=allowed, RUNNING_HV=current)
+        self.run_cli("_check-happyview-upgrade", "fixture:2.16.0",
+                     ok=False, FAIL_CONFIG="1")
+        calls = self.log.read_text()
+        self.assertNotIn(".Config.Image", calls)
+        self.assertNotIn(" pull", calls)
+        self.assertNotIn(" up ", calls)
 
     def test_proxy_gate_failure_never_stops(self):
         self.run_cli("maintenance", "on", ok=False, FAIL_GATE="1")
@@ -175,6 +200,11 @@ else:
 
     def test_failed_setup_container_never_starts_app(self):
         self.run_cli("upgrade", ok=False, SETUP_EXIT_CODE="1")
+        self.assertTrue(self.marker.exists())
+        self.assertNotIn(" up -d --no-deps atmobb", self.log.read_text())
+
+    def test_wrong_setup_image_never_starts_app(self):
+        self.run_cli("upgrade", ok=False, WRONG_IMAGE="setup")
         self.assertTrue(self.marker.exists())
         self.assertNotIn(" up -d --no-deps atmobb", self.log.read_text())
 

@@ -139,6 +139,52 @@ describe('outboundFetch transport limits', () => {
     expect(Buffer.from(result.body).toString('utf8')).toBe('final');
   });
 
+  it('rejects redirects before forwarding OAuth bodies or headers when opted in', async () => {
+    stubPublicHost('public.example.test', 'public2.example.test');
+    routeToTestServer();
+    const paths: string[] = [];
+    server.on('request', (req, res) => {
+      paths.push(req.url!);
+      if (req.url === '/start') res.writeHead(307, { location: 'https://public2.example.test/token' });
+      else res.writeHead(200);
+      res.end();
+    });
+    await expect(outboundFetch('https://public.example.test/start', {
+      method: 'POST', body: 'code=private', headers: { dpop: 'private-proof' }, redirect: 'error',
+    })).rejects.toMatchObject({ code: 'RedirectNotAllowed' });
+    expect(paths).toEqual(['/start']);
+  });
+
+  it('bounds DNS with the overall deadline and never connects after its late result', async () => {
+    let connected = false;
+    setResolverForTests(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      return [{ address: PUBLIC_TEST_ADDRESS, family: 4 }];
+    });
+    setRequestFnForTests((options, callback) => {
+      connected = true;
+      return httpRequest({ ...options, host: '127.0.0.1', port }, callback);
+    });
+    server.on('request', (_req, res) => res.end('too late'));
+    await expect(outboundFetch('https://public.example.test/', {
+      timeoutMs: 1000, totalTimeoutMs: 20,
+    })).rejects.toMatchObject({ code: 'Timeout' });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(connected).toBe(false);
+  });
+
+  it('uses one deadline across DNS and response rather than resetting the budget', async () => {
+    setResolverForTests(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      return [{ address: PUBLIC_TEST_ADDRESS, family: 4 }];
+    });
+    routeToTestServer();
+    server.on('request', (_req, res) => setTimeout(() => res.end('too late'), 80));
+    await expect(outboundFetch('https://public.example.test/', {
+      timeoutMs: 1000, totalTimeoutMs: 60,
+    })).rejects.toMatchObject({ code: 'Timeout' });
+  });
+
   it('gives up after too many redirects', async () => {
     stubPublicHost('public.example.test');
     routeToTestServer();

@@ -12,7 +12,11 @@ vi.mock('$lib/server/appview', () => ({
 }));
 vi.mock('$lib/server/admin', () => ({ adminActor: async () => true }));
 vi.mock('$lib/server/happyview-session', () => ({ privateBoardsEnabled: () => false }));
-vi.mock('$lib/server/forum-repo', () => ({ createForumRecord: state.create, putForumRecord: state.put }));
+vi.mock('$lib/server/forum-repo', () => ({
+  createForumRecord: state.create,
+  putForumRecord: state.put,
+  getForumRecord: async () => ({ uri, cid: 'cid', value: state.value }),
+}));
 vi.mock('$lib/server/saved-redirect', () => ({ savedRedirect: async () => {} }));
 import { actions } from './+page.server';
 
