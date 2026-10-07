@@ -5,7 +5,7 @@
 
 <div class="settings">
   <nav class="atm-tabs" aria-label="Settings">
-    {#each [{ label: 'Profile', href: '/settings/profile' }, { label: 'Stamps', href: '/settings/stamps' }, { label: 'Styles', href: '/settings/styles' }] as tab}
+    {#each [{ label: 'Profile', href: '/settings/profile' }, { label: 'Page', href: '/settings/page' }, { label: 'Stamps', href: '/settings/stamps' }, { label: 'Styles', href: '/settings/styles' }] as tab}
       <a class="atm-tab {page.url.pathname === tab.href ? 'atm-tab--active' : ''}"
         href={tab.href} aria-current={page.url.pathname === tab.href ? 'page' : undefined}>{tab.label}</a>
     {/each}
