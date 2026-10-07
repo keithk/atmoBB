@@ -19,6 +19,8 @@ export interface Main {
   forum: string
   /** Stamp ids the member wears on this forum, in order: an admin stamp's at-uri, or the fixed id of a generated stamp (atmobb:board:<board at-uri>, atmobb:arrival, atmobb:first-light, atmobb:early-days). */
   wearing?: string[]
+  /** At-uris of the member's own topics on this forum, pinned to their profile page in order. */
+  pinned?: string[]
   createdAt?: string
   [k: string]: unknown
 }

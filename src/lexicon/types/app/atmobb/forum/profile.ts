@@ -56,6 +56,8 @@ export interface Main {
   hideCredit?: boolean
   /** Hide the board and arrival default stamps on member rails. The 'here since' line always shows. Absent means shown. */
   hideDefaultStamps?: boolean
+  /** Show every member profile page in the forum's own colors, ignoring members' profile skins. Banner patterns and headlines still show. Absent means skins show. */
+  hideProfileSkins?: boolean
   createdAt?: string
   [k: string]: unknown
 }

@@ -158,6 +158,64 @@ export const schemaDict = {
               type: 'string',
               format: 'uri',
             },
+            profileSkin: {
+              type: 'string',
+              description:
+                "Color skin visitors see on this member's profile page. Omit to use the forum's look; forums may turn skins off.",
+              knownValues: [
+                'classic',
+                'sky',
+                'bubblegum',
+                'midnight',
+                'forest',
+              ],
+              maxLength: 64,
+            },
+            banner: {
+              type: 'ref',
+              ref: 'lex:app.atmobb.actor.profile#banner',
+              description:
+                'Patterned banner across the top of the profile page.',
+            },
+            headline: {
+              type: 'string',
+              description:
+                "Short line shown under the member's name on their profile page.",
+              maxLength: 800,
+              maxGraphemes: 80,
+            },
+            currently: {
+              type: 'string',
+              description:
+                'What the member is up to right now, shown under the headline.',
+              maxLength: 800,
+              maxGraphemes: 80,
+            },
+            about: {
+              type: 'array',
+              description:
+                'Long-form About me on the profile page, separate from the short bio in description.',
+              maxLength: 20,
+              items: {
+                type: 'union',
+                refs: [
+                  'lex:app.atmobb.richtext.block#text',
+                  'lex:app.atmobb.richtext.block#quote',
+                  'lex:app.atmobb.richtext.block#code',
+                  'lex:app.atmobb.richtext.block#image',
+                ],
+              },
+            },
+            panels: {
+              type: 'array',
+              description:
+                'Profile page panels in display order. Panels missing from the list follow in the default order; unknown ids are ignored.',
+              maxLength: 32,
+              items: {
+                type: 'ref',
+                ref: 'lex:app.atmobb.actor.profile#panel',
+              },
+            },
             avatarBuilder: {
               type: 'ref',
               ref: 'lex:app.atmobb.actor.profile#avatarBuilder',
@@ -194,6 +252,12 @@ export const schemaDict = {
                 'avatar',
                 'title',
                 'notifications',
+                'profileSkin',
+                'banner',
+                'headline',
+                'currently',
+                'about',
+                'panels',
               ],
             },
           },
@@ -241,6 +305,95 @@ export const schemaDict = {
                 'lex:app.atmobb.richtext.block#image',
               ],
             },
+          },
+          profileSkin: {
+            type: 'string',
+            maxLength: 64,
+            knownValues: ['classic', 'sky', 'bubblegum', 'midnight', 'forest'],
+          },
+          banner: {
+            type: 'ref',
+            ref: 'lex:app.atmobb.actor.profile#banner',
+          },
+          headline: {
+            type: 'string',
+            maxLength: 800,
+            maxGraphemes: 80,
+          },
+          currently: {
+            type: 'string',
+            maxLength: 800,
+            maxGraphemes: 80,
+          },
+          about: {
+            type: 'array',
+            maxLength: 20,
+            items: {
+              type: 'union',
+              refs: [
+                'lex:app.atmobb.richtext.block#text',
+                'lex:app.atmobb.richtext.block#quote',
+                'lex:app.atmobb.richtext.block#code',
+                'lex:app.atmobb.richtext.block#image',
+              ],
+            },
+          },
+          panels: {
+            type: 'array',
+            maxLength: 32,
+            items: {
+              type: 'ref',
+              ref: 'lex:app.atmobb.actor.profile#panel',
+            },
+          },
+        },
+      },
+      banner: {
+        type: 'object',
+        description: 'A CSS-drawn banner: a pattern over a color swatch.',
+        properties: {
+          pattern: {
+            type: 'string',
+            maxLength: 32,
+            knownValues: ['plain', 'stars', 'scanlines', 'checker'],
+          },
+          swatch: {
+            type: 'string',
+            maxLength: 32,
+            knownValues: [
+              'coral',
+              'rust',
+              'plum',
+              'berry',
+              'navy',
+              'teal',
+              'pine',
+              'slate',
+            ],
+          },
+        },
+      },
+      panel: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: {
+            type: 'string',
+            maxLength: 32,
+            knownValues: [
+              'about',
+              'pinned',
+              'stamps',
+              'regulars',
+              'activity',
+              'guestbook',
+              'bluesky',
+              'signature',
+            ],
+          },
+          hidden: {
+            type: 'boolean',
+            description: 'Hidden from visitors. Absent means shown.',
           },
         },
       },
@@ -1842,6 +1995,16 @@ export const schemaDict = {
                 maxLength: 300,
               },
             },
+            pinned: {
+              type: 'array',
+              description:
+                "At-uris of the member's own topics on this forum, pinned to their profile page in order.",
+              maxLength: 4,
+              items: {
+                type: 'string',
+                format: 'at-uri',
+              },
+            },
             createdAt: {
               type: 'string',
               format: 'datetime',
@@ -2038,6 +2201,11 @@ export const schemaDict = {
               type: 'boolean',
               description:
                 "Hide the board and arrival default stamps on member rails. The 'here since' line always shows. Absent means shown.",
+            },
+            hideProfileSkins: {
+              type: 'boolean',
+              description:
+                "Show every member profile page in the forum's own colors, ignoring members' profile skins. Banner patterns and headlines still show. Absent means skins show.",
             },
             createdAt: {
               type: 'string',

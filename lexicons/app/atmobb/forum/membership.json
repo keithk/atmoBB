@@ -17,6 +17,12 @@
             "maxLength": 6,
             "items": { "type": "string", "maxLength": 300 }
           },
+          "pinned": {
+            "type": "array",
+            "description": "At-uris of the member's own topics on this forum, pinned to their profile page in order.",
+            "maxLength": 4,
+            "items": { "type": "string", "format": "at-uri" }
+          },
           "createdAt": { "type": "string", "format": "datetime" }
         }
       }

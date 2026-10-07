@@ -83,6 +83,8 @@ export interface ForumProfile {
   membership?: ForumMembershipSettings;
   /** Hide the "powered by atmobb" footer badge. Absent means shown. */
   hideCredit?: boolean;
+  /** Show member profile pages in the forum's own colors. Absent means members' skins show. */
+  hideProfileSkins?: boolean;
   [k: string]: unknown;
 }
 

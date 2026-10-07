@@ -51,6 +51,40 @@
           },
           "pronouns": { "type": "string", "maxLength": 640, "maxGraphemes": 64 },
           "website": { "type": "string", "format": "uri" },
+          "profileSkin": {
+            "type": "string",
+            "description": "Color skin visitors see on this member's profile page. Omit to use the forum's look; forums may turn skins off.",
+            "knownValues": ["classic", "sky", "bubblegum", "midnight", "forest"],
+            "maxLength": 64
+          },
+          "banner": { "type": "ref", "ref": "#banner", "description": "Patterned banner across the top of the profile page." },
+          "headline": {
+            "type": "string",
+            "description": "Short line shown under the member's name on their profile page.",
+            "maxLength": 800,
+            "maxGraphemes": 80
+          },
+          "currently": {
+            "type": "string",
+            "description": "What the member is up to right now, shown under the headline.",
+            "maxLength": 800,
+            "maxGraphemes": 80
+          },
+          "about": {
+            "type": "array",
+            "description": "Long-form About me on the profile page, separate from the short bio in description.",
+            "maxLength": 20,
+            "items": {
+              "type": "union",
+              "refs": ["app.atmobb.richtext.block#text", "app.atmobb.richtext.block#quote", "app.atmobb.richtext.block#code", "app.atmobb.richtext.block#image"]
+            }
+          },
+          "panels": {
+            "type": "array",
+            "description": "Profile page panels in display order. Panels missing from the list follow in the default order; unknown ids are ignored.",
+            "maxLength": 32,
+            "items": { "type": "ref", "ref": "#panel" }
+          },
           "avatarBuilder": {
             "type": "ref",
             "ref": "#avatarBuilder",
@@ -68,7 +102,7 @@
         "fields": {
           "type": "array",
           "description": "Only listed fields override defaults. A listed field with no value explicitly clears it (avatar falls back to Bluesky); remove it from this list to inherit again.",
-          "items": { "type": "string", "knownValues": ["displayName", "description", "pronouns", "website", "signature", "avatar", "title", "notifications"] }
+          "items": { "type": "string", "knownValues": ["displayName", "description", "pronouns", "website", "signature", "avatar", "title", "notifications", "profileSkin", "banner", "headline", "currently", "about", "panels"] }
         },
         "displayName": { "type": "string", "maxLength": 640, "maxGraphemes": 64 },
         "description": { "type": "string", "maxLength": 2560, "maxGraphemes": 256 },
@@ -81,7 +115,33 @@
           "type": "array",
           "maxLength": 3,
           "items": { "type": "union", "refs": ["app.atmobb.richtext.block#text", "app.atmobb.richtext.block#quote", "app.atmobb.richtext.block#code", "app.atmobb.richtext.block#image"] }
-        }
+        },
+        "profileSkin": { "type": "string", "maxLength": 64, "knownValues": ["classic", "sky", "bubblegum", "midnight", "forest"] },
+        "banner": { "type": "ref", "ref": "#banner" },
+        "headline": { "type": "string", "maxLength": 800, "maxGraphemes": 80 },
+        "currently": { "type": "string", "maxLength": 800, "maxGraphemes": 80 },
+        "about": {
+          "type": "array",
+          "maxLength": 20,
+          "items": { "type": "union", "refs": ["app.atmobb.richtext.block#text", "app.atmobb.richtext.block#quote", "app.atmobb.richtext.block#code", "app.atmobb.richtext.block#image"] }
+        },
+        "panels": { "type": "array", "maxLength": 32, "items": { "type": "ref", "ref": "#panel" } }
+      }
+    },
+    "banner": {
+      "type": "object",
+      "description": "A CSS-drawn banner: a pattern over a color swatch.",
+      "properties": {
+        "pattern": { "type": "string", "maxLength": 32, "knownValues": ["plain", "stars", "scanlines", "checker"] },
+        "swatch": { "type": "string", "maxLength": 32, "knownValues": ["coral", "rust", "plum", "berry", "navy", "teal", "pine", "slate"] }
+      }
+    },
+    "panel": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "maxLength": 32, "knownValues": ["about", "pinned", "stamps", "regulars", "activity", "guestbook", "bluesky", "signature"] },
+        "hidden": { "type": "boolean", "description": "Hidden from visitors. Absent means shown." }
       }
     },
     "forumTheme": {
