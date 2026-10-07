@@ -335,14 +335,29 @@ describe('guestbook settings', () => {
     expect(repo.createRecord).not.toHaveBeenCalled();
   });
 
-  it('keeps only the newest twenty closed periods', async () => {
-    const periods = Array.from({ length: 20 }, (_, i) => ({ from: `2025-01-${String(i + 1).padStart(2, '0')}T00:00:00.000Z`, to: `2025-01-${String(i + 1).padStart(2, '0')}T01:00:00.000Z` }));
-    const records = fakePds([declaration({ guestbook: true, guestbookClosed: periods })]);
-    await setGuestbookOpen('did:plc:gb-cap', forum, false);
-    const closed = (records[0].value as Record<string, any>).guestbookClosed;
-    expect(closed).toHaveLength(20);
-    expect(closed[0]).toEqual(periods[1]);
-    expect(closed[19]).toEqual({ from: expect.any(String) });
+  it('merges the oldest closed periods past twenty, so the beginning of time stays covered', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const records = fakePds([declaration()]);
+      let time = Date.parse('2026-01-01T00:00:00.000Z');
+      let open = false;
+      for (let i = 0; i < 45; i++) {
+        vi.setSystemTime((time += 60_000));
+        open = !open;
+        await setGuestbookOpen('did:plc:gb-cap', forum, open);
+      }
+      const closed = (records[0].value as Record<string, any>).guestbookClosed as { from: string; to?: string }[];
+      expect(closed.length).toBeLessThanOrEqual(20);
+      expect(closed[0].from).toBe(BEGINNING);
+      closed.forEach((period, i) => {
+        if (period.to) expect(Date.parse(period.from)).toBeLessThan(Date.parse(period.to));
+        if (i > 0) expect(Date.parse(closed[i - 1].to!)).toBeLessThanOrEqual(Date.parse(period.from));
+      });
+      // The last toggle (the 45th) opened the guestbook, ending the period the 44th started.
+      expect(closed.at(-1)).toEqual({ from: new Date(time - 60_000).toISOString(), to: new Date(time).toISOString() });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('hides, unhides, blocks and unblocks without duplicates, keeping wearing and pins', async () => {

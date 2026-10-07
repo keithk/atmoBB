@@ -2232,7 +2232,7 @@ export const schemaDict = {
             guestbookClosed: {
               type: 'array',
               description:
-                'Periods the guestbook was closed; an entry indexed during one never shows. Turning the guestbook on records the end of the current closed period (or, the first time, a period from the beginning of time to now); turning it off starts a new one. The oldest periods drop off past 20.',
+                'Periods the guestbook was closed; an entry indexed during one never shows. Turning the guestbook on records the end of the current closed period (or, the first time, a period from the beginning of time to now); turning it off starts a new one. Past 20, the oldest periods merge into one, so nothing they covered resurfaces.',
               maxLength: 20,
               items: {
                 type: 'ref',

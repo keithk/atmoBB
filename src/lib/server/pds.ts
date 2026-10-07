@@ -168,8 +168,9 @@ function closedPeriods(value: unknown): { from: string; to?: string }[] {
 /**
  * Open or close the member's guestbook on this forum. Closing starts an
  * open-ended closed period; opening ends it, or the first time records one
- * from the beginning of time so entries signed before never show. Only the
- * newest periods are kept. Asking for the state it is already in writes nothing.
+ * from the beginning of time so entries signed before never show. Past the
+ * cap the oldest periods merge into one, so nothing they hid
+ * resurfaces. Asking for the state it is already in writes nothing.
  */
 export function setGuestbookOpen(did: string, forum: string, open: boolean): Promise<void> {
   return patchMembership(did, forum, (current) => {
@@ -184,7 +185,12 @@ export function setGuestbookOpen(did: string, forum: string, open: boolean): Pro
     } else {
       periods.push({ from: now });
     }
-    return { guestbook: open || undefined, guestbookClosed: periods.slice(-GUESTBOOK_PERIODS) };
+    // Merging the oldest two keeps the earliest covered instant in place. It also hides
+    // the open gap between them, so very old notes signed while it was open stop showing.
+    while (periods.length > GUESTBOOK_PERIODS) {
+      periods.splice(0, 2, { from: periods[0].from, to: periods[1].to });
+    }
+    return { guestbook: open || undefined, guestbookClosed: periods };
   });
 }
 
