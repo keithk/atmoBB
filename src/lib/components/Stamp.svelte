@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { TrayEntry } from '$lib/server/appview';
-  import { ariaLabel, lookFor, stampLabel, type Handles } from '$lib/stamps';
+  import { ariaLabel, lookFor, stampLabel, stampSymbol, type Handles } from '$lib/stamps';
 
   let {
     entry,
@@ -27,4 +27,4 @@
   title={size === 'compact' ? label : undefined}
   role="img"
   aria-label={ariaLabel(entry, handles)}
->{label}</span>
+>{size === 'compact' ? stampSymbol(entry) : label}</span>

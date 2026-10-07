@@ -89,6 +89,7 @@ export const load: PageServerLoad = async () => {
 // Strings throughout so a rejected submission can refill the form as sent.
 const fieldsOf = (form: FormData): Record<keyof StampFormFields, string> => ({
   name: String(form.get('name') ?? ''),
+  symbol: String(form.get('symbol') ?? ''),
   bg: String(form.get('bg') ?? ''),
   ink: String(form.get('ink') ?? ''),
   shape: String(form.get('shape') ?? ''),

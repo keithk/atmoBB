@@ -116,14 +116,14 @@ local function resolve_stamps(forum, dids)
       UNION ALL
       -- Network: first light for a first post on any forum this appview indexes.
       SELECT m.did, 'atmobb:first-light', 'first light', 'network',
-             NULL, NULL, '{"bg":"#fff3c4","ink":"#5b4300","shape":"stamp"}', NULL, NULL, NULL, NULL,
+             NULL, NULL, '{"bg":"#fff3c4","ink":"#5b4300","shape":"stamp","symbol":"☀️"}', NULL, NULL, NULL, NULL,
              (SELECT MIN(f.first_at) FROM atmobb_firsts f WHERE f.did = m.did AND f.board_uri IS NULL)
       FROM members m
       WHERE EXISTS (SELECT 1 FROM atmobb_firsts f WHERE f.did = m.did AND f.board_uri IS NULL)
       UNION ALL
       -- Network: early days for a profile older than the cutoff.
       SELECT m.did, 'atmobb:early-days', 'early days', 'network',
-             NULL, NULL, '{"bg":"#e4e0ff","ink":"#2b1f6b","shape":"ticket"}', NULL, NULL, NULL, NULL,
+             NULL, NULL, '{"bg":"#e4e0ff","ink":"#2b1f6b","shape":"ticket","symbol":"E"}', NULL, NULL, NULL, NULL,
              p.created_at
       FROM members m
       JOIN profiles p ON p.did = m.did
@@ -146,12 +146,22 @@ local function resolve_stamps(forum, dids)
       FROM tray t
     )
     -- worn_rank: the member's own order when they chose, else the newest
-    -- defaults; the caller keeps the first three.
+    -- three defaults; the caller keeps up to six explicitly chosen stamps.
     SELECT r.did, r.id, r.name, r.source, r.uri, r.cid, r.look, r.board, r.board_color,
            r.via, r.sponsor, r.earned_at,
+           CASE WHEN r.source = 'admin' THEN
+                  jsonb_strip_nulls(jsonb_build_object(
+                    'kind', d.kind, 'board', d.board, 'before', d.before, 'via', d.via))::text
+                WHEN r.id = 'atmobb:early-days' THEN
+                  jsonb_build_object('kind', 'profileBefore', 'before', $3::text)::text
+           END AS trigger,
+           (b.record::jsonb)->>'name' AS trigger_board_name,
            CASE WHEN r.chose THEN r.wearing_pos
-                WHEN r.source = 'default' THEN r.default_rank::int END AS worn_rank
+                WHEN r.source = 'default' AND r.default_rank <= 3 THEN r.default_rank::int END AS worn_rank
     FROM ranked r
+    LEFT JOIN defs d ON r.source = 'admin' AND d.uri = r.uri
+    LEFT JOIN happyview_records b ON d.kind = 'firstPostInBoard' AND b.uri = d.board
+      AND b.collection = 'app.atmobb.forum.board'
     ORDER BY r.did, worn_rank NULLS LAST, r.earned_at DESC NULLS LAST, r.id
   ]], { forum, table.concat(dids, ","), EARLY_DAYS_CUTOFF })
 
@@ -172,10 +182,12 @@ local function resolve_stamps(forum, dids)
       boardColor = row.board_color,
       via = row.via,
       sponsor = row.sponsor,
+      triggerBoardName = row.trigger_board_name,
     }
     if row.look then entry.look = json.decode(row.look) end
+    if row.trigger then entry.trigger = json.decode(row.trigger) end
     member.tray[#member.tray + 1] = entry
-    if row.worn_rank and #member.worn < 3 then
+    if row.worn_rank and #member.worn < 6 then
       member.worn[#member.worn + 1] = entry
     end
   end

@@ -76,6 +76,7 @@ export interface GeneratedStamp {
   id: string
   name: string
   look: AppAtmobbForumStamp.Look
+  trigger?: AppAtmobbForumStamp.Trigger
   /** For a board stamp: the board it marks. */
   board?: string
   /** For an arrival stamp: who brought the member in. */
@@ -100,6 +101,9 @@ export interface TrayEntry {
   id: string
   name: string
   look?: AppAtmobbForumStamp.Look
+  trigger?: AppAtmobbForumStamp.Trigger
+  /** The board name for an earned firstPostInBoard trigger. */
+  triggerBoardName?: string
   uri?: string
   cid?: string
   /** For a board stamp: the board it marks. */

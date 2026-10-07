@@ -30,7 +30,11 @@
 }
 .atm-postmeta__stat { display: flex; justify-content: space-between; gap: var(--space-2); }
 .atm-postmeta__stat b { color: var(--forum-ink); font-weight: var(--w-semibold); }
-.atm-postmeta__stamps { justify-content: center; margin-top: 2px; }
+.atm-postmeta__stamps {
+  justify-content: center;
+  margin: 2px calc(-1 * var(--space-3)) 0;
+  max-width: var(--rail-w);
+}
 .atm-postmeta__char {
   font: var(--w-medium) var(--text-xs)/1.2 var(--font-body);
   color: var(--forum-ink-soft);

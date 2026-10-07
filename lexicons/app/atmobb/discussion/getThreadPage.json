@@ -113,7 +113,7 @@
         "authorStamps": {
           "type": "array",
           "description": "The stamps the author wears on the viewing forum, in order.",
-          "maxLength": 3,
+          "maxLength": 6,
           "items": {
             "type": "ref",
             "ref": "app.atmobb.forum.getStamps#trayEntry"

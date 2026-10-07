@@ -32,6 +32,14 @@ DNS matching here is exact, not hierarchical. `_lexicon.atmobb.app` covers `app.
 
 Published schemas follow atproto's evolution rules. New fields are optional, existing types don't change, and a breaking change means a new NSID.
 
+### Compact stamps and six choices
+
+The stamp collection update adds optional `symbol` to `app.atmobb.forum.stamp#look` and raises `app.atmobb.forum.membership`'s `wearing` limit from three to six. Existing records remain valid. Before deploying the updated editor, the namespace maintainer must publish these two record schema updates, then rerun `appview/setup.sh` to refresh the record schemas, query output schemas, and Lua resolvers together. Self-hosters only rerun setup; they do not publish the shared namespace.
+
+No database migration or backfill is needed. Members who have never chosen stamps still receive at most three automatic defaults. Check that six explicitly selected stamps survive a refresh and appear in the same order in posts, profiles, member lists, and hovercards. An old resolver will truncate the row to three, so do not deploy the editor ahead of the appview update.
+
+### Update procedure
+
 1. Edit the JSON in `lexicons/`, additive only.
 2. Run `bun run lex` and `bun run check`.
 3. Republish the changed schema to the authority repo with `goat lex publish --update <files>`. Same rkey, so it's an update, and without `--update` goat leaves existing records alone (it marks them 🟠 and moves on).

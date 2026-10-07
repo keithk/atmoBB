@@ -26,7 +26,7 @@
     handle?: string;
     profile?: PostProfile | null;
     presence?: 'online' | 'idle' | 'offline';
-    /** The stamps the author wears on this forum; the row caps at three. */
+    /** The stamps the author wears on this forum; the row caps at six. */
     stamps?: TrayEntry[];
     /** DID to handle, for the sponsor named on an arrival stamp. */
     handles?: Handles;

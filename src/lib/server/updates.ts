@@ -4,7 +4,9 @@ const SOCKET = process.env.ATMOBB_UPDATER_SOCKET ?? '/run/atmobb-updater/updater
 
 export interface UpdateStatus {
   status: 'idle' | 'waiting' | 'running' | 'succeeded' | 'failed';
-  target?: 'stable' | 'main';
+  action?: 'update' | 'maintenance';
+  target?: 'stable' | 'main' | 'on' | 'off' | 'recover';
+  maintenance?: boolean;
   startedAt?: string;
   finishedAt?: string;
   installedVersion?: string;
@@ -56,3 +58,5 @@ function updater<T>(method: 'GET' | 'POST', path: string): Promise<T> {
 
 export const updateStatus = () => updater<UpdateStatus>('GET', '/status');
 export const triggerUpdate = (target: 'stable' | 'main') => updater<UpdateStatus>('POST', `/update/${target}`);
+export const triggerMaintenance = (action: 'on' | 'off' | 'recover') => updater<UpdateStatus>('POST', `/maintenance/${action}`);
+export const createUpdaterSession = () => updater<{ token: string; expiresAt: string }>('POST', '/session');

@@ -5,6 +5,7 @@
   import PostMeta from '$lib/components/PostMeta.svelte';
   import BoardLabel from '$lib/components/BoardLabel.svelte';
   import RichText from '$lib/components/RichText.svelte';
+  import PostContent from '$lib/components/PostContent.svelte';
   import RichTextEditor from '$lib/components/RichTextEditor.svelte';
   import PostEditor from '$lib/components/PostEditor.svelte';
   import Poll from '$lib/components/Poll.svelte';
@@ -225,7 +226,7 @@
       {#if data.editing?.uri === data.thread.uri}
         <PostEditor uri={data.thread.uri} title={data.thread.value.title} tags={data.editing.tags} doc={data.editing.doc} cancelHref="{basePath}#{postAnchor(data.thread.uri)}" message={form?.message} />
       {:else}
-        <RichText body={data.thread.value.body} threadUri={data.threadUri} threadHref={data.threadPath} handles={data.handles} />
+        <PostContent postUri={data.threadUri} body={data.thread.value.body} threadUri={data.threadUri} threadHref={data.threadPath} handles={data.handles} />
       {/if}
       {#if data.thread.value.poll}
         <div class="atm-post__poll">
@@ -277,7 +278,7 @@
         {#if data.editing?.uri === reply.uri}
           <PostEditor uri={reply.uri} doc={data.editing.doc} cancelHref="{basePath}{page.url.search.replace(/[?&]edit=[^&]*/, '')}#{postAnchor(reply.uri)}" message={form?.message} />
         {:else}
-          <RichText body={reply.value.body} threadUri={data.threadUri} threadHref={data.threadPath} handles={data.handles} />
+          <PostContent postUri={reply.uri} body={reply.value.body} threadUri={data.threadUri} threadHref={data.threadPath} handles={data.handles} />
         {/if}
         {#if reply.authorProfile?.signature}
           <div class="atm-sig">

@@ -1,12 +1,12 @@
 <script lang="ts">
   import type { TrayEntry } from '$lib/server/appview';
   import { wornEntries, type Handles } from '$lib/stamps';
-  import Stamp from './Stamp.svelte';
+  import StampDetails from './StampDetails.svelte';
 
   let {
     stamps = [],
     handles = {},
-    size = 'full',
+    size = 'compact',
     class: className = '',
   }: {
     stamps?: TrayEntry[];
@@ -21,7 +21,7 @@
 {#if worn.length}
   <ul class="atm-stamps atm-stamps--{size} {className}">
     {#each worn as entry (entry.id)}
-      <li><Stamp {entry} {handles} {size} /></li>
+      <li><StampDetails {entry} {handles} {size} /></li>
     {/each}
   </ul>
 {/if}

@@ -28,7 +28,8 @@ class UnixConnection(http.client.HTTPConnection):
 
 class HostingTest(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        # Keep Unix socket paths within macOS's 104-byte sockaddr_un limit.
+        self.temp = tempfile.TemporaryDirectory(dir='/tmp')
         self.root = Path(self.temp.name)
         hosting.ROOT = self.root
         hosting.config = {
@@ -166,8 +167,9 @@ class HostingTest(unittest.TestCase):
         instance = hosting.reserve(self.request(1))
         template = self.root / 'template'
         template.mkdir()
-        for name in ('atmobb', 'compose.yml', 'updater.py', 'compose.caddy.yml', 'Caddyfile', 'env.example'):
-            (template / name).write_text('# ATMOBB_INSTANCE_CONFIG_VERSION=1\n')
+        for name in ('atmobb', 'compose.yml', 'updater.py', 'updater-page.html', 'compose.caddy.yml', 'env.example'):
+            (template / name).write_text('# ATMOBB_INSTANCE_CONFIG_VERSION=1\n# ATMOBB_MAINTENANCE_VERSION=1\n')
+        (template / 'Caddyfile').write_text((Path(__file__).parent / 'release' / 'Caddyfile').read_text())
         routes = self.root / 'routes'
         routes.mkdir()
         hosting.config.update(template=str(template), routes=str(routes))
@@ -196,7 +198,13 @@ class HostingTest(unittest.TestCase):
         route = routes / f"{instance['id']}.caddy"
         self.assertIn('tenant1.example.test {', route.read_text())
         self.assertIn('hv.tenant1.example.test {', route.read_text())
-        self.assertIn('@admin path /admin /admin/*\n respond @admin 404', route.read_text())
+        self.assertIn('@admin path /admin /admin/*', route.read_text())
+        self.assertIn('respond @admin 404', route.read_text())
+        self.assertIn(f"/var/lib/atmobb-maintenance-{instance['id']}", route.read_text())
+        self.assertIn(f"unix//run/atmobb-updater-{instance['id']}-public/updater.sock", route.read_text())
+        self.assertIn('reverse_proxy 127.0.0.1:12000', route.read_text())
+        self.assertIn('reverse_proxy 127.0.0.1:12001', route.read_text())
+        self.assertNotIn('{$', route.read_text())
         self.assertEqual(route.stat().st_mode & 0o777, 0o644)
         self.assertEqual([cmd[0] if cmd[0] in ('caddy', 'systemctl') else 'install' for cmd in calls],
                          ['install', 'caddy', 'systemctl', 'install', 'caddy', 'systemctl'])

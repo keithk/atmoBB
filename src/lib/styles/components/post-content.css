@@ -1,0 +1,57 @@
+/* CSS is the source of truth for preview sizing, including owner overrides.
+   The out-of-flow ruler lets ResizeObserver notice responsive/token changes.
+   A zero height disables folding. No content is clipped until JS is ready. */
+.atm-post-content { position: relative; min-width: 0; }
+.atm-post-content__measure {
+  position: absolute;
+  width: 0;
+  height: var(--post-preview-height, 36rem);
+  visibility: hidden;
+  pointer-events: none;
+}
+.atm-post-content__text { display: flow-root; }
+.atm-post-content--collapsed .atm-post-content__preview {
+  position: relative;
+  max-height: var(--post-preview-height, 36rem);
+  overflow: hidden;
+}
+.atm-post-content--collapsed .atm-post-content__preview::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: var(--post-preview-fade, 4rem);
+  background: linear-gradient(to bottom, transparent, var(--forum-surface));
+  pointer-events: none;
+}
+.atm-post-content__expand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 44px;
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-top: var(--border-hair) solid var(--forum-line);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  color: var(--forum-link);
+  background: var(--forum-surface);
+  font: var(--type-meta);
+  cursor: pointer;
+}
+.atm-post-content__expand:hover {
+  color: var(--forum-link-hover);
+  background: var(--forum-accent-soft);
+}
+.atm-post-content__expand:focus-visible,
+.atm-post-content__text:focus-visible {
+  outline: 2px solid var(--forum-link);
+  outline-offset: 2px;
+}
+.atm-post-content__chevron { flex: none; }
+@media print {
+  .atm-post-content--collapsed .atm-post-content__preview { max-height: none; overflow: visible; }
+  .atm-post-content__expand,
+  .atm-post-content--collapsed .atm-post-content__preview::after { display: none; }
+}
