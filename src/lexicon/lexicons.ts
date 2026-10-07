@@ -62,6 +62,63 @@ export const schemaDict = {
       },
     },
   },
+  AppAtmobbActorGetRegulars: {
+    lexicon: 1,
+    id: 'app.atmobb.actor.getRegulars',
+    defs: {
+      main: {
+        type: 'query',
+        description:
+          'The members an actor replies alongside most on one forum: at least two shared public threads in the last 180 days, most shared first. At most six; no counts.',
+        parameters: {
+          type: 'params',
+          required: ['actor', 'forum'],
+          properties: {
+            actor: {
+              type: 'string',
+              format: 'did',
+            },
+            forum: {
+              type: 'string',
+              format: 'did',
+            },
+          },
+        },
+        output: {
+          encoding: 'application/json',
+          schema: {
+            type: 'object',
+            required: ['regulars'],
+            properties: {
+              regulars: {
+                type: 'array',
+                maxLength: 6,
+                items: {
+                  type: 'ref',
+                  ref: 'lex:app.atmobb.actor.getRegulars#regular',
+                },
+              },
+            },
+          },
+        },
+      },
+      regular: {
+        type: 'object',
+        required: ['did'],
+        properties: {
+          did: {
+            type: 'string',
+            format: 'did',
+          },
+          profile: {
+            type: 'unknown',
+            description:
+              "The member's app.atmobb.actor.profile record, when they have one.",
+          },
+        },
+      },
+    },
+  },
   AppAtmobbActorProfile: {
     lexicon: 1,
     id: 'app.atmobb.actor.profile',
@@ -3371,6 +3428,7 @@ export function validate(
 
 export const ids = {
   AppAtmobbActorGetActivity: 'app.atmobb.actor.getActivity',
+  AppAtmobbActorGetRegulars: 'app.atmobb.actor.getRegulars',
   AppAtmobbActorProfile: 'app.atmobb.actor.profile',
   AppAtmobbDiscussionCreateReply: 'app.atmobb.discussion.createReply',
   AppAtmobbDiscussionCreateThread: 'app.atmobb.discussion.createThread',

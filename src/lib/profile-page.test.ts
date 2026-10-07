@@ -60,18 +60,18 @@ describe('resolvePanels', () => {
   const allFilled = Object.fromEntries(PROFILE_PANELS.map((id) => [id, true]));
   const ids = (result: ReturnType<typeof resolvePanels>) => result.panels.map((panel) => panel.id);
 
-  it('registers only the phase 1 panels, in default order', () => {
-    expect([...PROFILE_PANELS]).toEqual(['about', 'pinned', 'stamps', 'activity', 'bluesky', 'signature']);
+  it('registers only the shipped panels, in default order', () => {
+    expect([...PROFILE_PANELS]).toEqual(['about', 'pinned', 'stamps', 'regulars', 'activity', 'bluesky', 'signature']);
   });
 
   it('keeps saved order, ignores unknown and unregistered ids, and appends missing panels', () => {
     const result = resolvePanels({
-      panels: [{ id: 'signature' }, { id: 'nonsense' }, { id: 'regulars' }, { id: 'stamps' }, { id: 'signature' }],
+      panels: [{ id: 'signature' }, { id: 'nonsense' }, { id: 'guestbook' }, { id: 'stamps' }, { id: 'signature' }],
       hasContent: allFilled,
       viewer: 'visitor',
       plain: false,
     });
-    expect(ids(result)).toEqual(['signature', 'stamps', 'about', 'pinned', 'activity', 'bluesky']);
+    expect(ids(result)).toEqual(['signature', 'stamps', 'about', 'pinned', 'regulars', 'activity', 'bluesky']);
   });
 
   it('uses the default order for a missing or malformed list', () => {
@@ -91,6 +91,7 @@ describe('resolvePanels', () => {
       { id: 'about', state: 'content' },
       { id: 'pinned', state: 'prompt' },
       { id: 'stamps', state: 'prompt' },
+      { id: 'regulars', state: 'prompt' },
       { id: 'activity', state: 'prompt' },
       { id: 'bluesky', state: 'prompt' },
       { id: 'signature', state: 'content' },
@@ -109,11 +110,12 @@ describe('resolvePanels', () => {
     expect(visitor.chips).not.toContain('stamps');
   });
 
-  it('leaves About me out of a plain page even when it is filled', () => {
+  it('leaves About me out of a plain page even when it is filled, and keeps Regulars', () => {
     for (const viewer of ['owner', 'visitor'] as const) {
       const result = resolvePanels({ panels: undefined, hasContent: allFilled, viewer, plain: true });
       expect(ids(result)).not.toContain('about');
       expect(result.chips).not.toContain('about');
+      expect(ids(result)).toContain('regulars');
     }
   });
 

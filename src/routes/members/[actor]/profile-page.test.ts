@@ -18,6 +18,8 @@ const state = vi.hoisted(() => ({
   threadReads: [] as string[],
   spaceReads: [] as string[],
   activity: { local: {}, global: {}, recentThreads: [] as unknown[] },
+  regulars: [] as { did: string; profile?: Record<string, unknown> }[],
+  regularsAsked: [] as [string, string][],
   forumHides: false,
 }));
 
@@ -34,6 +36,10 @@ vi.mock('$lib/server/appview', async (importOriginal) => ({
   getMembership: async () => null,
   getStamps: async () => state.stamps,
   getStanding: async () => state.standing,
+  getRegulars: async (forum: string, actor: string) => {
+    state.regularsAsked.push([forum, actor]);
+    return { regulars: state.regulars };
+  },
   resolveHandle: async (did: string) => did,
   getThreadPage: async (uri: string) => {
     state.threadReads.push(uri);
@@ -118,6 +124,8 @@ beforeEach(() => {
     local: {}, global: {},
     recentThreads: [{ uri: publicPin('r1'), board: BOARD, boardName: 'General', title: 'Recent', createdAt: '2026-09-14T00:00:00Z', replyCount: 1, forum: { did: FORUM } }],
   };
+  state.regulars = [];
+  state.regularsAsked = [];
   state.forumHides = false;
 });
 
@@ -158,6 +166,37 @@ describe('plain mode for a banned owner', () => {
     const data = await view('owner');
     expect(data.notices).toMatchObject({ plain: true });
     expect(data.standing).not.toBeNull();
+  });
+});
+
+describe('regulars', () => {
+  const ids = (data: Record<string, any>) => data.panels.panels.map((p: { id: string }) => p.id);
+
+  it('shows visitors the owner\'s regulars on this forum with handles and profiles, and no counts', async () => {
+    state.regulars = [{ did: 'did:plc:pal', profile: { displayName: 'Pal' } }, { did: 'did:plc:mate' }];
+    const data = await view('anon');
+    expect(state.regularsAsked).toEqual([[FORUM, OWNER]]);
+    expect(ids(data)).toContain('regulars');
+    expect(data.panels.chips).toContain('regulars');
+    expect(data.regulars).toEqual([
+      { did: 'did:plc:pal', handle: 'did:plc:pal', profile: { displayName: 'Pal' } },
+      { did: 'did:plc:mate', handle: 'did:plc:mate', profile: undefined },
+    ]);
+    expect(JSON.stringify(data.regulars)).not.toMatch(/count|shared/i);
+  });
+
+  it('leaves the panel out for visitors when there are none, and prompts the owner', async () => {
+    expect(ids(await view('member'))).not.toContain('regulars');
+    const owner = await view('owner');
+    expect(owner.panels.panels).toContainEqual({ id: 'regulars', state: 'prompt' });
+  });
+
+  it('keeps Regulars on a banned owner\'s plain page', async () => {
+    state.standing = { bans: [{ uri: 'at://ban/1', since: '2026-09-01T00:00:00Z' }], warnings: [] };
+    state.regulars = [{ did: 'did:plc:pal' }];
+    const data = await view('anon');
+    expect(data.look.plain).toBe(true);
+    expect(ids(data)).toContain('regulars');
   });
 });
 

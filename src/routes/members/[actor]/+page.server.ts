@@ -4,6 +4,7 @@ import { canModerate, canModerateForum, forumStaff } from '$lib/server/admin';
 import {
   getBoardIndex,
   getMembership,
+  getRegulars,
   getStamps,
   getStanding,
   getThreadPage,
@@ -164,7 +165,7 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
   const pinsRead = stampsRead.then((set) =>
     pinCards(set?.pinned, id.did, forumDid, preview ? undefined : locals.user?.did, isYou, boardNames),
   );
-  const [fullProfile, activity, elsewhere, standingRead, membership, index, stampSet, forumWide, pins] = await Promise.all([
+  const [fullProfile, activity, elsewhere, standingRead, membership, index, stampSet, forumWide, pins, regularsRead] = await Promise.all([
     getPublicProfile(id.did, id.pds),
     getAtmobbActivity(id.did, forumDid),
     getElsewhere(id.did, id.pds, id.handle),
@@ -175,6 +176,8 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
     // Only forum-wide staff give and revoke stamps; a board-scoped moderator sees no control.
     staffRole ? canModerateForum(locals.user?.did) : false,
     pinsRead,
+    // An appview without the query yet leaves the panel empty rather than failing the page.
+    getRegulars(forumDid, id.did).catch(() => null),
   ]);
   // Board-only bans leave the page as the owner made it.
   const ownerBanned = !!standingRead && !!banCovering(standingRead.bans);
@@ -202,12 +205,13 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
   const stamps = wornFromTray(tray, stampSet?.worn ?? []);
   const wornIds = new Set(stamps.map((entry) => entry.id));
   const shelf = [...stamps, ...tray.filter((entry) => !wornIds.has(entry.id))];
-  const [sponsorHandle, sponsored, handleEntries] = await Promise.all([
+  const [sponsorHandle, sponsored, handleEntries, regulars] = await Promise.all([
     membership?.sponsor ? resolveHandle(membership.sponsor) : null,
     showStanding && membership
       ? Promise.all(membership.sponsored.map(async (s) => ({ ...s, handle: await resolveHandle(s.did) })))
       : null,
     Promise.all(sponsorDids(shelf).map(async (did) => [did, await resolveHandle(did)] as const)),
+    Promise.all((regularsRead?.regulars ?? []).map(async (r) => ({ did: r.did, handle: await resolveHandle(r.did), profile: r.profile }))),
   ]);
   const handles = Object.fromEntries(handleEntries);
   const sponsor =
@@ -250,6 +254,7 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
       about: about.length > 0,
       pinned: pins.length > 0,
       stamps: shelf.length > 0,
+      regulars: regulars.length > 0,
       activity: activity.recentThreads.length > 0,
       bluesky: elsewhere.posts.length > 0,
       signature: sig.length > 0,
@@ -303,6 +308,7 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
     look,
     panels,
     pins,
+    regulars,
     shelf,
     notices,
     standing,

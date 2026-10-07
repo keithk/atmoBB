@@ -59,6 +59,7 @@
     about: { label: 'About me', note: 'rich text' },
     pinned: { label: 'Pinned topics', note: `up to ${data.maxPins}` },
     stamps: { label: 'Stamps' },
+    regulars: { label: 'Regulars', note: 'who you reply alongside most' },
     activity: { label: 'Recent activity' },
     bluesky: { label: 'Recent on Bluesky' },
     signature: { label: 'Signature' },

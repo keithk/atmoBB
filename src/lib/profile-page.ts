@@ -84,7 +84,7 @@ export type ProfilePanelId =
  * are ignored, so a panel ships by adding it here; the full default order is
  * about, pinned, stamps, regulars, activity, guestbook, bluesky, signature.
  */
-export const PROFILE_PANELS: readonly ProfilePanelId[] = ['about', 'pinned', 'stamps', 'activity', 'bluesky', 'signature'];
+export const PROFILE_PANELS: readonly ProfilePanelId[] = ['about', 'pinned', 'stamps', 'regulars', 'activity', 'bluesky', 'signature'];
 
 /** Panels a banned owner's plain page leaves out. */
 const PLAIN_EXCLUDED: readonly ProfilePanelId[] = ['about', 'guestbook'];

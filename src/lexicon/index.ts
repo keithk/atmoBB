@@ -10,6 +10,7 @@ import { schemas } from './lexicons.js'
 import { CID } from 'multiformats/cid'
 import { type OmitKey, type Un$Typed } from './util.js'
 import * as AppAtmobbActorGetActivity from './types/app/atmobb/actor/getActivity.js'
+import * as AppAtmobbActorGetRegulars from './types/app/atmobb/actor/getRegulars.js'
 import * as AppAtmobbActorProfile from './types/app/atmobb/actor/profile.js'
 import * as AppAtmobbDiscussionCreateReply from './types/app/atmobb/discussion/createReply.js'
 import * as AppAtmobbDiscussionCreateThread from './types/app/atmobb/discussion/createThread.js'
@@ -53,6 +54,7 @@ import * as ComAtprotoRepoPutRecord from './types/com/atproto/repo/putRecord.js'
 import * as ComAtprotoRepoStrongRef from './types/com/atproto/repo/strongRef.js'
 
 export * as AppAtmobbActorGetActivity from './types/app/atmobb/actor/getActivity.js'
+export * as AppAtmobbActorGetRegulars from './types/app/atmobb/actor/getRegulars.js'
 export * as AppAtmobbActorProfile from './types/app/atmobb/actor/profile.js'
 export * as AppAtmobbDiscussionCreateReply from './types/app/atmobb/discussion/createReply.js'
 export * as AppAtmobbDiscussionCreateThread from './types/app/atmobb/discussion/createThread.js'
@@ -158,6 +160,18 @@ export class AppAtmobbActorNS {
   ): Promise<AppAtmobbActorGetActivity.Response> {
     return this._client.call(
       'app.atmobb.actor.getActivity',
+      params,
+      undefined,
+      opts,
+    )
+  }
+
+  getRegulars(
+    params?: AppAtmobbActorGetRegulars.QueryParams,
+    opts?: AppAtmobbActorGetRegulars.CallOptions,
+  ): Promise<AppAtmobbActorGetRegulars.Response> {
+    return this._client.call(
+      'app.atmobb.actor.getRegulars',
       params,
       undefined,
       opts,

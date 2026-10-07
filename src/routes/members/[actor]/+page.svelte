@@ -12,7 +12,7 @@
   import type { ProfilePanelId } from '$lib/profile-page';
   import type { RichTextBlock } from '$lib/richtext/bbcode';
   import { page } from '$app/state';
-  import { hereSince } from '$lib/profile-card';
+  import { hereSince, profileHref } from '$lib/profile-card';
 
   let { data, form } = $props();
 
@@ -176,6 +176,9 @@
             {:else if panel.id === 'stamps'}
               <p>No stamps yet. Staff and boards hand these out, and they all sit on this shelf.</p>
               <a href="/settings/page#panels">Hide this panel until then</a>
+            {:else if panel.id === 'regulars'}
+              <p>Fills in on its own as you reply alongside people here.</p>
+              <a href="/settings/page#panels">Hide this panel until then</a>
             {:else if panel.id === 'activity'}
               <p>Topics you start show up here.</p>
               <a href="/settings/page#panels">Hide this panel until then</a>
@@ -220,6 +223,17 @@
             {#if data.isYou}
               <p class="atm-profile__panel-foot"><a href="/settings/stamps">Choose which you wear</a></p>
             {/if}
+          {:else if panel.id === 'regulars'}
+            <ul class="atm-profile-regulars">
+              {#each data.regulars as regular (regular.did)}
+                <li>
+                  <a class="atm-profile-regular" href={profileHref(regular.handle)}>
+                    <Avatar seed={regular.did} profile={regular.profile} size={56} alt="" />
+                    <span class="atm-profile-regular__handle">{regular.handle}</span>
+                  </a>
+                </li>
+              {/each}
+            </ul>
           {:else if panel.id === 'activity'}
             <ul class="posts">
               {#each m.activity.recentThreads as t}
@@ -611,6 +625,17 @@
   @media (prefers-reduced-motion: reduce) {
     .atm-profile-pin, .atm-profile-pin:nth-child(even) { rotate: none; }
   }
+
+  .atm-profile-regulars {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3);
+  }
+  .atm-profile-regular {
+    display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0;
+    font: var(--type-meta); color: var(--forum-ink); text-decoration: none;
+  }
+  .atm-profile-regular:hover { color: var(--forum-link); }
+  .atm-profile-regular__handle { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .details {
     display: grid; grid-template-columns: auto 1fr; gap: var(--space-2) var(--space-3);

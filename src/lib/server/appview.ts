@@ -487,6 +487,14 @@ export const getLatestThreads = (
 export const getMemberActivity = (actor: string, forum = FORUM_DID()) =>
   xrpc<MemberActivity>('GET', `${NS}.actor.getActivity`, { params: { actor, forum } });
 
+/** Up to six members `actor` replies alongside most on `forum`, most shared threads first. */
+export interface Regulars {
+  regulars: { did: string; profile?: ActorProfile }[];
+}
+
+export const getRegulars = (forum: string, actor: string) =>
+  xrpc<Regulars>('GET', `${NS}.actor.getRegulars`, { params: { forum, actor } });
+
 export interface Staff {
   staff: {
     uri: string;

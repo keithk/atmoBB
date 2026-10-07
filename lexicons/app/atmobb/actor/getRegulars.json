@@ -1,0 +1,36 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.actor.getRegulars",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "The members an actor replies alongside most on one forum: at least two shared public threads in the last 180 days, most shared first. At most six; no counts.",
+      "parameters": {
+        "type": "params",
+        "required": ["actor", "forum"],
+        "properties": {
+          "actor": { "type": "string", "format": "did" },
+          "forum": { "type": "string", "format": "did" }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["regulars"],
+          "properties": {
+            "regulars": { "type": "array", "maxLength": 6, "items": { "type": "ref", "ref": "#regular" } }
+          }
+        }
+      }
+    },
+    "regular": {
+      "type": "object",
+      "required": ["did"],
+      "properties": {
+        "did": { "type": "string", "format": "did" },
+        "profile": { "type": "unknown", "description": "The member's app.atmobb.actor.profile record, when they have one." }
+      }
+    }
+  }
+}

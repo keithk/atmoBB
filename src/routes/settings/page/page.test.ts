@@ -46,7 +46,7 @@ vi.mock('$lib/server/appview', () => ({
 import { actions, load } from './+page.server';
 
 const user = { did: MEMBER, handle: 'member.test' };
-const ALL_PANELS = ['about', 'pinned', 'stamps', 'activity', 'bluesky', 'signature'];
+const ALL_PANELS = ['about', 'pinned', 'stamps', 'regulars', 'activity', 'bluesky', 'signature'];
 const topic = (rkey: string) => `at://${MEMBER}/${THREAD}/${rkey}`;
 
 function event(action: string, scope: string, values: [string, string][] = [], authenticated = true) {
@@ -133,11 +133,11 @@ describe('profile page editor: save', () => {
   });
 
   it('saves an unchecked panel as hidden in its place', async () => {
-    const order = ['pinned', 'about', 'stamps', 'activity', 'bluesky', 'signature'];
+    const order = ['pinned', 'about', 'stamps', 'regulars', 'activity', 'bluesky', 'signature'];
     const posted = fields([], order).filter(([name, value]) => !(name === 'show' && value === 'stamps'));
     await actions.save!(event('save', 'all', posted));
     expect(state.save.mock.calls[0][1].panels).toEqual([
-      { id: 'pinned' }, { id: 'about' }, { id: 'stamps', hidden: true }, { id: 'activity' }, { id: 'bluesky' }, { id: 'signature' },
+      { id: 'pinned' }, { id: 'about' }, { id: 'stamps', hidden: true }, { id: 'regulars' }, { id: 'activity' }, { id: 'bluesky' }, { id: 'signature' },
     ]);
   });
 
@@ -218,7 +218,7 @@ describe('profile page editor: move', () => {
     const result = await actions.move!(event('move', 'all', posted)) as Record<string, any>;
     expect(result.values.panels).toEqual([
       { id: 'pinned', hidden: false }, { id: 'about', hidden: false }, { id: 'stamps', hidden: false },
-      { id: 'activity', hidden: false }, { id: 'bluesky', hidden: true }, { id: 'signature', hidden: false },
+      { id: 'regulars', hidden: false }, { id: 'activity', hidden: false }, { id: 'bluesky', hidden: true }, { id: 'signature', hidden: false },
     ]);
     expect(result.values).toMatchObject({ headline: 'half-written', about: 'Draft [i]about[/i]', profileSkin: 'midnight' });
     expect(result.values.aboutDoc).toEqual(blocksToDoc(parseBBCode('Draft [i]about[/i]')));
