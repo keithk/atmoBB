@@ -175,7 +175,7 @@ COMMIT;"
 echo "== record + def lexicons via network resolution"
 for nsid in \
   $NS.richtext.facet $NS.richtext.block \
-  $NS.actor.profile \
+  $NS.actor.profile $NS.actor.guestbook \
   $NS.forum.profile $NS.forum.board $NS.forum.category $NS.forum.moderator $NS.forum.membership $NS.forum.accessRequest $NS.forum.watch $NS.forum.stamp \
   $NS.moderation.action \
   $NS.discussion.thread $NS.discussion.reply \
@@ -202,6 +202,7 @@ upload_lex lexicons/app/atmobb/authForum.json '{}'
 upload_lex lexicons/app/atmobb/authSysop.json '{}'
 upload_lex lexicons/app/atmobb/actor/getActivity.json "{target_collection: \"$NS.actor.profile\"}"
 upload_lex lexicons/app/atmobb/actor/getRegulars.json "{target_collection: \"$NS.discussion.reply\"}"
+upload_lex lexicons/app/atmobb/actor/getGuestbook.json "{target_collection: \"$NS.actor.guestbook\"}"
 upload_lex lexicons/app/atmobb/forum/getBoardIndex.json "{target_collection: \"$NS.forum.board\"}"
 upload_lex lexicons/app/atmobb/discussion/getBoardThreads.json "{target_collection: \"$NS.discussion.thread\"}"
 upload_lex lexicons/app/atmobb/discussion/getThreadPage.json "{target_collection: \"$NS.discussion.reply\"}"
@@ -233,6 +234,7 @@ upload_script() {
 }
 upload_script "xrpc.query:$NS.actor.getActivity" getActorActivity.lua
 upload_script "xrpc.query:$NS.actor.getRegulars" getRegulars.lua
+upload_script "xrpc.query:$NS.actor.getGuestbook" getGuestbook.lua
 upload_script "xrpc.query:$NS.forum.getBoardIndex" getBoardIndex.lua
 upload_script "xrpc.query:$NS.discussion.getBoardThreads" getBoardThreads.lua
 upload_script "xrpc.query:$NS.discussion.getThreadPage" getThreadPage.lua

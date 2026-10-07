@@ -30,7 +30,11 @@ const NOTIFY_SCOPE = `rpc:pub.atmo.notify.requestPermission?aud=${encodeURICompo
 export const MODERATION_SCOPE = 'repo:app.atmobb.moderation.action?action=create';
 export const STAMP_SCOPE = 'repo:app.atmobb.forum.stamp';
 const SYSOP_GRANTS = `include:app.atmobb.authSysop ${MODERATION_SCOPE} ${STAMP_SCOPE}`;
-const MEMBER_SET = `include:app.atmobb.authForum ${NOTIFY_SCOPE}`;
+// Guestbook entries are in authForum too, and requested explicitly for the
+// same reason: a PDS holding a cached authForum from before they existed
+// would otherwise refuse the write until its cache refreshed.
+export const GUESTBOOK_SCOPE = 'repo:app.atmobb.actor.guestbook';
+const MEMBER_SET = `include:app.atmobb.authForum ${GUESTBOOK_SCOPE} ${NOTIFY_SCOPE}`;
 export const MEMBER_SCOPE = `atproto ${MEMBER_SET} blob:image/*`;
 const SYSOP_BASE_SCOPE = `atproto ${SYSOP_GRANTS} blob:image/* blob:font/*`;
 const OAUTH_BASE_SCOPE = `atproto ${MEMBER_SET} ${SYSOP_GRANTS} blob:image/* blob:font/*`;

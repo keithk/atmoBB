@@ -495,6 +495,45 @@ export interface Regulars {
 export const getRegulars = (forum: string, actor: string) =>
   xrpc<Regulars>('GET', `${NS}.actor.getRegulars`, { params: { forum, actor } });
 
+/** Why a guestbook entry is hidden; only returned with includeHidden. */
+export type GuestbookHidden = 'owner' | 'staff' | 'blocked';
+
+export interface GuestbookEntry {
+  uri: string;
+  author: string;
+  text: string;
+  /** The signer's own timestamp. */
+  createdAt: string;
+  /** When the appview indexed the entry; ordering and the time rules use this. */
+  indexedAt: string;
+  hidden?: GuestbookHidden;
+}
+
+/** The entries in `subject`'s guestbook on `forum`, newest first. */
+export interface Guestbook {
+  entries: GuestbookEntry[];
+  cursor?: string;
+}
+
+/**
+ * `includeHidden` returns hidden entries flagged instead of dropping them:
+ * pass it only when the viewer is the owner or staff.
+ */
+export const getGuestbook = (
+  forum: string,
+  subject: string,
+  opts: { limit?: number; cursor?: string; includeHidden?: boolean } = {},
+) =>
+  xrpc<Guestbook>('GET', `${NS}.actor.getGuestbook`, {
+    params: {
+      forum,
+      subject,
+      limit: String(opts.limit ?? 20),
+      ...(opts.cursor ? { cursor: opts.cursor } : {}),
+      ...(opts.includeHidden ? { includeHidden: 'true' } : {}),
+    },
+  });
+
 export interface Staff {
   staff: {
     uri: string;

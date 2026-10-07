@@ -1,0 +1,44 @@
+{
+  "lexicon": 1,
+  "id": "app.atmobb.actor.getGuestbook",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "The entries signed in one member's guestbook on one forum, newest first by index time. Nothing while the owner keeps it closed or is banned; entries indexed while it was closed, by signers banned or shut out by a closed gate, or within 24 hours of the same signer's previous entry never show. With includeHidden, entries hidden by staff or the owner, or from a signer the owner blocked, come back flagged instead of dropped.",
+      "parameters": {
+        "type": "params",
+        "required": ["forum", "subject"],
+        "properties": {
+          "forum": { "type": "string", "format": "did" },
+          "subject": { "type": "string", "format": "did" },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 50, "default": 20 },
+          "cursor": { "type": "string" },
+          "includeHidden": { "type": "boolean", "default": false, "description": "Return hidden entries, flagged. For the owner and staff." }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["entries"],
+          "properties": {
+            "entries": { "type": "array", "items": { "type": "ref", "ref": "#entry" } },
+            "cursor": { "type": "string" }
+          }
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "required": ["uri", "author", "text", "createdAt", "indexedAt"],
+      "properties": {
+        "uri": { "type": "string", "format": "at-uri" },
+        "author": { "type": "string", "format": "did" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "datetime", "description": "The signer's own timestamp." },
+        "indexedAt": { "type": "string", "format": "datetime", "description": "When the appview indexed the entry; ordering and every time rule use this." },
+        "hidden": { "type": "string", "knownValues": ["owner", "staff", "blocked"], "description": "Only with includeHidden: why the entry is hidden. staff: a forum hide. owner: the owner hid it. blocked: the owner blocked its signer." }
+      }
+    }
+  }
+}

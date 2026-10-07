@@ -21,6 +21,14 @@ export interface Main {
   wearing?: string[]
   /** At-uris of the member's own topics on this forum, pinned to their profile page in order. */
   pinned?: string[]
+  /** Whether the member's guestbook on this forum is open for signing. Absent means closed. */
+  guestbook?: boolean
+  /** Periods the guestbook was closed; an entry indexed during one never shows. Turning the guestbook on records the end of the current closed period (or, the first time, a period from the beginning of time to now); turning it off starts a new one. The oldest periods drop off past 20. */
+  guestbookClosed?: ClosedPeriod[]
+  /** At-uris of guestbook entries the member hid. */
+  guestbookHidden?: string[]
+  /** Signers the member blocked from their guestbook; none of their entries show. */
+  guestbookBlocked?: string[]
   createdAt?: string
   [k: string]: unknown
 }
@@ -39,4 +47,21 @@ export {
   type Main as Record,
   isMain as isRecord,
   validateMain as validateRecord,
+}
+
+/** A span the guestbook was closed. With no end it is closed still. */
+export interface ClosedPeriod {
+  $type?: 'app.atmobb.forum.membership#closedPeriod'
+  from: string
+  to?: string
+}
+
+const hashClosedPeriod = 'closedPeriod'
+
+export function isClosedPeriod<V>(v: V) {
+  return is$typed(v, id, hashClosedPeriod)
+}
+
+export function validateClosedPeriod<V>(v: V) {
+  return validate<ClosedPeriod & V>(v, id, hashClosedPeriod)
 }

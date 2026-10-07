@@ -62,6 +62,99 @@ export const schemaDict = {
       },
     },
   },
+  AppAtmobbActorGetGuestbook: {
+    lexicon: 1,
+    id: 'app.atmobb.actor.getGuestbook',
+    defs: {
+      main: {
+        type: 'query',
+        description:
+          "The entries signed in one member's guestbook on one forum, newest first by index time. Nothing while the owner keeps it closed or is banned; entries indexed while it was closed, by signers banned or shut out by a closed gate, or within 24 hours of the same signer's previous entry never show. With includeHidden, entries hidden by staff or the owner, or from a signer the owner blocked, come back flagged instead of dropped.",
+        parameters: {
+          type: 'params',
+          required: ['forum', 'subject'],
+          properties: {
+            forum: {
+              type: 'string',
+              format: 'did',
+            },
+            subject: {
+              type: 'string',
+              format: 'did',
+            },
+            limit: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 50,
+              default: 20,
+            },
+            cursor: {
+              type: 'string',
+            },
+            includeHidden: {
+              type: 'boolean',
+              default: false,
+              description:
+                'Return hidden entries, flagged. For the owner and staff.',
+            },
+          },
+        },
+        output: {
+          encoding: 'application/json',
+          schema: {
+            type: 'object',
+            required: ['entries'],
+            properties: {
+              entries: {
+                type: 'array',
+                items: {
+                  type: 'ref',
+                  ref: 'lex:app.atmobb.actor.getGuestbook#entry',
+                },
+              },
+              cursor: {
+                type: 'string',
+              },
+            },
+          },
+        },
+      },
+      entry: {
+        type: 'object',
+        required: ['uri', 'author', 'text', 'createdAt', 'indexedAt'],
+        properties: {
+          uri: {
+            type: 'string',
+            format: 'at-uri',
+          },
+          author: {
+            type: 'string',
+            format: 'did',
+          },
+          text: {
+            type: 'string',
+          },
+          createdAt: {
+            type: 'string',
+            format: 'datetime',
+            description: "The signer's own timestamp.",
+          },
+          indexedAt: {
+            type: 'string',
+            format: 'datetime',
+            description:
+              'When the appview indexed the entry; ordering and every time rule use this.',
+          },
+          hidden: {
+            type: 'string',
+            knownValues: ['owner', 'staff', 'blocked'],
+            description:
+              'Only with includeHidden: why the entry is hidden. staff: a forum hide. owner: the owner hid it. blocked: the owner blocked its signer.',
+          },
+        },
+      },
+    },
+  },
   AppAtmobbActorGetRegulars: {
     lexicon: 1,
     id: 'app.atmobb.actor.getRegulars',
@@ -114,6 +207,44 @@ export const schemaDict = {
             type: 'unknown',
             description:
               "The member's app.atmobb.actor.profile record, when they have one.",
+          },
+        },
+      },
+    },
+  },
+  AppAtmobbActorGuestbook: {
+    lexicon: 1,
+    id: 'app.atmobb.actor.guestbook',
+    defs: {
+      main: {
+        type: 'record',
+        description:
+          "A guestbook entry: a short note signed on a member's profile page on one forum. Lives in the signer's own repo — signing is an act of the signer, taking it back is deleting this record. The profile owner decides what shows through their membership record.",
+        key: 'tid',
+        record: {
+          type: 'object',
+          required: ['forum', 'subject', 'text', 'createdAt'],
+          properties: {
+            forum: {
+              type: 'string',
+              format: 'did',
+            },
+            subject: {
+              type: 'string',
+              format: 'did',
+              description:
+                'The member whose guestbook this entry is signed in.',
+            },
+            text: {
+              type: 'string',
+              description: 'Plain text; no rich text.',
+              maxLength: 3000,
+              maxGraphemes: 300,
+            },
+            createdAt: {
+              type: 'string',
+              format: 'datetime',
+            },
           },
         },
       },
@@ -2072,10 +2203,60 @@ export const schemaDict = {
                 format: 'at-uri',
               },
             },
+            guestbook: {
+              type: 'boolean',
+              description:
+                "Whether the member's guestbook on this forum is open for signing. Absent means closed.",
+            },
+            guestbookClosed: {
+              type: 'array',
+              description:
+                'Periods the guestbook was closed; an entry indexed during one never shows. Turning the guestbook on records the end of the current closed period (or, the first time, a period from the beginning of time to now); turning it off starts a new one. The oldest periods drop off past 20.',
+              maxLength: 20,
+              items: {
+                type: 'ref',
+                ref: 'lex:app.atmobb.forum.membership#closedPeriod',
+              },
+            },
+            guestbookHidden: {
+              type: 'array',
+              description: 'At-uris of guestbook entries the member hid.',
+              maxLength: 500,
+              items: {
+                type: 'string',
+                format: 'at-uri',
+              },
+            },
+            guestbookBlocked: {
+              type: 'array',
+              description:
+                'Signers the member blocked from their guestbook; none of their entries show.',
+              maxLength: 500,
+              items: {
+                type: 'string',
+                format: 'did',
+              },
+            },
             createdAt: {
               type: 'string',
               format: 'datetime',
             },
+          },
+        },
+      },
+      closedPeriod: {
+        type: 'object',
+        description:
+          'A span the guestbook was closed. With no end it is closed still.',
+        required: ['from'],
+        properties: {
+          from: {
+            type: 'string',
+            format: 'datetime',
+          },
+          to: {
+            type: 'string',
+            format: 'datetime',
           },
         },
       },
@@ -3428,7 +3609,9 @@ export function validate(
 
 export const ids = {
   AppAtmobbActorGetActivity: 'app.atmobb.actor.getActivity',
+  AppAtmobbActorGetGuestbook: 'app.atmobb.actor.getGuestbook',
   AppAtmobbActorGetRegulars: 'app.atmobb.actor.getRegulars',
+  AppAtmobbActorGuestbook: 'app.atmobb.actor.guestbook',
   AppAtmobbActorProfile: 'app.atmobb.actor.profile',
   AppAtmobbDiscussionCreateReply: 'app.atmobb.discussion.createReply',
   AppAtmobbDiscussionCreateThread: 'app.atmobb.discussion.createThread',

@@ -5,7 +5,7 @@
     "main": {
       "type": "permission-set",
       "title": "atmobb",
-      "detail": "Post threads and replies, join forums, watch boards, vote in polls, and customize your profile and signature.",
+      "detail": "Post threads and replies, join forums, watch boards, vote in polls, sign guestbooks, and customize your profile and signature.",
       "permissions": [
         {
           "type": "permission",
@@ -17,7 +17,8 @@
             "app.atmobb.forum.accessRequest",
             "app.atmobb.forum.watch",
             "app.atmobb.poll.vote",
-            "app.atmobb.actor.profile"
+            "app.atmobb.actor.profile",
+            "app.atmobb.actor.guestbook"
           ]
         }
       ]
