@@ -127,6 +127,14 @@ Members wear up to six stamps on the post rail, the hovercard, the member list, 
 
 A stamp with fixed colors (an admin's own stamp, a board's first-post stamp in the board's color, the network set) carries `.atm-stamp--custom` and sets `--atm-stamp-bg` and `--atm-stamp-ink` inline. Every other stamp, the arrival stamp included, draws from `--forum-rank` and `--forum-rank-bg`, the same tokens the `.atm-rank` badge and member titles use, so a theme that restyles those tokens restyles the default stamps with them.
 
+### Member profile pages
+
+A member picks one of the five presets as the skin of their profile page, and visitors see it on the profile body only; the masthead, navigation, and everything outside the profile keep the visitor's own theme. The skin sets the same `--forum-*` tokens on the profile body, so it beats a visitor's personal theme there. A banner is drawn in CSS from one of eight swatches and a pattern (plain, stars, scanlines, or checker).
+
+Admin → Appearance has **Show member profile pages in this forum's colors**, stored as `hideProfileSkins` on the forum profile. With it on, profile pages ignore member skins and use the forum's theme and your CSS.
+
+Unlayered owner CSS that hard-codes colors on `.atm-*` classes (`.atm-card { background: #fff }`) also wins over a member's skin, and can leave a skinned profile with unreadable text. Style with the `--forum-*` tokens instead and the skin carries through.
+
 ## Custom fonts
 
 Upload one WOFF or WOFF2 file per weight and style, then point a font token at the family:
