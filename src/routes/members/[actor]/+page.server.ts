@@ -71,6 +71,7 @@ import {
 } from '$lib/server/profiles';
 import { resolveHandle } from '$lib/server/appview';
 import { resolveBodyImages } from '$lib/server/richtext';
+import { isConsentRefusal } from '$lib/server/notify/optin';
 
 const THREAD = `${NS}.discussion.thread`;
 
@@ -432,16 +433,6 @@ const CANT_SIGN = "You can't sign this guestbook.";
 async function mayPostHere(locals: App.Locals): Promise<boolean> {
   if (!locals.user || (await bannedFrom(locals.user.did))) return false;
   return !(await refuseUnlessMember(locals));
-}
-
-// A write the PDS refused for want of the guestbook grant: the session's
-// consent predates it. The same test the notifications switch uses.
-function isConsentRefusal(err: unknown): boolean {
-  const text = [
-    err instanceof Error ? err.message : String(err),
-    typeof (err as { error?: unknown })?.error === 'string' ? (err as { error: string }).error : '',
-  ].join(' ');
-  return /scope|permission|InvalidToken|not authorized/i.test(text);
 }
 
 const isGuestbookEntry = (uri: string) => parseAtUri(uri)?.collection === GUESTBOOK;

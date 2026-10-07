@@ -23,6 +23,7 @@ import {
   BANNER_PATTERN_IDS,
   BANNER_SWATCH_IDS,
   DEFAULT_SWATCH,
+  graphemeCount,
   MAX_PINS,
   PROFILE_PANELS,
   resolvePanels,
@@ -72,12 +73,8 @@ export interface Topic {
   createdAt: string;
 }
 
-const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 function tooLong(text: string): boolean {
-  if (new TextEncoder().encode(text).length > LINE_MAX_BYTES) return true;
-  let n = 0;
-  for (const _ of segmenter.segment(text)) if (++n > LINE_MAX_GRAPHEMES) return true;
-  return false;
+  return new TextEncoder().encode(text).length > LINE_MAX_BYTES || graphemeCount(text) > LINE_MAX_GRAPHEMES;
 }
 
 /**

@@ -113,7 +113,7 @@
       }}
     >
       <!-- Pressing Enter in a field submits with the first submit button; make that Save, not a move. -->
-      <button class="default-save" tabindex="-1" aria-hidden="true">Save changes</button>
+      <button class="default-save" tabindex="-1" aria-hidden="true" disabled={saving}>Save changes</button>
       <p class="lede">
         Your profile page is what members see when they open your name. Pick its colors and banner,
         write a little about yourself, and choose what shows.
