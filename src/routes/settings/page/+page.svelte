@@ -29,13 +29,22 @@
   let headline = $derived(values.headline);
   let currently = $derived(values.currently);
   let hiddenPanels = $derived(values.panels.filter((panel) => panel.hidden).map((panel) => panel.id));
+  let panelOrder = $derived(values.panels.map((panel) => panel.id));
   let checkedPins = $derived([...values.pins]);
 
   let saving = $state(false);
   // The editor posts a hidden `about`; until it mounts (or without JavaScript) the
   // <noscript> box is the only `about` field, so the two never submit together.
   let mounted = $state(false);
-  onMount(() => (mounted = true));
+  onMount(() => {
+    mounted = true;
+    // Drag and keyboard reordering for the panel and pin lists; client-only, since it defines a custom element.
+    import('$lib/elements/atm-reorder');
+  });
+  // <atm-reorder> moves rows itself, so read the panel order back from the form for the preview.
+  const readPanelOrder = (event: Event) => {
+    panelOrder = [...(event.currentTarget as HTMLElement).querySelectorAll<HTMLInputElement>('input[name="panel"]')].map((input) => input.value);
+  };
 
   const hidesSkins = $derived(data.forum.hideProfileSkins === true);
   const look = $derived(profileLook({
@@ -222,10 +231,14 @@
       <fieldset id="panels" class="section" class:atm-field--error={!!errors.panels}>
         <legend class="atm-label">Panels</legend>
         {@render inheritance('panels', 'panels')}
+        <atm-reorder onreorder={(event: Event) => { readPanelOrder(event); editing('panels')(); }}>
+        <!-- Rebuild the rows when the server hands back an order, since <atm-reorder> may have moved them behind Svelte's back. -->
+        {#key values}
         <ol class="rows" onchange={editing('panels')}>
           {#each values.panels as panel, i (panel.id)}
             {@const info = PANEL_LABELS[panel.id] ?? { label: panel.id }}
-            <li class="row">
+            <li class="row" data-reorder-item data-reorder-label={info.label}>
+              <span class="row__handle" data-reorder-handle aria-hidden="true">⠿</span>
               <input type="hidden" name="panel" value={panel.id} />
               <label class="row__label">
                 <input type="checkbox" name="show" value={panel.id} checked={!hiddenPanels.includes(panel.id)}
@@ -234,14 +247,17 @@
               </label>
               {#if info.note}<span class="atm-hint">{info.note}</span>{/if}
               <span class="row__moves">
-                <button class="atm-btn atm-btn--ghost atm-btn--sm" type="submit" formaction={moveAction} name="move"
+                <button class="atm-btn atm-btn--ghost atm-btn--sm" type="submit" formaction={moveAction} name="move" data-reorder-up
                   value={`panel:up:${panel.id}`} disabled={saving || i === 0} aria-label={`Move ${info.label} up`}>↑</button>
-                <button class="atm-btn atm-btn--ghost atm-btn--sm" type="submit" formaction={moveAction} name="move"
+                <button class="atm-btn atm-btn--ghost atm-btn--sm" type="submit" formaction={moveAction} name="move" data-reorder-down
                   value={`panel:down:${panel.id}`} disabled={saving || i === values.panels.length - 1} aria-label={`Move ${info.label} down`}>↓</button>
               </span>
             </li>
           {/each}
         </ol>
+        {/key}
+        <p class="atm-hint reorder-hint">Drag a row by its handle, or press Alt+↑ / Alt+↓ on it, to move it.</p>
+        </atm-reorder>
         {@render fieldError('panels')}
         <p class="atm-hint">Unchecked panels are hidden from visitors; you still see them on your page. Moving a panel doesn’t save it; press Save when you’re done.</p>
       </fieldset>
@@ -259,23 +275,28 @@
           {#if !pinnedRows.length && !unpinnedRows.length}
             <p class="atm-empty atm-empty--bare">You haven’t started any topics here yet.</p>
           {:else}
+            <atm-reorder>
+            {#key values}
             <ol class="rows">
               {#each pinnedRows as topic, i (topic.uri)}
-                <li class="row">
+                <li class="row" data-reorder-item data-reorder-label={topic.title}>
+                  <span class="row__handle" data-reorder-handle aria-hidden="true">⠿</span>
                   <label class="row__label">
                     <input type="checkbox" name="pin" value={topic.uri} checked={checkedPins.includes(topic.uri)}
                       onchange={(event) => (checkedPins = toggle(checkedPins, topic.uri, event.currentTarget.checked))} />
                     <span class="topic">{topic.title}{#if topic.board} <span class="atm-hint">in {topic.board}</span>{/if}</span>
                   </label>
                   <span class="row__moves">
-                    <button class="atm-btn atm-btn--ghost atm-btn--sm" type="submit" formaction={moveAction} name="move"
+                    <button class="atm-btn atm-btn--ghost atm-btn--sm" type="submit" formaction={moveAction} name="move" data-reorder-up
                       value={`pin:up:${topic.uri}`} disabled={saving || i === 0} aria-label={`Move ${topic.title} up`}>↑</button>
-                    <button class="atm-btn atm-btn--ghost atm-btn--sm" type="submit" formaction={moveAction} name="move"
+                    <button class="atm-btn atm-btn--ghost atm-btn--sm" type="submit" formaction={moveAction} name="move" data-reorder-down
                       value={`pin:down:${topic.uri}`} disabled={saving || i === pinnedRows.length - 1} aria-label={`Move ${topic.title} down`}>↓</button>
                   </span>
                 </li>
               {/each}
             </ol>
+            {/key}
+            </atm-reorder>
             {#if unpinnedRows.length}
               <ul class="rows rows--plain">
                 {#each unpinnedRows as topic (topic.uri)}
@@ -322,9 +343,9 @@
           </div>
         </div>
       </div>
-      {#each values.panels.filter((panel) => !hiddenPanels.includes(panel.id)).slice(0, 4) as panel (panel.id)}
+      {#each panelOrder.filter((id) => !hiddenPanels.includes(id)).slice(0, 4) as id (id)}
         <div class="preview__panel">
-          <div class="preview__panel-title">{PANEL_LABELS[panel.id]?.label ?? panel.id}</div>
+          <div class="preview__panel-title">{PANEL_LABELS[id]?.label ?? id}</div>
           <div class="preview__panel-body" aria-hidden="true"><span></span><span></span></div>
         </div>
       {/each}
@@ -386,6 +407,11 @@
   .row + .row { border-top: var(--border-hair) solid var(--forum-line); }
   .row__label { flex: 1; display: flex; align-items: center; gap: var(--space-2); font: var(--type-ui); cursor: pointer; min-width: 0; }
   .row__moves { display: inline-flex; gap: 2px; }
+  .row__handle { cursor: grab; touch-action: none; user-select: none; color: var(--forum-ink-soft); }
+  .row:global([data-reorder-dragging]) { background: var(--forum-surface-2); }
+  .row:global([data-reorder-dragging]) .row__handle { cursor: grabbing; }
+  /* Drag and Alt+arrow only work once <atm-reorder> is defined; until then the move buttons post to the server. */
+  atm-reorder:not(:defined) :is(.row__handle, .reorder-hint) { display: none; }
   .topic { min-width: 0; overflow-wrap: anywhere; }
 
   .actions {
