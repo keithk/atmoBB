@@ -926,3 +926,49 @@ run('regulars SQL integration', () => {
     ]);
   });
 });
+
+// Pinned topics: the profile-page pins getStamps reads from a member's newest
+// membership declaration for the forum.
+run('pinned topics SQL integration', () => {
+  const sql = postgres(DATABASE_URL!, { max: 1 });
+  const pinnedSql = statement(source('./lua/getStamps.lua'), "->'pinned'", 'pinned topics');
+  const topic = (rkey: string) => `at://did:plc:author/${NS}.discussion.thread/${rkey}`;
+  const pinned = async (did: string, forum = F) =>
+    (await sql.unsafe(pinnedSql, [did, forum])).map((row) => row.uri);
+  let declarations = 0;
+  const declaration = (did: string, forum: string, value: object, indexed: string) => {
+    const rkey = `pin-${(declarations += 1)}`;
+    return sql`INSERT INTO happyview_records ${sql({
+      uri: `at://${did}/${NS}.forum.membership/${rkey}`, did, collection: `${NS}.forum.membership`, rkey,
+      record: JSON.stringify({ forum, ...value }), cid: `c-${rkey}`, created_at: indexed,
+    })}`;
+  };
+
+  beforeAll(async () => {
+    await fixtures(sql);
+    // The newer declaration by createdAt was indexed first; a later one is for another forum.
+    await declaration('did:plc:pinner', F, { pinned: [topic('old')], createdAt: '2026-01-01T00:00:00Z' }, '2026-03-01T00:00:00Z');
+    await declaration('did:plc:pinner', F, { pinned: [topic('new')], createdAt: '2026-02-01T00:00:00Z' }, '2026-01-01T00:00:00Z');
+    await declaration('did:plc:pinner', 'did:plc:peer', { pinned: [topic('peer')], createdAt: '2026-12-01T00:00:00Z' }, '2026-12-01T00:00:00Z');
+    await declaration('did:plc:mixed', F, {
+      pinned: [topic('z'), 5, null, topic('a'), { uri: topic('obj') }, topic('m'), topic('b'), topic('c')],
+      createdAt: '2026-01-01T00:00:00Z',
+    }, '2026-01-01T00:00:00Z');
+    await declaration('did:plc:scalar', F, { pinned: topic('lone'), createdAt: '2026-01-01T00:00:00Z' }, '2026-01-01T00:00:00Z');
+  });
+  afterAll(() => sql.end());
+
+  it('reads the newest declaration for the forum by createdAt and ignores other forums', async () => {
+    expect(await pinned('did:plc:pinner')).toEqual([topic('new')]);
+    expect(await pinned('did:plc:pinner', 'did:plc:peer')).toEqual([topic('peer')]);
+  });
+
+  it('keeps the first four strings in their pinned order and skips everything else', async () => {
+    expect(await pinned('did:plc:mixed')).toEqual([topic('z'), topic('a'), topic('m'), topic('b')]);
+  });
+
+  it('returns nothing for a non-array pinned value or a member with no declaration', async () => {
+    expect(await pinned('did:plc:scalar')).toEqual([]);
+    expect(await pinned('did:plc:nobody')).toEqual([]);
+  });
+});

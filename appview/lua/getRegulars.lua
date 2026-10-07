@@ -51,12 +51,23 @@ function handle()
               AND w.since <= s.created_at
               AND (w.until IS NULL OR s.created_at < w.until)))
     ),
+    -- Every thread the actor replied in during the window, before any
+    -- visibility, ban or gate check. It only narrows recent_replies to
+    -- threads that could be shared; partners still requires the actor's own
+    -- reply there to pass every check.
+    actor_threads AS (
+      SELECT DISTINCT (r.record::jsonb)->'thread'->>'uri' AS thread_uri
+      FROM happyview_records r
+      WHERE r.did = $1 AND r.collection = $4
+        AND r.created_at::timestamptz > now() - interval '180 days'
+    ),
     recent_replies AS (
       SELECT r.did, t.thread_uri, r.created_at::timestamptz AS replied_at
       FROM happyview_records r
       JOIN public_threads t
         ON t.thread_uri = (r.record::jsonb)->'thread'->>'uri'
       WHERE r.collection = $4 AND t.forum_did = $6
+        AND t.thread_uri IN (SELECT thread_uri FROM actor_threads)
         AND r.created_at::timestamptz > now() - interval '180 days'
         AND NOT EXISTS (
           SELECT 1 FROM atmobb_bans bn
