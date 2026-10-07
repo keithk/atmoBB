@@ -14,6 +14,7 @@ import {
   spaceUriOf,
 } from './appview';
 import { bustProfileCache } from './profiles';
+import { MAX_PINS } from '$lib/profile-page';
 
 const NS = 'app.atmobb';
 const MEMBERSHIP = `${NS}.forum.membership`;
@@ -125,6 +126,12 @@ async function writeMembership(did: string, forum: string, fields: Record<string
 /** Set the stamps the member wears on this forum: the `wearing` field on their declaration (KTD3). */
 export function setWearing(did: string, forum: string, wearing: string[]): Promise<void> {
   return patchMembership(did, forum, { wearing });
+}
+
+/** The topics the member pinned to their profile page on this forum, read from their declaration. */
+export async function getPinned(did: string, forum: string): Promise<string[]> {
+  const pinned = (await findDeclaration(did, forum))?.value.pinned;
+  return Array.isArray(pinned) ? pinned.filter((uri): uri is string => typeof uri === 'string') : [];
 }
 
 /** An access request targets a members-only board or, as an application, the forum itself. */
@@ -603,8 +610,6 @@ export async function deletePost(did: string, uri: string): Promise<void> {
 // --- Profile pins -------------------------------------------------------------
 // The topics a member pins to their profile page on this forum, kept on their
 // membership record next to `wearing` because pins belong to one forum.
-
-export const MAX_PINS = 4;
 
 /** Pin up to MAX_PINS of the member's own topics on this forum, in order. An empty list unpins them all. */
 export async function setPinned(did: string, forum: string, pinned: string[]): Promise<void> {

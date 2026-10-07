@@ -6,7 +6,6 @@ import { parseBBCode } from '$lib/richtext/bbcode';
 const FORUM = 'did:plc:current';
 const MEMBER = 'did:plc:member';
 const THREAD = 'app.atmobb.discussion.thread';
-const MEMBERSHIP = 'app.atmobb.forum.membership';
 
 const state = vi.hoisted(() => ({
   save: vi.fn(),
@@ -16,8 +15,8 @@ const state = vi.hoisted(() => ({
   threads: [] as { uri: string; value: Record<string, unknown> }[],
 }));
 vi.mock('$lib/server/pds', () => ({
-  MAX_PINS: 4,
   getActorProfile: async () => state.profile,
+  getPinned: async () => state.pinned,
   saveProfile: state.save,
   setPinned: state.setPinned,
 }));
@@ -27,11 +26,7 @@ vi.mock('$lib/server/atproto-oauth', () => ({
       atproto: {
         repo: {
           listRecords: async ({ collection }: { collection: string }) => ({
-            data: {
-              records: collection === MEMBERSHIP
-                ? [{ uri: `at://${MEMBER}/${MEMBERSHIP}/self`, value: { forum: FORUM, pinned: state.pinned } }]
-                : collection === THREAD ? state.threads : [],
-            },
+            data: { records: collection === THREAD ? state.threads : [] },
           }),
         },
       },

@@ -8,9 +8,9 @@
   import { profileLook } from '$lib/profile-page';
   import { THEME_PRESETS } from '$lib/themes';
   import type { PageData } from './$types';
+  import type { Errors as FieldErrors } from './+page.server';
 
   type Values = PageData['values'];
-  type FieldErrors = Partial<Record<'profileSkin' | 'banner' | 'headline' | 'currently' | 'about' | 'panels' | 'pins', string>>;
   let { data, form }: {
     data: PageData;
     form: { saved?: boolean; moved?: boolean; message?: string; errors?: FieldErrors; values?: Values } | null;

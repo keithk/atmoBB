@@ -8,6 +8,8 @@ import {
   getStanding,
   getThreadPage,
   isSpaceMember,
+  parseSpaceUri,
+  spaceUriOf,
   FORUM_DID,
   type Stamps,
   type ThreadPage,
@@ -20,7 +22,7 @@ import { revokeSpaceAccess } from '$lib/server/space-access';
 import { joinMode, sponsorDisplay } from '$lib/membership';
 import { sponsorDids, wornFromTray } from '$lib/stamps';
 import { banCovering, expiryFromDays } from '$lib/standing';
-import { profileLook, resolvePanels } from '$lib/profile-page';
+import { MAX_PINS, profileLook, resolvePanels } from '$lib/profile-page';
 import { parseAtUri } from '$lib/appview-paths';
 import type { RichTextBlock } from '$lib/richtext/bbcode';
 
@@ -49,8 +51,6 @@ import { resolveHandle } from '$lib/server/appview';
 import { resolveBodyImages } from '$lib/server/richtext';
 
 const THREAD = `${NS}.discussion.thread`;
-/** The membership lexicon's cap; a record holding more is read only this far. */
-const MAX_PINS = 4;
 
 /** Profile fields a banned owner's plain page leaves out of the page data. */
 const PLAIN_FIELDS = ['profileSkin', 'banner', 'headline', 'currently', 'about'];
@@ -61,10 +61,9 @@ const PLAIN_FIELDS = ['profileSkin', 'banner', 'headline', 'currently', 'about']
  * one of this forum's spaces. Checked before anything is read.
  */
 function ownTopic(uri: string, owner: string, forumDid: string): boolean {
-  const parts = uri.split('/');
-  // ['at:', '', forum, 'space', type, skey, author, collection, rkey]
-  if (parts[3] === 'space') {
-    return parts.length === 9 && parts[2] === forumDid && parts[6] === owner && parts[7] === THREAD;
+  const spaced = parseSpaceUri(uri);
+  if (spaced) {
+    return uri.split('/').length === 9 && spaced.space.startsWith(`at://${forumDid}/`) && spaced.author === owner && spaced.collection === THREAD;
   }
   const ref = parseAtUri(uri);
   return ref?.did === owner && ref.collection === THREAD;
@@ -86,11 +85,14 @@ interface PinCard {
  * thread pages do: a space thread only for a member of its space, a public
  * thread from the index, which leaves out hidden and unfederated ones.
  */
-async function readPin(uri: string, reader: string | undefined): Promise<{ thread: ThreadPage['thread'] | null; replyCount: number; restricted: boolean; member: boolean }> {
-  const parts = uri.split('/');
-  if (parts[3] === 'space') {
-    const space = parts.slice(0, 6).join('/');
-    const member = !!reader && (await isSpaceMember(space, reader));
+async function readPin(
+  uri: string,
+  reader: string | undefined,
+  memberOf: (space: string) => Promise<boolean>,
+): Promise<{ thread: ThreadPage['thread'] | null; replyCount: number; restricted: boolean; member: boolean }> {
+  const space = spaceUriOf(uri);
+  if (space) {
+    const member = !!reader && (await memberOf(space));
     const page = member ? await readSpaceThreadPage(reader!, uri).catch(() => null) : null;
     return { thread: page?.thread ?? null, replyCount: page?.replyCount ?? 0, restricted: true, member };
   }
@@ -116,7 +118,13 @@ async function pinCards(
   const uris = (Array.isArray(pinned) ? pinned : [])
     .slice(0, MAX_PINS)
     .filter((uri): uri is string => typeof uri === 'string' && ownTopic(uri, owner, forumDid));
-  const reads = await Promise.all([...new Set(uris)].map(async (uri) => ({ uri, ...(await readPin(uri, reader)) })));
+  // Pins in the same space share one membership check.
+  const spaces = new Map<string, Promise<boolean>>();
+  const memberOf = (space: string) => {
+    if (!spaces.has(space)) spaces.set(space, isSpaceMember(space, reader!));
+    return spaces.get(space)!;
+  };
+  const reads = await Promise.all([...new Set(uris)].map(async (uri) => ({ uri, ...(await readPin(uri, reader, memberOf)) })));
   return reads.flatMap(({ uri, thread, replyCount, restricted, member }) => {
     if (!thread && !asOwner) return [];
     // The owner learns why visitors won't see a pin: a members-only board it
@@ -150,16 +158,23 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
 
   // Standing is read for every viewer because a forum-wide ban turns the page
   // plain; its details reach only the viewers showStanding allows.
-  const [fullProfile, activity, elsewhere, standingRead, membership, index, stampSet, forumWide] = await Promise.all([
+  const boardNames = new Map((sidebarBoards ?? []).map((b) => [b.uri, b.value.name] as const));
+  // Pins start reading as soon as the stamps (which carry them) arrive.
+  const stampsRead = getStamps(forumDid, id.did).catch(() => null);
+  const pinsRead = stampsRead.then((set) =>
+    pinCards(set?.pinned, id.did, forumDid, preview ? undefined : locals.user?.did, isYou, boardNames),
+  );
+  const [fullProfile, activity, elsewhere, standingRead, membership, index, stampSet, forumWide, pins] = await Promise.all([
     getPublicProfile(id.did, id.pds),
     getAtmobbActivity(id.did, forumDid),
     getElsewhere(id.did, id.pds, id.handle),
     getStanding(id.did, forumDid).catch(() => null),
     gated ? getMembership(id.did, forumDid).catch(() => null) : null,
     staffRole ? getBoardIndex(forumDid).catch(() => null) : null,
-    getStamps(forumDid, id.did).catch(() => null),
+    stampsRead,
     // Only forum-wide staff give and revoke stamps; a board-scoped moderator sees no control.
     staffRole ? canModerateForum(locals.user?.did) : false,
+    pinsRead,
   ]);
   // Board-only bans leave the page as the owner made it.
   const ownerBanned = !!standingRead && !!banCovering(standingRead.bans);
@@ -187,14 +202,12 @@ export const load: PageServerLoad = async ({ params, locals, parent, url }) => {
   const stamps = wornFromTray(tray, stampSet?.worn ?? []);
   const wornIds = new Set(stamps.map((entry) => entry.id));
   const shelf = [...stamps, ...tray.filter((entry) => !wornIds.has(entry.id))];
-  const boardNames = new Map((sidebarBoards ?? []).map((b) => [b.uri, b.value.name] as const));
-  const [sponsorHandle, sponsored, handleEntries, pins] = await Promise.all([
+  const [sponsorHandle, sponsored, handleEntries] = await Promise.all([
     membership?.sponsor ? resolveHandle(membership.sponsor) : null,
     showStanding && membership
       ? Promise.all(membership.sponsored.map(async (s) => ({ ...s, handle: await resolveHandle(s.did) })))
       : null,
     Promise.all(sponsorDids(shelf).map(async (did) => [did, await resolveHandle(did)] as const)),
-    pinCards(stampSet?.pinned, id.did, forumDid, preview ? undefined : locals.user?.did, isYou, boardNames),
   ]);
   const handles = Object.fromEntries(handleEntries);
   const sponsor =

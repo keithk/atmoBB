@@ -26,7 +26,9 @@ vi.mock('$lib/server/admin', () => ({
   canModerateForum: async (did?: string) => did === 'did:plc:staff',
   forumStaff: async () => [],
 }));
-vi.mock('$lib/server/appview', () => ({
+vi.mock('$lib/server/appview', async (importOriginal) => ({
+  parseSpaceUri: (await importOriginal<typeof import('$lib/server/appview')>()).parseSpaceUri,
+  spaceUriOf: (await importOriginal<typeof import('$lib/server/appview')>()).spaceUriOf,
   FORUM_DID: () => FORUM,
   getBoardIndex: async () => ({ boards: [{ uri: BOARD, value: { name: 'General' } }] }),
   getMembership: async () => null,

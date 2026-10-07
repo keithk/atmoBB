@@ -1,6 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { MAX_PINS, getActorProfile, saveProfile, setPinned, type ProfileEdit } from '$lib/server/pds';
+import { getActorProfile, getPinned, saveProfile, setPinned, type ProfileEdit } from '$lib/server/pds';
 import { agentFor } from '$lib/server/atproto-oauth';
 import { FORUM_DID, getBoardIndex, getSpaceRecord, listSpaceRecords, spaceOfBoard } from '$lib/server/appview';
 import { parseAtUri } from '$lib/appview-paths';
@@ -9,20 +9,23 @@ import { parseBBCode, type RichTextBlock } from '$lib/richtext/bbcode';
 import { blocksToDoc } from '$lib/richtext/blocks-tiptap';
 import { collectImages, docToBBCode } from '$lib/richtext/tiptap-bbcode';
 import { forumProfileOverride, profileForForum, type ProfileField } from '$lib/profile-overrides';
-import { PROFILE_PANELS, resolvePanels, type ProfilePanelId } from '$lib/profile-page';
+import {
+  BANNER_PATTERN_IDS,
+  BANNER_SWATCH_IDS,
+  DEFAULT_SWATCH,
+  MAX_PINS,
+  PROFILE_PANELS,
+  resolvePanels,
+  type ProfilePanelId,
+} from '$lib/profile-page';
 import { FORUM_THEMES, type ForumTheme } from '$lib/themes';
 
 const THREAD = 'app.atmobb.discussion.thread';
-const MEMBERSHIP = 'app.atmobb.forum.membership';
 
 /** Fields this tab edits; in forum scope each can follow the account default instead. */
 const PAGE_FIELDS = ['profileSkin', 'banner', 'headline', 'currently', 'about', 'panels'] as const satisfies readonly ProfileField[];
 type PageField = typeof PAGE_FIELDS[number];
 
-// From the #banner knownValues in lexicons/app/atmobb/actor/profile.json.
-const BANNER_PATTERNS = ['plain', 'stars', 'scanlines', 'checker'] as const;
-const BANNER_SWATCHES = ['coral', 'rust', 'plum', 'berry', 'navy', 'teal', 'pine', 'slate'] as const;
-const DEFAULT_SWATCH = 'slate';
 
 const LINE_MAX_GRAPHEMES = 80;
 const LINE_MAX_BYTES = 800;
@@ -63,15 +66,6 @@ function tooLong(text: string): boolean {
   let n = 0;
   for (const _ of segmenter.segment(text)) if (++n > LINE_MAX_GRAPHEMES) return true;
   return false;
-}
-
-/** The pinned list on the member's declaration for this forum, read from their PDS. */
-async function readPinned(did: string, forum: string): Promise<string[]> {
-  const agent = await agentFor(did);
-  const res = await agent.com.atproto.repo.listRecords({ repo: did, collection: MEMBERSHIP, limit: 100 });
-  const declaration = res.data.records.find((r) => (r.value as { forum?: unknown }).forum === forum);
-  const pinned = (declaration?.value as { pinned?: unknown } | undefined)?.pinned;
-  return Array.isArray(pinned) ? pinned.filter((uri): uri is string => typeof uri === 'string') : [];
 }
 
 /**
@@ -183,7 +177,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const scope = url.searchParams.get('scope') === 'all' ? 'all' : 'forum';
   const [accountProfile, pinned, listed] = await Promise.all([
     getActorProfile(did),
-    readPinned(did, forum).catch(() => null),
+    getPinned(did, forum).catch(() => null),
     ownTopics(did, forum).catch(() => null),
   ]);
   const profile = scope === 'forum' ? profileForForum(accountProfile, forum) : accountProfile;
@@ -194,9 +188,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const aboutDoc = blocksToDoc(about);
   const banner = profile?.banner as { pattern?: unknown; swatch?: unknown } | undefined;
   const bannerPattern = banner && typeof banner === 'object'
-    ? (BANNER_PATTERNS as readonly unknown[]).includes(banner.pattern) ? String(banner.pattern) : 'plain'
+    ? BANNER_PATTERN_IDS.includes(banner.pattern as string) ? String(banner.pattern) : 'plain'
     : '';
-  const bannerSwatch = (BANNER_SWATCHES as readonly unknown[]).includes(banner?.swatch) ? String(banner!.swatch) : DEFAULT_SWATCH;
+  const bannerSwatch = BANNER_SWATCH_IDS.includes(banner?.swatch as string) ? String(banner!.swatch) : DEFAULT_SWATCH;
   const { panels } = resolvePanels({ panels: profile?.panels, hasContent: {}, viewer: 'owner', plain: false });
 
   const values: PageValues = {
@@ -228,12 +222,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     pinsReadable: pinned !== null && topics !== null,
     maxPins: MAX_PINS,
     topicLimit: TOPIC_LIMIT,
-    bannerPatterns: BANNER_PATTERNS,
-    bannerSwatches: BANNER_SWATCHES,
+    bannerPatterns: BANNER_PATTERN_IDS,
+    bannerSwatches: BANNER_SWATCH_IDS,
   };
 };
 
-type Errors = Partial<Record<'profileSkin' | 'banner' | 'headline' | 'currently' | 'about' | 'panels' | 'pins', string>>;
+export type Errors = Partial<Record<'profileSkin' | 'banner' | 'headline' | 'currently' | 'about' | 'panels' | 'pins', string>>;
 
 export const actions: Actions = {
   /** Reorder a panel or pin without saving; every other posted field comes back as typed. */
@@ -267,8 +261,8 @@ export const actions: Actions = {
       errors.profileSkin = 'Choose one of the listed skins.';
     }
     if (writes('banner') && values.bannerPattern &&
-      (!(BANNER_PATTERNS as readonly string[]).includes(values.bannerPattern) ||
-        !(BANNER_SWATCHES as readonly string[]).includes(values.bannerSwatch))) {
+      (!BANNER_PATTERN_IDS.includes(values.bannerPattern) ||
+        !BANNER_SWATCH_IDS.includes(values.bannerSwatch))) {
       errors.banner = 'Choose one of the listed patterns and colors.';
     }
     if (writes('headline') && tooLong(values.headline)) errors.headline = `Keep your headline to ${LINE_MAX_GRAPHEMES} characters.`;
@@ -291,7 +285,7 @@ export const actions: Actions = {
 
     if (pinsShown) {
       try {
-        const current = await readPinned(did, forum);
+        const current = await getPinned(did, forum);
         if (current.join('\n') !== values.pins.join('\n')) await setPinned(did, forum, values.pins);
       } catch (e) {
         const message = e instanceof Error ? e.message : 'We couldn\'t save your pinned topics. Try again.';

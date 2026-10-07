@@ -28,7 +28,10 @@ const BANNER_SWATCHES: Record<string, string> = {
   pine: '#2f5a3a',
   slate: '#4a5563',
 };
-const DEFAULT_SWATCH = 'slate';
+export const DEFAULT_SWATCH = 'slate';
+/** Banner choices, matching the #banner knownValues in the actor profile lexicon. */
+export const BANNER_PATTERN_IDS = Object.keys(BANNER_PATTERNS);
+export const BANNER_SWATCH_IDS = Object.keys(BANNER_SWATCHES);
 const SWATCH_INK = 'rgb(255 255 255 / 0.4)';
 
 // With skins off the banner follows the forum: accent ground, accent-ink
@@ -69,6 +72,9 @@ export function profileLook({ profileSkin, banner, forumHidesSkins, ownerBanned 
   const skin = FORUM_THEMES.includes(profileSkin as ForumTheme) ? profileSkinStyle(profileSkin as ForumTheme) : undefined;
   return { style: skin, banner: bannerStyle(banner, null, null), plain: false };
 }
+
+/** Topics a member can pin to their profile page: the membership lexicon's cap. */
+export const MAX_PINS = 4;
 
 export type ProfilePanelId =
   | 'about' | 'pinned' | 'stamps' | 'regulars' | 'activity' | 'guestbook' | 'bluesky' | 'signature';
