@@ -500,6 +500,7 @@ export type GuestbookHidden = 'owner' | 'staff' | 'blocked';
 
 export interface GuestbookEntry {
   uri: string;
+  cid: string;
   author: string;
   text: string;
   /** The signer's own timestamp. */
@@ -513,16 +514,21 @@ export interface GuestbookEntry {
 export interface Guestbook {
   entries: GuestbookEntry[];
   cursor?: string;
+  /** Whether it takes entries now: the owner turned it on and isn't banned forum-wide. */
+  open: boolean;
+  /** Present when `viewer` was given: whether the owner blocked them. */
+  viewerBlocked?: boolean;
 }
 
 /**
  * `includeHidden` returns hidden entries flagged instead of dropping them:
- * pass it only when the viewer is the owner or staff.
+ * pass it only when the viewer is the owner or staff. `viewer` asks whether
+ * the owner blocked that signer.
  */
 export const getGuestbook = (
   forum: string,
   subject: string,
-  opts: { limit?: number; cursor?: string; includeHidden?: boolean } = {},
+  opts: { limit?: number; cursor?: string; includeHidden?: boolean; viewer?: string } = {},
 ) =>
   xrpc<Guestbook>('GET', `${NS}.actor.getGuestbook`, {
     params: {
@@ -531,6 +537,7 @@ export const getGuestbook = (
       limit: String(opts.limit ?? 20),
       ...(opts.cursor ? { cursor: opts.cursor } : {}),
       ...(opts.includeHidden ? { includeHidden: 'true' } : {}),
+      ...(opts.viewer ? { viewer: opts.viewer } : {}),
     },
   });
 

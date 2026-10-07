@@ -10,6 +10,11 @@ const THREAD = 'app.atmobb.discussion.thread';
 const state = vi.hoisted(() => ({
   save: vi.fn(),
   setPinned: vi.fn(),
+  setGuestbookOpen: vi.fn(),
+  unblock: vi.fn(),
+  unhide: vi.fn(),
+  guestbook: { open: false, hidden: [] as string[], blocked: [] as string[] },
+  entries: [] as Record<string, unknown>[],
   profile: {} as Record<string, unknown>,
   pinned: [] as string[],
   threads: [] as { uri: string; value: Record<string, unknown> }[],
@@ -19,6 +24,10 @@ vi.mock('$lib/server/pds', () => ({
   getPinned: async () => state.pinned,
   saveProfile: state.save,
   setPinned: state.setPinned,
+  getGuestbookSettings: async () => state.guestbook,
+  setGuestbookOpen: state.setGuestbookOpen,
+  unblockGuestbookSigner: state.unblock,
+  unhideGuestbookEntry: state.unhide,
 }));
 vi.mock('$lib/server/atproto-oauth', () => ({
   agentFor: async () => ({
@@ -42,11 +51,13 @@ vi.mock('$lib/server/appview', () => ({
   listSpaceRecords: async () => [],
   getSpaceRecord: async () => { throw new Error('no space records in these tests'); },
   spaceOfBoard: (access?: { space?: string }) => access?.space ?? null,
+  getGuestbook: async () => ({ entries: state.entries, open: state.guestbook.open }),
+  resolveHandle: async (did: string) => `${did.split(':').pop()}.test`,
 }));
 import { actions, load } from './+page.server';
 
 const user = { did: MEMBER, handle: 'member.test' };
-const ALL_PANELS = ['about', 'pinned', 'stamps', 'regulars', 'activity', 'bluesky', 'signature'];
+const ALL_PANELS = ['about', 'pinned', 'stamps', 'regulars', 'activity', 'guestbook', 'bluesky', 'signature'];
 const topic = (rkey: string) => `at://${MEMBER}/${THREAD}/${rkey}`;
 
 function event(action: string, scope: string, values: [string, string][] = [], authenticated = true) {
@@ -71,6 +82,7 @@ function fields(extra: [string, string][] = [], panels = ALL_PANELS): [string, s
     ...panels.map((id): [string, string] => ['panel', id]),
     ...panels.map((id): [string, string] => ['show', id]),
     ['pinsShown', '1'],
+    ['guestbookShown', '1'],
   ];
   return [...base.filter(([name]) => !replaced.has(name)), ...extra];
 }
@@ -78,6 +90,11 @@ function fields(extra: [string, string][] = [], panels = ALL_PANELS): [string, s
 beforeEach(() => {
   state.save.mockReset();
   state.setPinned.mockReset();
+  state.setGuestbookOpen.mockReset();
+  state.unblock.mockReset();
+  state.unhide.mockReset();
+  state.guestbook = { open: false, hidden: [], blocked: [] };
+  state.entries = [];
   state.profile = { headline: 'Account headline', forumProfiles: [{ forum: FORUM, fields: ['headline'], headline: 'Forum headline' }] };
   state.pinned = [];
   state.threads = [];
@@ -123,7 +140,7 @@ describe('profile page editor: save', () => {
   });
 
   it('rejects a panel order with an unknown id or a duplicate', async () => {
-    const unknown = await actions.save!(event('save', 'all', fields([], [...ALL_PANELS, 'guestbook'])));
+    const unknown = await actions.save!(event('save', 'all', fields([], [...ALL_PANELS, 'reactions'])));
     expect(unknown).toMatchObject({ status: 400, data: { errors: { panels: expect.any(String) } } });
     const duplicate = await actions.save!(event('save', 'all', fields([], [...ALL_PANELS, 'about'])));
     expect(duplicate).toMatchObject({ status: 400, data: { errors: { panels: expect.any(String) } } });
@@ -133,11 +150,11 @@ describe('profile page editor: save', () => {
   });
 
   it('saves an unchecked panel as hidden in its place', async () => {
-    const order = ['pinned', 'about', 'stamps', 'regulars', 'activity', 'bluesky', 'signature'];
+    const order = ['pinned', 'about', 'stamps', 'regulars', 'activity', 'guestbook', 'bluesky', 'signature'];
     const posted = fields([], order).filter(([name, value]) => !(name === 'show' && value === 'stamps'));
     await actions.save!(event('save', 'all', posted));
     expect(state.save.mock.calls[0][1].panels).toEqual([
-      { id: 'pinned' }, { id: 'about' }, { id: 'stamps', hidden: true }, { id: 'regulars' }, { id: 'activity' }, { id: 'bluesky' }, { id: 'signature' },
+      { id: 'pinned' }, { id: 'about' }, { id: 'stamps', hidden: true }, { id: 'regulars' }, { id: 'activity' }, { id: 'guestbook' }, { id: 'bluesky' }, { id: 'signature' },
     ]);
   });
 
@@ -218,7 +235,7 @@ describe('profile page editor: move', () => {
     const result = await actions.move!(event('move', 'all', posted)) as Record<string, any>;
     expect(result.values.panels).toEqual([
       { id: 'pinned', hidden: false }, { id: 'about', hidden: false }, { id: 'stamps', hidden: false },
-      { id: 'regulars', hidden: false }, { id: 'activity', hidden: false }, { id: 'bluesky', hidden: true }, { id: 'signature', hidden: false },
+      { id: 'regulars', hidden: false }, { id: 'activity', hidden: false }, { id: 'guestbook', hidden: false }, { id: 'bluesky', hidden: true }, { id: 'signature', hidden: false },
     ]);
     expect(result.values).toMatchObject({ headline: 'half-written', about: 'Draft [i]about[/i]', profileSkin: 'midnight' });
     expect(result.values.aboutDoc).toEqual(blocksToDoc(parseBBCode('Draft [i]about[/i]')));
@@ -229,5 +246,74 @@ describe('profile page editor: move', () => {
     const result = await actions.move!(event('move', 'all', fields([['pin', topic('a')], ['pin', topic('b')], ['move', `pin:up:${topic('b')}`]]))) as Record<string, any>;
     expect(result.values.pins).toEqual([topic('b'), topic('a')]);
     expect(state.setPinned).not.toHaveBeenCalled();
+  });
+});
+
+describe('profile page editor: guestbook', () => {
+  const entry = (rkey: string, author: string) => `at://${author}/app.atmobb.actor.guestbook/${rkey}`;
+
+  it('loads the open flag, blocked members with handles, and the notes the owner hid', async () => {
+    const hidden = entry('e1', 'did:plc:pal');
+    state.guestbook = { open: true, hidden: [hidden, entry('gone', 'did:plc:old')], blocked: ['did:plc:pest'] };
+    state.entries = [
+      { uri: hidden, author: 'did:plc:pal', text: 'oops', createdAt: '2026-10-01T00:00:00Z', hidden: 'owner' },
+      { uri: entry('e2', 'did:plc:mod'), author: 'did:plc:mod', text: 'staff hid', createdAt: '2026-10-01T00:00:00Z', hidden: 'staff' },
+    ];
+    const data = await load(event('save', 'forum')) as Record<string, any>;
+    expect(data.values.guestbookOpen).toBe(true);
+    expect(data.guestbook.blocked).toEqual([{ did: 'did:plc:pest', handle: 'pest.test' }]);
+    expect(data.guestbook.hidden).toEqual([
+      { uri: hidden, author: 'did:plc:pal', handle: 'pal.test', text: 'oops' },
+      { uri: entry('gone', 'did:plc:old'), author: 'did:plc:old', handle: 'old.test', text: null },
+    ]);
+  });
+
+  it('opens the guestbook once when the box is newly checked, before saving the profile', async () => {
+    state.setGuestbookOpen.mockImplementation(async () => expect(state.save).not.toHaveBeenCalled());
+    await actions.save!(event('save', 'forum', fields([['guestbook', 'on']])));
+    expect(state.setGuestbookOpen).toHaveBeenCalledTimes(1);
+    expect(state.setGuestbookOpen).toHaveBeenCalledWith(MEMBER, FORUM, true);
+    expect(state.save).toHaveBeenCalled();
+  });
+
+  it('closes it when unchecked, and leaves it alone when unchanged', async () => {
+    state.guestbook.open = true;
+    await actions.save!(event('save', 'all', fields()));
+    expect(state.setGuestbookOpen).toHaveBeenCalledWith(MEMBER, FORUM, false);
+    state.setGuestbookOpen.mockReset();
+    await actions.save!(event('save', 'all', fields([['guestbook', 'on']])));
+    expect(state.setGuestbookOpen).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing for the guestbook when the section did not render, or when validation fails', async () => {
+    state.guestbook.open = true;
+    await actions.save!(event('save', 'all', fields().filter(([name]) => name !== 'guestbookShown')));
+    expect(state.setGuestbookOpen).not.toHaveBeenCalled();
+    await actions.save!(event('save', 'all', fields([['headline', 'x'.repeat(200)]])));
+    expect(state.setGuestbookOpen).not.toHaveBeenCalled();
+  });
+
+  it('turns a guestbook write error into a form error and saves nothing after it', async () => {
+    state.setGuestbookOpen.mockRejectedValue(new Error('PDS down'));
+    const result = await actions.save!(event('save', 'all', fields([['guestbook', 'on']])));
+    expect(result).toMatchObject({ status: 502, data: { errors: { guestbook: expect.any(String) } } });
+    expect(state.save).not.toHaveBeenCalled();
+  });
+
+  it('unblocks a member and unhides a note, back on the guestbook section', async () => {
+    await expect(actions.unblock!(event('unblock', 'forum', [['did', 'did:plc:pest']]))).rejects.toMatchObject({
+      status: 303, location: '/settings/page?scope=forum#guestbook',
+    });
+    expect(state.unblock).toHaveBeenCalledWith(MEMBER, FORUM, 'did:plc:pest');
+    const uri = entry('e1', 'did:plc:pal');
+    await expect(actions.unhide!(event('unhide', 'all', [['uri', uri]]))).rejects.toMatchObject({ status: 303 });
+    expect(state.unhide).toHaveBeenCalledWith(MEMBER, FORUM, uri);
+  });
+
+  it('refuses an unblock or unhide without a login or a value', async () => {
+    expect(await actions.unblock!(event('unblock', 'forum', [['did', 'did:plc:pest']], false))).toMatchObject({ status: 401 });
+    expect(await actions.unhide!(event('unhide', 'forum', []))).toMatchObject({ status: 400 });
+    expect(state.unblock).not.toHaveBeenCalled();
+    expect(state.unhide).not.toHaveBeenCalled();
   });
 });

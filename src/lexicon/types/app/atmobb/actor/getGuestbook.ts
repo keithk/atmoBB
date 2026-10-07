@@ -22,12 +22,18 @@ export type QueryParams = {
   cursor?: string
   /** Return hidden entries, flagged. For the owner and staff. */
   includeHidden?: boolean
+  /** Report whether the owner blocked this signer, as viewerBlocked. */
+  viewer?: string
 }
 export type InputSchema = undefined
 
 export interface OutputSchema {
   entries: Entry[]
   cursor?: string
+  /** Whether the guestbook takes entries now: the owner turned it on and is not banned forum-wide. */
+  open: boolean
+  /** Only with viewer: whether the owner blocked that signer. False while the guestbook is closed. */
+  viewerBlocked?: boolean
 }
 
 export interface CallOptions {
@@ -48,6 +54,8 @@ export function toKnownErr(e: any) {
 export interface Entry {
   $type?: 'app.atmobb.actor.getGuestbook#entry'
   uri: string
+  /** For a strongRef, as a staff hide names it. */
+  cid: string
   author: string
   text: string
   /** The signer's own timestamp. */

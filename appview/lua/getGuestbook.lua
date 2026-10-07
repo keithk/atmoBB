@@ -14,6 +14,10 @@
 -- signer is dropped too, unless includeHidden asks for it flagged; hiding or
 -- blocking never frees up the signer's 24 hours. Every time rule reads the
 -- index time, never the signer's createdAt. Offset cursor.
+--
+-- Alongside the entries: open, whether the guestbook takes entries now (on,
+-- owner not banned), and with viewer, viewerBlocked, whether the owner
+-- blocked that signer, so the app can offer or refuse the sign form.
 local NS = "app.atmobb"
 
 function handle()
@@ -53,7 +57,7 @@ function handle()
       -- Entries for this forum and owner, indexed while the guestbook was
       -- open, by signers neither banned forum-wide nor shut out by a closed
       -- gate. The forum account is exempt from its own gate.
-      SELECT e.uri, e.did, e.record, e.created_at, e.created_at::timestamptz AS indexed
+      SELECT e.uri, e.cid, e.did, e.record, e.created_at, e.created_at::timestamptz AS indexed
       FROM happyview_records e
       CROSS JOIN owner o
       WHERE e.collection = $3
@@ -103,7 +107,7 @@ function handle()
         END AS hidden
       FROM paced e
     )
-    SELECT f.uri, f.did, f.record, f.created_at, f.hidden
+    SELECT f.uri, f.cid, f.did, f.record, f.created_at, f.hidden
     FROM flagged f
     WHERE $6 = 'true' OR f.hidden IS NULL
     ORDER BY f.indexed DESC, f.uri DESC
@@ -116,6 +120,7 @@ function handle()
     local rec = json.decode(row.record)
     entries[i] = {
       uri = row.uri,
+      cid = row.cid,
       author = row.did,
       text = rec.text,
       createdAt = rec.createdAt,
@@ -124,7 +129,30 @@ function handle()
     }
   end
 
-  local result = { entries = entries }
+  -- The owner's newest declaration again, for the open flag and the
+  -- viewer's block: a row only while the guestbook is on and the owner is
+  -- not banned forum-wide, the same rule the entries follow.
+  local state = db.raw([[
+    SELECT CASE WHEN $3::text <> '' AND (d.record::jsonb)->'guestbookBlocked' @> jsonb_build_array($3::text)
+                THEN 'yes' ELSE 'no' END AS viewer_blocked
+    FROM (
+      SELECT d.record
+      FROM happyview_records d
+      WHERE d.did = $2 AND d.collection = $4 AND (d.record::jsonb)->>'forum' = $1
+      ORDER BY COALESCE((d.record::jsonb)->>'createdAt', d.created_at::text) DESC, d.uri DESC
+      LIMIT 1
+    ) d
+    WHERE (d.record::jsonb)->'guestbook' = 'true'::jsonb
+      AND NOT EXISTS (
+        SELECT 1 FROM atmobb_bans bn
+        WHERE bn.did = $2 AND bn.forum_did = $1 AND bn.board_uri IS NULL
+          AND (bn.until IS NULL OR bn.until::timestamptz > now()))
+  ]], { forum, subject, params.viewer or "", NS .. ".forum.membership" })
+
+  local result = { entries = entries, open = #state > 0 }
+  if params.viewer then
+    result.viewerBlocked = #state > 0 and state[1].viewer_blocked == "yes"
+  end
   if #rows == limit then
     result.cursor = tostring(offset + limit)
   end

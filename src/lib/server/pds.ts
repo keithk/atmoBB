@@ -88,13 +88,18 @@ export async function joinForum(did: string, forum: string, fields: Record<strin
 // re-reads the declaration it created, instead of racing to create its own.
 const patchingMembership = new Map<string, Promise<void>>();
 
+/** Fields to set, or a function of the current declaration (empty when there is none) returning them, or null to write nothing. */
+type MembershipPatch = Record<string, unknown> | ((current: Record<string, unknown>) => Record<string, unknown> | null);
+
 /**
  * Set fields on the member's declaration for this forum. Without a
  * declaration (an open forum, never joined by hand) one is created carrying
  * the fields; leaving deletes it and them with it. Other fields on the record
- * are kept, and a field set to undefined is removed.
+ * are kept, and a field set to undefined is removed. A function patch reads
+ * the declaration inside the queue, so a change built on the current value
+ * can't race another write.
  */
-function patchMembership(did: string, forum: string, fields: Record<string, unknown>): Promise<void> {
+function patchMembership(did: string, forum: string, fields: MembershipPatch): Promise<void> {
   const ahead = patchingMembership.get(did) ?? Promise.resolve();
   const write: Promise<void> = ahead
     .catch(() => {})
@@ -106,8 +111,10 @@ function patchMembership(did: string, forum: string, fields: Record<string, unkn
   return write;
 }
 
-async function writeMembership(did: string, forum: string, fields: Record<string, unknown>): Promise<void> {
+async function writeMembership(did: string, forum: string, patch: MembershipPatch): Promise<void> {
   const current = await findDeclaration(did, forum);
+  const fields = typeof patch === 'function' ? patch(current?.value ?? {}) : patch;
+  if (!fields) return;
   const record: Record<string, unknown> = { ...current?.value, ...fields, $type: MEMBERSHIP };
   for (const key of Object.keys(record)) if (record[key] === undefined) delete record[key];
   if (!current) return joinForum(did, forum, record);
@@ -132,6 +139,115 @@ export function setWearing(did: string, forum: string, wearing: string[]): Promi
 export async function getPinned(did: string, forum: string): Promise<string[]> {
   const pinned = (await findDeclaration(did, forum))?.value.pinned;
   return Array.isArray(pinned) ? pinned.filter((uri): uri is string => typeof uri === 'string') : [];
+}
+
+// --- Guestbook --------------------------------------------------------------
+// The owner's guestbook choices live on their membership declaration for the
+// forum: whether it is open, the periods it was closed, and the entries and
+// signers they hid. The entries themselves are records in the signers' repos.
+
+const GUESTBOOK = `${NS}.actor.guestbook`;
+/** The membership lexicon's caps on the closed periods and the hidden and blocked lists. */
+const GUESTBOOK_PERIODS = 20;
+const GUESTBOOK_LIST_MAX = 500;
+/** The start of the period closing a guestbook before it was first opened, so older entries never show. */
+const BEGINNING = '1970-01-01T00:00:00.000Z';
+
+const strings = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+
+function closedPeriods(value: unknown): { from: string; to?: string }[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((period) =>
+    period && typeof period.from === 'string'
+      ? [typeof period.to === 'string' ? { from: period.from, to: period.to } : { from: period.from }]
+      : [],
+  );
+}
+
+/**
+ * Open or close the member's guestbook on this forum. Closing starts an
+ * open-ended closed period; opening ends it, or the first time records one
+ * from the beginning of time so entries signed before never show. Only the
+ * newest periods are kept. Asking for the state it is already in writes nothing.
+ */
+export function setGuestbookOpen(did: string, forum: string, open: boolean): Promise<void> {
+  return patchMembership(did, forum, (current) => {
+    if ((current.guestbook === true) === open) return null;
+    const now = new Date().toISOString();
+    const periods = closedPeriods(current.guestbookClosed);
+    if (open) {
+      const last = periods.at(-1);
+      // No open period to end (the first opening, or a flag cleared by hand): close the gap since the last one.
+      if (last && !last.to) last.to = now;
+      else periods.push({ from: last?.to ?? BEGINNING, to: now });
+    } else {
+      periods.push({ from: now });
+    }
+    return { guestbook: open || undefined, guestbookClosed: periods.slice(-GUESTBOOK_PERIODS) };
+  });
+}
+
+/** Add or remove one value on a guestbook list, oldest dropping off past the cap; an empty list is removed. */
+function patchGuestbookList(did: string, forum: string, field: 'guestbookHidden' | 'guestbookBlocked', value: string, add: boolean) {
+  return patchMembership(did, forum, (current) => {
+    const list = strings(current[field]);
+    if (list.includes(value) === add) return null;
+    const next = add ? [...list, value].slice(-GUESTBOOK_LIST_MAX) : list.filter((entry) => entry !== value);
+    return { [field]: next.length ? next : undefined };
+  });
+}
+
+export const hideGuestbookEntry = (did: string, forum: string, uri: string) => patchGuestbookList(did, forum, 'guestbookHidden', uri, true);
+export const unhideGuestbookEntry = (did: string, forum: string, uri: string) => patchGuestbookList(did, forum, 'guestbookHidden', uri, false);
+export const blockGuestbookSigner = (did: string, forum: string, signer: string) => patchGuestbookList(did, forum, 'guestbookBlocked', signer, true);
+export const unblockGuestbookSigner = (did: string, forum: string, signer: string) => patchGuestbookList(did, forum, 'guestbookBlocked', signer, false);
+
+export interface GuestbookSettings {
+  open: boolean;
+  hidden: string[];
+  blocked: string[];
+}
+
+/** The member's own guestbook choices on this forum, read live from their declaration. */
+export async function getGuestbookSettings(did: string, forum: string): Promise<GuestbookSettings> {
+  const value = (await findDeclaration(did, forum))?.value ?? {};
+  return { open: value.guestbook === true, hidden: strings(value.guestbookHidden), blocked: strings(value.guestbookBlocked) };
+}
+
+/** Sign `subject`'s guestbook on this forum: a record in the signer's own repo. */
+export async function signGuestbook(did: string, forum: string, subject: string, text: string): Promise<{ uri: string; cid: string }> {
+  const agent = await agentFor(did);
+  const res = await agent.com.atproto.repo.createRecord({
+    repo: did,
+    collection: GUESTBOOK,
+    record: { $type: GUESTBOOK, forum, subject, text, createdAt: new Date().toISOString() },
+  });
+  return { uri: res.data.uri, cid: res.data.cid };
+}
+
+/**
+ * When the signer last signed `subject`'s guestbook on this forum, from their
+ * own repo (newest records first), or null. One page is plenty to cover a day.
+ */
+export async function lastGuestbookEntryAt(did: string, forum: string, subject: string): Promise<string | null> {
+  const agent = await agentFor(did);
+  const res = await agent.com.atproto.repo.listRecords({ repo: did, collection: GUESTBOOK, limit: 100 });
+  let newest: string | null = null;
+  for (const record of res.data.records) {
+    const value = record.value as { forum?: unknown; subject?: unknown; createdAt?: unknown };
+    if (value.forum !== forum || value.subject !== subject || typeof value.createdAt !== 'string') continue;
+    if (!newest || value.createdAt > newest) newest = value.createdAt;
+  }
+  return newest;
+}
+
+/** Take back a guestbook entry. Only its signer can: the check is on the URI's authority. */
+export async function deleteGuestbookEntry(did: string, uri: string): Promise<void> {
+  const p = parseAtUri(uri);
+  if (!p || p.did !== did || p.collection !== GUESTBOOK) throw new Error('not your guestbook entry');
+  const agent = await agentFor(did);
+  await agent.com.atproto.repo.deleteRecord({ repo: did, collection: p.collection, rkey: p.rkey });
 }
 
 /** An access request targets a members-only board or, as an application, the forum itself. */

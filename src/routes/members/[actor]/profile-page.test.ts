@@ -21,6 +21,10 @@ const state = vi.hoisted(() => ({
   regulars: [] as { did: string; profile?: Record<string, unknown> }[],
   regularsAsked: [] as [string, string][],
   forumHides: false,
+  guestbook: { open: false, entries: [] as Record<string, unknown>[] },
+  guestbookAsked: [] as Record<string, unknown>[],
+  viewerBanned: false,
+  memberRefusal: null as unknown,
 }));
 
 vi.mock('$lib/server/admin', () => ({
@@ -46,7 +50,20 @@ vi.mock('$lib/server/appview', async (importOriginal) => ({
     return state.threads.get(uri) ?? { replies: [], replyCount: 0 };
   },
   isSpaceMember: async (_space: string, did: string) => state.spaceMembers.has(did),
+  // Hidden entries come back only when asked for, as the script does.
+  getGuestbook: async (_forum: string, _subject: string, opts: Record<string, unknown>) => {
+    state.guestbookAsked.push(opts);
+    return {
+      open: state.guestbook.open,
+      entries: state.guestbook.entries.filter((entry) => opts.includeHidden || !entry.hidden),
+      ...(opts.viewer ? { viewerBlocked: false } : {}),
+    };
+  },
 }));
+vi.mock('$lib/server/standing', () => ({
+  bannedFrom: async () => (state.viewerBanned ? { uri: 'ban', since: '2026-01-01T00:00:00Z' } : undefined),
+}));
+vi.mock('$lib/server/membership', () => ({ refuseUnlessMember: async () => state.memberRefusal }));
 vi.mock('$lib/server/space-read', () => ({
   readSpaceThreadPage: async (viewer: string, uri: string) => {
     state.spaceReads.push(uri);
@@ -127,6 +144,10 @@ beforeEach(() => {
   state.regulars = [];
   state.regularsAsked = [];
   state.forumHides = false;
+  state.guestbook = { open: false, entries: [] };
+  state.guestbookAsked = [];
+  state.viewerBanned = false;
+  state.memberRefusal = null;
 });
 
 describe('plain mode for a banned owner', () => {
@@ -197,6 +218,76 @@ describe('regulars', () => {
     const data = await view('anon');
     expect(data.look.plain).toBe(true);
     expect(ids(data)).toContain('regulars');
+  });
+});
+
+describe('guestbook', () => {
+  const panel = (data: Record<string, any>) => data.panels.panels.find((p: { id: string }) => p.id === 'guestbook');
+  const entry = (rkey: string, author: string, hidden?: string) => ({
+    uri: `at://${author}/app.atmobb.actor.guestbook/${rkey}`, cid: 'c', author, text: `note ${rkey}`,
+    createdAt: '2026-10-01T00:00:00Z', indexedAt: '2026-10-01T00:00:00Z', ...(hidden ? { hidden } : {}),
+  });
+
+  it('shows an eligible member the sign form in an open guestbook with no notes yet', async () => {
+    state.guestbook.open = true;
+    const data = await view('member');
+    expect(panel(data)).toEqual({ id: 'guestbook', state: 'content' });
+    expect(data.guestbook).toMatchObject({ sign: 'sign', entries: [], open: true });
+    expect(state.guestbookAsked[0]).toMatchObject({ viewer: OTHER });
+  });
+
+  it('leaves an empty guestbook out for anyone who can\'t sign it', async () => {
+    state.guestbook.open = true;
+    state.viewerBanned = true;
+    expect(panel(await view('member'))).toBeUndefined();
+    state.viewerBanned = false;
+    state.memberRefusal = { status: 403 };
+    const gated = await view('member');
+    expect(panel(gated)).toBeUndefined();
+    expect(gated.guestbook.sign).toBe('members');
+    expect(panel(await view('anon'))).toBeUndefined();
+  });
+
+  it('shows visitors the notes, with a login link for a logged-out one', async () => {
+    state.guestbook = { open: true, entries: [entry('e1', 'did:plc:pal')] };
+    const anon = await view('anon');
+    expect(panel(anon)).toEqual({ id: 'guestbook', state: 'content' });
+    expect(anon.guestbook.sign).toBe('login');
+    expect(anon.guestbook.entries).toEqual([expect.objectContaining({ uri: entry('e1', 'did:plc:pal').uri, handle: 'did:plc:pal' })]);
+  });
+
+  it('prompts the owner to open a closed guestbook, and offers them no sign form', async () => {
+    const owner = await view('owner');
+    expect(panel(owner)).toEqual({ id: 'guestbook', state: 'prompt' });
+    state.guestbook.open = true;
+    const open = await view('owner');
+    expect(panel(open)).toEqual({ id: 'guestbook', state: 'content' });
+    expect(open.guestbook.sign).toBeNull();
+  });
+
+  it('hands hidden notes only to the owner and forum staff', async () => {
+    state.guestbook = { open: true, entries: [entry('e1', 'did:plc:pal'), entry('e2', 'did:plc:pest', 'blocked')] };
+    const hiddenIn = (data: Record<string, any>) => data.guestbook.entries.some((e: { hidden?: string }) => e.hidden);
+    expect(hiddenIn(await view('owner'))).toBe(true);
+    expect(hiddenIn(await view('staff'))).toBe(true);
+    expect(hiddenIn(await view('member'))).toBe(false);
+    expect(hiddenIn(await view('anon'))).toBe(false);
+    expect(hiddenIn(await view('owner', '?as=visitor'))).toBe(false);
+    expect((await view('staff')).guestbook.staff).toBe(true);
+    expect((await view('member')).guestbook.staff).toBe(false);
+  });
+
+  it('pages with the gb cursor', async () => {
+    state.guestbook.open = true;
+    await view('anon', '?gb=20');
+    expect(state.guestbookAsked[0]).toMatchObject({ cursor: '20' });
+  });
+
+  it('drops the guestbook from a banned owner\'s plain page', async () => {
+    state.standing = { bans: [{ uri: 'at://ban/1', since: '2026-09-01T00:00:00Z' }], warnings: [] };
+    state.guestbook = { open: true, entries: [entry('e1', 'did:plc:pal')] };
+    expect(panel(await view('anon'))).toBeUndefined();
+    expect(panel(await view('owner'))).toBeUndefined();
   });
 });
 

@@ -61,6 +61,7 @@
     stamps: { label: 'Stamps' },
     regulars: { label: 'Regulars', note: 'who you reply alongside most' },
     activity: { label: 'Recent activity' },
+    guestbook: { label: 'Guestbook', note: 'notes from other members' },
     bluesky: { label: 'Recent on Bluesky' },
     signature: { label: 'Signature' },
   });
@@ -317,6 +318,52 @@
         {@render fieldError('pins')}
       </fieldset>
 
+      <fieldset id="guestbook" class="section" class:atm-field--error={!!errors.guestbook}>
+        <legend class="atm-label">Guestbook</legend>
+        {#if !data.guestbook}
+          <p class="atm-err">We couldn’t load your guestbook settings right now, so they’re left as they are. Try again in a minute.</p>
+        {:else}
+          <input type="hidden" name="guestbookShown" value="1" />
+          <label class="row__label">
+            <input type="checkbox" name="guestbook" checked={values.guestbookOpen} aria-describedby="guestbook-hint" />
+            Open my guestbook
+          </label>
+          <p class="atm-hint" id="guestbook-hint">
+            Off by default. Members can leave you short notes. You can hide any note or block someone; your hidden
+            and blocked lists are public on your account. Your guestbook belongs to this forum, whichever scope you’re editing.
+          </p>
+          {#if data.guestbook.blocked.length}
+            <h3 class="atm-label sublabel">Blocked members</h3>
+            <ul class="rows">
+              {#each data.guestbook.blocked as member (member.did)}
+                <li class="row">
+                  <span class="row__label topic">{member.handle ? `@${member.handle}` : member.did}</span>
+                  <button class="atm-btn atm-btn--ghost atm-btn--sm" form="guestbook-unblock" name="did" value={member.did}>Unblock</button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          {#if data.guestbook.hidden.length}
+            <h3 class="atm-label sublabel">Hidden notes</h3>
+            <ul class="rows">
+              {#each data.guestbook.hidden as note (note.uri)}
+                <li class="row">
+                  <span class="row__label topic">
+                    {#if note.text}<span class="note-text">“{note.text}”</span>{:else}A note{/if}
+                    <span class="atm-hint">from {note.handle ? `@${note.handle}` : note.author || 'someone'}</span>
+                  </span>
+                  <button class="atm-btn atm-btn--ghost atm-btn--sm" form="guestbook-unhide" name="uri" value={note.uri}>Unhide</button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          {#if data.guestbook.blocked.length || data.guestbook.hidden.length}
+            <p class="atm-hint">Unblock and Unhide save right away, without the rest of the page.</p>
+          {/if}
+        {/if}
+        {@render fieldError('guestbook')}
+      </fieldset>
+
       <div class="actions">
         <span class="status" aria-live="polite">
           {#if form?.message}<span class="atm-err">{form.message}</span>
@@ -328,6 +375,9 @@
         <button class="atm-btn atm-btn--primary" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
       </div>
     </form>
+    <!-- Unblock and Unhide buttons sit in the guestbook section above and submit these, since forms can't nest. -->
+    <form id="guestbook-unblock" method="POST" action={`?/unblock&scope=${data.scope}`} hidden></form>
+    <form id="guestbook-unhide" method="POST" action={`?/unhide&scope=${data.scope}`} hidden></form>
   </Card>
 
   <section class="preview" aria-label="Preview">
@@ -414,6 +464,8 @@
   /* Drag and Alt+arrow only work once <atm-reorder> is defined; until then the move buttons post to the server. */
   atm-reorder:not(:defined) :is(.row__handle, .reorder-hint) { display: none; }
   .topic { min-width: 0; overflow-wrap: anywhere; }
+  .sublabel { margin: var(--space-2) 0 0; }
+  .note-text { white-space: pre-wrap; }
 
   .actions {
     display: flex; align-items: center; gap: var(--space-3);

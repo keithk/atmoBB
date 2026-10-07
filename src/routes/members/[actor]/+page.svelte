@@ -9,6 +9,7 @@
   import StampRow from '$lib/components/StampRow.svelte';
   import StampDetails from '$lib/components/StampDetails.svelte';
   import ProfilePanel from '$lib/components/profile/ProfilePanel.svelte';
+  import Guestbook from '$lib/components/profile/Guestbook.svelte';
   import type { ProfilePanelId } from '$lib/profile-page';
   import type { RichTextBlock } from '$lib/richtext/bbcode';
   import { page } from '$app/state';
@@ -141,8 +142,13 @@
           <a class="atm-btn atm-btn--secondary" href="/settings/profile">Change avatar</a>
           <a class="atm-btn atm-btn--secondary" href="/settings/profile">Edit profile</a>
           <a class="atm-btn atm-btn--primary" href="/settings/page">Customize page</a>
-        {:else if m.elsewhere.bsky}
-          <a class="atm-btn atm-btn--secondary" href="https://bsky.app/profile/{m.elsewhere.bsky.handle}" target="_blank" rel="noopener">🦋 View on Bluesky</a>
+        {:else}
+          {#if data.guestbook.sign === 'sign' && data.panels.chips.includes('guestbook')}
+            <a class="atm-btn atm-btn--secondary" href="#guestbook-note">Sign guestbook</a>
+          {/if}
+          {#if m.elsewhere.bsky}
+            <a class="atm-btn atm-btn--secondary" href="https://bsky.app/profile/{m.elsewhere.bsky.handle}" target="_blank" rel="noopener">🦋 View on Bluesky</a>
+          {/if}
         {/if}
       </div>
     </div>
@@ -182,6 +188,9 @@
             {:else if panel.id === 'activity'}
               <p>Topics you start show up here.</p>
               <a href="/settings/page#panels">Hide this panel until then</a>
+            {:else if panel.id === 'guestbook'}
+              <p>Let other members leave you notes.</p>
+              <a class="atm-btn atm-btn--secondary atm-btn--sm" href="/settings/page#guestbook">Open your guestbook</a>
             {:else if panel.id === 'bluesky'}
               <p>Your newest Bluesky posts show up here once you post there.</p>
               <a href="/settings/page#panels">Hide this panel</a>
@@ -250,6 +259,8 @@
                 </li>
               {/each}
             </ul>
+          {:else if panel.id === 'guestbook'}
+            <Guestbook book={data.guestbook} isOwner={data.isYou} ownerName={name} profilePath={page.url.pathname} {form} {pending} />
           {:else if panel.id === 'bluesky'}
             <ul class="bposts">
               {#each m.elsewhere.posts as post}

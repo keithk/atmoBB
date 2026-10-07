@@ -97,13 +97,19 @@ export const schemaDict = {
               description:
                 'Return hidden entries, flagged. For the owner and staff.',
             },
+            viewer: {
+              type: 'string',
+              format: 'did',
+              description:
+                'Report whether the owner blocked this signer, as viewerBlocked.',
+            },
           },
         },
         output: {
           encoding: 'application/json',
           schema: {
             type: 'object',
-            required: ['entries'],
+            required: ['entries', 'open'],
             properties: {
               entries: {
                 type: 'array',
@@ -115,17 +121,32 @@ export const schemaDict = {
               cursor: {
                 type: 'string',
               },
+              open: {
+                type: 'boolean',
+                description:
+                  'Whether the guestbook takes entries now: the owner turned it on and is not banned forum-wide.',
+              },
+              viewerBlocked: {
+                type: 'boolean',
+                description:
+                  'Only with viewer: whether the owner blocked that signer. False while the guestbook is closed.',
+              },
             },
           },
         },
       },
       entry: {
         type: 'object',
-        required: ['uri', 'author', 'text', 'createdAt', 'indexedAt'],
+        required: ['uri', 'cid', 'author', 'text', 'createdAt', 'indexedAt'],
         properties: {
           uri: {
             type: 'string',
             format: 'at-uri',
+          },
+          cid: {
+            type: 'string',
+            format: 'cid',
+            description: 'For a strongRef, as a staff hide names it.',
           },
           author: {
             type: 'string',

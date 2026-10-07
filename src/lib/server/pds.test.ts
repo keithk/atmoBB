@@ -6,6 +6,7 @@ const repo = vi.hoisted(() => ({
   uploadBlob: vi.fn(),
   listRecords: vi.fn(),
   createRecord: vi.fn(),
+  deleteRecord: vi.fn(),
 }));
 const space = vi.hoisted(() => ({ getSpaceRecord: vi.fn() }));
 const profiles = vi.hoisted(() => ({ bustProfileCache: vi.fn() }));
@@ -21,7 +22,21 @@ vi.mock('./appview', async (importOriginal) => ({
 
 vi.mock('./profiles', () => profiles);
 
-import { getOwnAvatarProfile, saveProfile, setPinned, setWearing } from './pds';
+import {
+  blockGuestbookSigner,
+  deleteGuestbookEntry,
+  getGuestbookSettings,
+  getOwnAvatarProfile,
+  hideGuestbookEntry,
+  lastGuestbookEntryAt,
+  saveProfile,
+  setGuestbookOpen,
+  setPinned,
+  setWearing,
+  signGuestbook,
+  unblockGuestbookSigner,
+  unhideGuestbookEntry,
+} from './pds';
 import { profileForForum } from '$lib/profile-overrides';
 
 beforeEach(() => {
@@ -30,6 +45,7 @@ beforeEach(() => {
   repo.uploadBlob.mockReset();
   repo.listRecords.mockReset();
   repo.createRecord.mockReset();
+  repo.deleteRecord.mockReset();
   space.getSpaceRecord.mockReset();
   profiles.bustProfileCache.mockReset();
 });
@@ -261,5 +277,143 @@ describe('membership pins', () => {
     await Promise.all([setPinned(did, forum, [thread(did, 't1')]), setPinned(did, forum, [thread(did, 't2')])]);
     expect(records).toHaveLength(1);
     expect(records[0].value).toMatchObject({ pinned: [thread(did, 't2')] });
+  });
+});
+
+describe('guestbook settings', () => {
+  const forum = 'did:plc:friends';
+  const BEGINNING = '1970-01-01T00:00:00.000Z';
+
+  /** A member's PDS holding membership records, rewritten in place by putRecord. */
+  function fakePds(memberships: Record<string, unknown>[] = []) {
+    const records = memberships.map((value, i) => ({ uri: `at://did:plc:x/app.atmobb.forum.membership/m${i}`, value }));
+    repo.listRecords.mockImplementation(async () => ({ data: { records: [...records] } }));
+    repo.createRecord.mockImplementation(async ({ record }) => {
+      records.push({ uri: `at://did:plc:x/app.atmobb.forum.membership/m${records.length}`, value: record });
+      return { data: {} };
+    });
+    repo.putRecord.mockImplementation(async ({ rkey, record }) => {
+      const at = records.findIndex((r) => r.uri.endsWith(`/${rkey}`));
+      records[at] = { ...records[at], value: record };
+    });
+    return records;
+  }
+  const declaration = (fields: Record<string, unknown> = {}) =>
+    ({ $type: 'app.atmobb.forum.membership', forum, wearing: ['atmobb:arrival'], pinned: ['at://p'], createdAt: 'then', ...fields });
+
+  it('opens for the first time with a closed period from the beginning of time to now', async () => {
+    const records = fakePds([declaration()]);
+    await setGuestbookOpen('did:plc:gb-first', forum, true);
+    const value = records[0].value as Record<string, any>;
+    expect(value.guestbook).toBe(true);
+    expect(value.guestbookClosed).toEqual([{ from: BEGINNING, to: expect.any(String) }]);
+    expect(Date.parse(value.guestbookClosed[0].to)).toBeGreaterThan(Date.now() - 5000);
+    expect(value).toMatchObject({ wearing: ['atmobb:arrival'], pinned: ['at://p'], createdAt: 'then' });
+  });
+
+  it('closing starts an open period, and reopening ends it', async () => {
+    const records = fakePds([declaration({ guestbook: true, guestbookClosed: [{ from: BEGINNING, to: '2026-01-01T00:00:00.000Z' }] })]);
+    await setGuestbookOpen('did:plc:gb-cycle', forum, false);
+    let value = records[0].value as Record<string, any>;
+    expect(value).not.toHaveProperty('guestbook');
+    expect(value.guestbookClosed).toHaveLength(2);
+    expect(value.guestbookClosed[1]).toEqual({ from: expect.any(String) });
+    await setGuestbookOpen('did:plc:gb-cycle', forum, true);
+    value = records[0].value as Record<string, any>;
+    expect(value.guestbook).toBe(true);
+    expect(value.guestbookClosed).toHaveLength(2);
+    expect(value.guestbookClosed[1]).toEqual({ from: expect.any(String), to: expect.any(String) });
+    expect(value).toMatchObject({ wearing: ['atmobb:arrival'], pinned: ['at://p'] });
+  });
+
+  it('writes nothing when the guestbook is already in the asked state', async () => {
+    fakePds([declaration({ guestbook: true })]);
+    await setGuestbookOpen('did:plc:gb-noop', forum, true);
+    fakePds([]);
+    await setGuestbookOpen('did:plc:gb-noop', forum, false);
+    expect(repo.putRecord).not.toHaveBeenCalled();
+    expect(repo.createRecord).not.toHaveBeenCalled();
+  });
+
+  it('keeps only the newest twenty closed periods', async () => {
+    const periods = Array.from({ length: 20 }, (_, i) => ({ from: `2025-01-${String(i + 1).padStart(2, '0')}T00:00:00.000Z`, to: `2025-01-${String(i + 1).padStart(2, '0')}T01:00:00.000Z` }));
+    const records = fakePds([declaration({ guestbook: true, guestbookClosed: periods })]);
+    await setGuestbookOpen('did:plc:gb-cap', forum, false);
+    const closed = (records[0].value as Record<string, any>).guestbookClosed;
+    expect(closed).toHaveLength(20);
+    expect(closed[0]).toEqual(periods[1]);
+    expect(closed[19]).toEqual({ from: expect.any(String) });
+  });
+
+  it('hides, unhides, blocks and unblocks without duplicates, keeping wearing and pins', async () => {
+    const did = 'did:plc:gb-lists';
+    const records = fakePds([declaration()]);
+    const value = () => records[0].value as Record<string, any>;
+    await hideGuestbookEntry(did, forum, 'at://a/e/1');
+    await hideGuestbookEntry(did, forum, 'at://a/e/1');
+    await hideGuestbookEntry(did, forum, 'at://a/e/2');
+    expect(value().guestbookHidden).toEqual(['at://a/e/1', 'at://a/e/2']);
+    await blockGuestbookSigner(did, forum, 'did:plc:pest');
+    await blockGuestbookSigner(did, forum, 'did:plc:pest');
+    expect(value().guestbookBlocked).toEqual(['did:plc:pest']);
+    await unhideGuestbookEntry(did, forum, 'at://a/e/1');
+    await unhideGuestbookEntry(did, forum, 'at://a/e/2');
+    await unblockGuestbookSigner(did, forum, 'did:plc:pest');
+    expect(value()).not.toHaveProperty('guestbookHidden');
+    expect(value()).not.toHaveProperty('guestbookBlocked');
+    expect(value()).toMatchObject({ wearing: ['atmobb:arrival'], pinned: ['at://p'], createdAt: 'then' });
+    expect(await getGuestbookSettings(did, forum)).toEqual({ open: false, hidden: [], blocked: [] });
+  });
+
+  it('drops the oldest hidden entry past 500', async () => {
+    const hidden = Array.from({ length: 500 }, (_, i) => `at://a/e/${i}`);
+    const records = fakePds([declaration({ guestbookHidden: hidden })]);
+    await hideGuestbookEntry('did:plc:gb-cap500', forum, 'at://a/e/new');
+    const list = (records[0].value as Record<string, any>).guestbookHidden;
+    expect(list).toHaveLength(500);
+    expect(list[0]).toBe('at://a/e/1');
+    expect(list[499]).toBe('at://a/e/new');
+  });
+
+  it('reads the open flag and lists for the settings page', async () => {
+    fakePds([declaration({ guestbook: true, guestbookHidden: ['at://a/e/1', 7], guestbookBlocked: ['did:plc:pest'] })]);
+    expect(await getGuestbookSettings('did:plc:gb-read', forum)).toEqual({ open: true, hidden: ['at://a/e/1'], blocked: ['did:plc:pest'] });
+  });
+});
+
+describe('guestbook entries', () => {
+  const forum = 'did:plc:friends';
+  const signer = 'did:plc:signer';
+  const GB = 'app.atmobb.actor.guestbook';
+
+  it('writes the entry in the signer\'s repo naming the forum and owner', async () => {
+    repo.createRecord.mockResolvedValue({ data: { uri: `at://${signer}/${GB}/e1`, cid: 'bafy' } });
+    expect(await signGuestbook(signer, forum, 'did:plc:owner', 'hello')).toEqual({ uri: `at://${signer}/${GB}/e1`, cid: 'bafy' });
+    expect(repo.createRecord).toHaveBeenCalledWith({
+      repo: signer,
+      collection: GB,
+      record: { $type: GB, forum, subject: 'did:plc:owner', text: 'hello', createdAt: expect.any(String) },
+    });
+  });
+
+  it('deletes only the signer\'s own entry', async () => {
+    await expect(deleteGuestbookEntry(signer, `at://did:plc:else/${GB}/e1`)).rejects.toThrow();
+    await expect(deleteGuestbookEntry(signer, `at://${signer}/app.atmobb.discussion.reply/e1`)).rejects.toThrow();
+    expect(repo.deleteRecord).not.toHaveBeenCalled();
+    await deleteGuestbookEntry(signer, `at://${signer}/${GB}/e1`);
+    expect(repo.deleteRecord).toHaveBeenCalledWith({ repo: signer, collection: GB, rkey: 'e1' });
+  });
+
+  it('finds the signer\'s newest entry for this owner on this forum', async () => {
+    repo.listRecords.mockResolvedValue({ data: { records: [
+      { uri: 'a', value: { forum, subject: 'did:plc:other', createdAt: '2026-10-06T10:00:00.000Z' } },
+      { uri: 'b', value: { forum: 'did:plc:elsewhere', subject: 'did:plc:owner', createdAt: '2026-10-06T09:00:00.000Z' } },
+      { uri: 'c', value: { forum, subject: 'did:plc:owner', createdAt: '2026-10-05T08:00:00.000Z' } },
+      { uri: 'd', value: { forum, subject: 'did:plc:owner', createdAt: '2026-10-06T07:00:00.000Z' } },
+    ] } });
+    expect(await lastGuestbookEntryAt(signer, forum, 'did:plc:owner')).toBe('2026-10-06T07:00:00.000Z');
+    expect(repo.listRecords).toHaveBeenCalledWith(expect.objectContaining({ repo: signer, collection: GB }));
+    repo.listRecords.mockResolvedValue({ data: { records: [] } });
+    expect(await lastGuestbookEntryAt(signer, forum, 'did:plc:owner')).toBeNull();
   });
 });

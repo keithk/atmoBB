@@ -61,17 +61,17 @@ describe('resolvePanels', () => {
   const ids = (result: ReturnType<typeof resolvePanels>) => result.panels.map((panel) => panel.id);
 
   it('registers only the shipped panels, in default order', () => {
-    expect([...PROFILE_PANELS]).toEqual(['about', 'pinned', 'stamps', 'regulars', 'activity', 'bluesky', 'signature']);
+    expect([...PROFILE_PANELS]).toEqual(['about', 'pinned', 'stamps', 'regulars', 'activity', 'guestbook', 'bluesky', 'signature']);
   });
 
   it('keeps saved order, ignores unknown and unregistered ids, and appends missing panels', () => {
     const result = resolvePanels({
-      panels: [{ id: 'signature' }, { id: 'nonsense' }, { id: 'guestbook' }, { id: 'stamps' }, { id: 'signature' }],
+      panels: [{ id: 'signature' }, { id: 'nonsense' }, { id: 'guestbook' }, { id: 'stamps' }, { id: 'signature' }, { id: 'reactions' }],
       hasContent: allFilled,
       viewer: 'visitor',
       plain: false,
     });
-    expect(ids(result)).toEqual(['signature', 'stamps', 'about', 'pinned', 'regulars', 'activity', 'bluesky']);
+    expect(ids(result)).toEqual(['signature', 'guestbook', 'stamps', 'about', 'pinned', 'regulars', 'activity', 'bluesky']);
   });
 
   it('uses the default order for a missing or malformed list', () => {
@@ -93,6 +93,7 @@ describe('resolvePanels', () => {
       { id: 'stamps', state: 'prompt' },
       { id: 'regulars', state: 'prompt' },
       { id: 'activity', state: 'prompt' },
+      { id: 'guestbook', state: 'prompt' },
       { id: 'bluesky', state: 'prompt' },
       { id: 'signature', state: 'content' },
     ]);
@@ -110,11 +111,13 @@ describe('resolvePanels', () => {
     expect(visitor.chips).not.toContain('stamps');
   });
 
-  it('leaves About me out of a plain page even when it is filled, and keeps Regulars', () => {
+  it('leaves About me and the guestbook out of a plain page even when filled, and keeps Regulars', () => {
     for (const viewer of ['owner', 'visitor'] as const) {
       const result = resolvePanels({ panels: undefined, hasContent: allFilled, viewer, plain: true });
       expect(ids(result)).not.toContain('about');
       expect(result.chips).not.toContain('about');
+      expect(ids(result)).not.toContain('guestbook');
+      expect(result.chips).not.toContain('guestbook');
       expect(ids(result)).toContain('regulars');
     }
   });

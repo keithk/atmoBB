@@ -9,17 +9,17 @@ const NS = 'app.atmobb';
 const F = 'did:plc:forum';
 const OTHER_FORUM = 'did:plc:other-forum';
 
-/** The getGuestbook statement, run exactly as the script sends it. */
-function guestbookStatement(): string {
+/** The getGuestbook statements (entries, then the open flag and viewer block), run exactly as the script sends them. */
+function guestbookStatements(): [string, string] {
   const text = fs.readFileSync(new URL('./lua/getGuestbook.lua', import.meta.url), 'utf8');
-  const match = text.match(/db\.raw\(\[\[([\s\S]*?)\]\], \{/);
-  if (!match) throw new Error('Could not extract the getGuestbook statement from Lua source');
-  return match[1];
+  const matches = [...text.matchAll(/db\.raw\(\[\[([\s\S]*?)\]\], \{/g)];
+  if (matches.length !== 2) throw new Error('Could not extract the getGuestbook statements from Lua source');
+  return [matches[0][1], matches[1][1]];
 }
 
 run('guestbook SQL integration', () => {
   const sql = postgres(DATABASE_URL!, { max: 1 });
-  const statement = guestbookStatement();
+  const [statement, stateStatement] = guestbookStatements();
   // One clock for the whole suite; every time below is hours before it.
   const now = Date.now();
   const hoursAgo = (hours: number) => new Date(now - hours * 3_600_000).toISOString();
@@ -33,6 +33,12 @@ run('guestbook SQL integration', () => {
       opts.includeHidden ? 'true' : 'false', opts.limit ?? 20, opts.offset ?? 0,
     ]);
     return rows.map((row) => (row.hidden ? [row.uri, row.hidden] : row.uri));
+  };
+
+  /** What the script reports beside the entries: open, and whether `viewer` is blocked. */
+  const state = async (subject: string, viewer = '', forum = F) => {
+    const rows = await sql.unsafe(stateStatement, [forum, subject, viewer, `${NS}.forum.membership`]);
+    return { open: rows.length > 0, viewerBlocked: rows.length > 0 && rows[0].viewer_blocked === 'yes' };
   };
 
   let rkeys = 0;
@@ -200,6 +206,32 @@ run('guestbook SQL integration', () => {
     expect(await guestbook(owner)).toEqual([entry]);
     await sql`DELETE FROM happyview_records WHERE uri = ${entry}`;
     expect(await guestbook(owner)).toEqual([]);
+  });
+
+  it('returns each entry\'s cid for a strongRef', async () => {
+    const owner = 'did:plc:owner-cid';
+    await declare(owner, { guestbook: true });
+    const entry = await sign('did:plc:a', owner, 10);
+    const rows = await sql.unsafe(statement, [
+      F, owner, `${NS}.actor.guestbook`, `${NS}.forum.membership`, `${NS}.moderation.action`, 'false', 20, 0,
+    ]);
+    expect(rows.map((row) => [row.uri, row.cid])).toEqual([[entry, `c-${entry.split('/').pop()}`]]);
+  });
+
+  it('reports the guestbook open only while the newest declaration has it on and the owner is not banned', async () => {
+    const owner = 'did:plc:owner-state';
+    expect(await state(owner)).toEqual({ open: false, viewerBlocked: false });
+    await declare(owner, { guestbook: true, guestbookBlocked: ['did:plc:pest'] }, 500);
+    expect(await state(owner)).toEqual({ open: true, viewerBlocked: false });
+    expect(await state(owner, 'did:plc:pest')).toEqual({ open: true, viewerBlocked: true });
+    expect(await state(owner, 'did:plc:friend')).toEqual({ open: true, viewerBlocked: false });
+    expect((await state(owner, '', OTHER_FORUM)).open).toBe(false);
+    await declare(owner, { guestbookBlocked: ['did:plc:pest'] }, 400);
+    expect(await state(owner, 'did:plc:pest')).toEqual({ open: false, viewerBlocked: false });
+    await declare(owner, { guestbook: true }, 300);
+    expect(await state(owner)).toEqual({ open: true, viewerBlocked: false });
+    await ban(owner);
+    expect(await state(owner)).toEqual({ open: false, viewerBlocked: false });
   });
 
   it('pages newest first without repeats or gaps', async () => {

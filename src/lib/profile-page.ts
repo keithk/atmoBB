@@ -84,7 +84,7 @@ export type ProfilePanelId =
  * are ignored, so a panel ships by adding it here; the full default order is
  * about, pinned, stamps, regulars, activity, guestbook, bluesky, signature.
  */
-export const PROFILE_PANELS: readonly ProfilePanelId[] = ['about', 'pinned', 'stamps', 'regulars', 'activity', 'bluesky', 'signature'];
+export const PROFILE_PANELS: readonly ProfilePanelId[] = ['about', 'pinned', 'stamps', 'regulars', 'activity', 'guestbook', 'bluesky', 'signature'];
 
 /** Panels a banned owner's plain page leaves out. */
 const PLAIN_EXCLUDED: readonly ProfilePanelId[] = ['about', 'guestbook'];
@@ -132,4 +132,16 @@ export function resolvePanels({ panels, hasContent, viewer, plain }: {
     }
   }
   return { panels: resolved, chips: resolved.filter((panel) => panel.state !== 'stub').map((panel) => panel.id) };
+}
+
+/** A guestbook note's cap, the guestbook lexicon's maxGraphemes and maxLength (bytes). */
+export const GUESTBOOK_MAX_GRAPHEMES = 300;
+export const GUESTBOOK_MAX_BYTES = 3000;
+
+const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+/** Characters as a reader counts them: an emoji with a skin tone is one. */
+export function graphemeCount(text: string): number {
+  let n = 0;
+  for (const _ of graphemeSegmenter.segment(text)) n++;
+  return n;
 }

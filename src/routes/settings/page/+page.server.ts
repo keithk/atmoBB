@@ -1,8 +1,18 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { getActorProfile, getPinned, saveProfile, setPinned, type ProfileEdit } from '$lib/server/pds';
+import {
+  getActorProfile,
+  getGuestbookSettings,
+  getPinned,
+  saveProfile,
+  setGuestbookOpen,
+  setPinned,
+  unblockGuestbookSigner,
+  unhideGuestbookEntry,
+  type ProfileEdit,
+} from '$lib/server/pds';
 import { agentFor } from '$lib/server/atproto-oauth';
-import { FORUM_DID, getBoardIndex, getSpaceRecord, listSpaceRecords, spaceOfBoard } from '$lib/server/appview';
+import { FORUM_DID, getBoardIndex, getGuestbook, getSpaceRecord, listSpaceRecords, resolveHandle, spaceOfBoard } from '$lib/server/appview';
 import { parseAtUri } from '$lib/appview-paths';
 import { resolveBodyImages, attachImages } from '$lib/server/richtext';
 import { parseBBCode, type RichTextBlock } from '$lib/richtext/bbcode';
@@ -51,6 +61,8 @@ export interface PageValues {
   aboutDoc: ReturnType<typeof blocksToDoc>;
   panels: { id: string; hidden: boolean }[];
   pins: string[];
+  /** The guestbook belongs to this forum in either scope, like pins. */
+  guestbookOpen: boolean;
 }
 
 export interface Topic {
@@ -116,6 +128,36 @@ async function ownTopics(did: string, forum: string): Promise<{ topics: Topic[];
   return { topics, capped: capped || topics.length > TOPIC_LIMIT };
 }
 
+export interface GuestbookLists {
+  open: boolean;
+  blocked: { did: string; handle: string | null }[];
+  /** Every note the member hid; text is null when the index no longer lists it. */
+  hidden: { uri: string; author: string; handle: string | null; text: string | null }[];
+}
+
+/**
+ * The member's guestbook switch and lists, read live from their declaration.
+ * The note text comes from the index, which lists hidden notes only while
+ * the guestbook is open and only the newest page of them; the rest still
+ * show by signer so they can be unhidden.
+ */
+async function guestbookLists(did: string, forum: string): Promise<GuestbookLists> {
+  const [settings, read] = await Promise.all([
+    getGuestbookSettings(did, forum),
+    getGuestbook(forum, did, { includeHidden: true, limit: 50 }).catch(() => null),
+  ]);
+  const texts = new Map((read?.entries ?? []).map((entry) => [entry.uri, entry.text]));
+  const handle = (author: string) => resolveHandle(author).catch(() => null);
+  const [blocked, hidden] = await Promise.all([
+    Promise.all(settings.blocked.map(async (signer) => ({ did: signer, handle: await handle(signer) }))),
+    Promise.all(settings.hidden.map(async (uri) => {
+      const author = parseAtUri(uri)?.did ?? '';
+      return { uri, author, handle: author ? await handle(author) : null, text: texts.get(uri) ?? null };
+    })),
+  ]);
+  return { open: settings.open, blocked, hidden };
+}
+
 /** An About me draft reopened in the editor, keeping the posted image blobs. */
 function aboutDraftDoc(about: string, imagesRaw: string): ReturnType<typeof blocksToDoc> {
   let images: Record<string, { blob?: unknown; alt?: string }> = {};
@@ -150,6 +192,7 @@ function readForm(fd: FormData, scope: 'forum' | 'all'): PageValues {
     aboutDoc: aboutDraftDoc(about, aboutImages),
     panels: fd.getAll('panel').map(String).map((id) => ({ id, hidden: !shown.has(id) })),
     pins: fd.getAll('pin').map(String),
+    guestbookOpen: fd.has('guestbook'),
   };
 }
 
@@ -175,10 +218,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const did = locals.user.did;
   const forum = FORUM_DID();
   const scope = url.searchParams.get('scope') === 'all' ? 'all' : 'forum';
-  const [accountProfile, pinned, listed] = await Promise.all([
+  const [accountProfile, pinned, listed, guestbook] = await Promise.all([
     getActorProfile(did),
     getPinned(did, forum).catch(() => null),
     ownTopics(did, forum).catch(() => null),
+    guestbookLists(did, forum).catch(() => null),
   ]);
   const profile = scope === 'forum' ? profileForForum(accountProfile, forum) : accountProfile;
   const overridden = forumProfileOverride(accountProfile, forum)?.fields ?? [];
@@ -205,6 +249,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     aboutDoc,
     panels: panels.map((panel) => ({ id: panel.id, hidden: panel.state === 'stub' })),
     pins: pinned ?? [],
+    guestbookOpen: guestbook?.open ?? false,
   };
 
   // Pinned topics stay listed even when older than the newest TOPIC_LIMIT.
@@ -220,6 +265,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     topics,
     topicsCapped: listed?.capped ?? false,
     pinsReadable: pinned !== null && topics !== null,
+    guestbook,
     maxPins: MAX_PINS,
     topicLimit: TOPIC_LIMIT,
     bannerPatterns: BANNER_PATTERN_IDS,
@@ -227,9 +273,39 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   };
 };
 
-export type Errors = Partial<Record<'profileSkin' | 'banner' | 'headline' | 'currently' | 'about' | 'panels' | 'pins', string>>;
+export type Errors = Partial<Record<'profileSkin' | 'banner' | 'headline' | 'currently' | 'about' | 'panels' | 'pins' | 'guestbook', string>>;
+
+/** Back to the guestbook section, in the scope the member was editing. */
+function guestbookRedirect(url: URL): never {
+  redirect(303, `/settings/page?scope=${scopeOf(url) ?? 'forum'}#guestbook`);
+}
 
 export const actions: Actions = {
+  /** Let a blocked member's notes show again. Lives outside the main form, so it saves on its own. */
+  unblock: async ({ request, locals, url }) => {
+    if (!locals.user) return fail(401, { message: 'Log in to edit your profile page.' });
+    const signer = String((await request.formData()).get('did') ?? '');
+    if (!signer.startsWith('did:')) return fail(400, { message: 'Choose someone to unblock.' });
+    try {
+      await unblockGuestbookSigner(locals.user.did, FORUM_DID(), signer);
+    } catch {
+      return fail(502, { message: 'We couldn’t unblock them. Try again.' });
+    }
+    guestbookRedirect(url);
+  },
+
+  unhide: async ({ request, locals, url }) => {
+    if (!locals.user) return fail(401, { message: 'Log in to edit your profile page.' });
+    const uri = String((await request.formData()).get('uri') ?? '');
+    if (!uri.startsWith('at://')) return fail(400, { message: 'Choose a note to unhide.' });
+    try {
+      await unhideGuestbookEntry(locals.user.did, FORUM_DID(), uri);
+    } catch {
+      return fail(502, { message: 'We couldn’t unhide that note. Try again.' });
+    }
+    guestbookRedirect(url);
+  },
+
   /** Reorder a panel or pin without saving; every other posted field comes back as typed. */
   move: async ({ request, locals, url }) => {
     if (!locals.user) return fail(401, { message: 'Log in to edit your profile page.' });
@@ -244,7 +320,8 @@ export const actions: Actions = {
   /**
    * Everything is validated before anything is written. Pins go first because
    * only setPinned can find a topic that isn't the member's or isn't on this
-   * forum; if it refuses, the profile is left untouched too.
+   * forum; if it refuses, the profile is left untouched too. The guestbook
+   * switch is written next, only when it changed.
    */
   save: async ({ request, locals, url }) => {
     if (!locals.user) return fail(401, { message: 'Log in to edit your profile page.' });
@@ -290,6 +367,19 @@ export const actions: Actions = {
       } catch (e) {
         const message = e instanceof Error ? e.message : 'We couldn\'t save your pinned topics. Try again.';
         return fail(400, { message: 'Nothing was saved.', errors: { pins: message } satisfies Errors, values });
+      }
+    }
+
+    if (fd.has('guestbookShown')) {
+      try {
+        const current = await getGuestbookSettings(did, forum);
+        if (current.open !== values.guestbookOpen) await setGuestbookOpen(did, forum, values.guestbookOpen);
+      } catch {
+        return fail(502, {
+          message: 'The rest of the page wasn’t saved either. Try again.',
+          errors: { guestbook: 'We couldn’t save your guestbook setting.' } satisfies Errors,
+          values,
+        });
       }
     }
 
