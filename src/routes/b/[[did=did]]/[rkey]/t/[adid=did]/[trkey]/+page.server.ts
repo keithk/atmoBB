@@ -201,6 +201,7 @@ export const actions: Actions = {
     if (title !== undefined && !title) return fail(400, { message: 'Enter a title for your thread.' });
     if (parsedTags?.error) return fail(400, { message: parsedTags.error });
     if (title === undefined && !body) return fail(400, { message: 'Write something, or delete the post instead.' });
+    const { boardPath } = await threadRef(params);
     try {
       await updatePost(locals.user.did, target, {
         title,
@@ -210,7 +211,6 @@ export const actions: Actions = {
     } catch (e) {
       return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t save your changes. Try again.' });
     }
-    const { boardPath } = await threadRef(params);
     redirect(303, `${boardPath}/t/${params.adid}/${params.trkey}?saved=1#post-${target.split('/').pop()}`);
   },
 
