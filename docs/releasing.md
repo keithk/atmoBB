@@ -16,7 +16,9 @@ The image contains the built app under `/app/build`, production `node_modules`, 
 
 ## Version levels
 
-Semver, with meanings tied to what an operator has to do:
+Before 1.0, minor releases may include compatibility changes and manual operator steps. Patch releases remain app-only fixes. Release notes identify database migrations, required consent, and host configuration separately from the version number.
+
+From 1.0 onward, version levels follow these operator-facing rules:
 
 | level | contents | operator action |
 |---|---|---|
@@ -24,7 +26,7 @@ Semver, with meanings tied to what an operator has to do:
 | minor | new features; may add Lua queries, lexicons, or derived-table columns | `./atmobb upgrade`; the setup job applies the rest. Notes say if a backfill is needed. |
 | major | Happyview pin bump with migrations, removed or renamed env vars, anything needing manual steps | back up, read the migration section, `./atmobb upgrade-happyview` |
 
-A Happyview bump is always its own release, never folded into unrelated app changes, so the release with the risky step is easy to spot.
+A Happyview bump must be prominent in the release notes, with its backup and upgrade requirements. A pre-1.0 release may include other app features alongside that bump; the migration procedure still runs separately from application startup.
 
 Record schemas under `app.atmobb.*` are published network-wide and records already exist in members' repos. Schema changes to record types must stay backward compatible regardless of the atmobb version. Query and procedure lexicons are per instance and can change with any release.
 
