@@ -79,6 +79,22 @@
   </div>
 </div>
 
+<div class="atm-card panel">
+  <div class="atm-card__header"><span>Member profile pages</span></div>
+  <div class="atm-card__body">
+    <form class="skins" method="POST" action="?/setHideProfileSkins">
+      <label class="skins__check">
+        <input type="checkbox" name="hideProfileSkins" checked={data.hideProfileSkins} />
+        <span>
+          <b>Show member profile pages in this forum's colors</b>
+          <small>Ignore members' profile skins. Their banner patterns and headlines still show.</small>
+        </span>
+      </label>
+      <button class="atm-btn atm-btn--primary atm-btn--sm">save</button>
+    </form>
+  </div>
+</div>
+
 <style>
   .panel { max-width: 80ch; margin-bottom: var(--space-4); }
   .lede { margin: 0 0 var(--space-4); font: var(--type-ui); color: var(--forum-ink-soft); }
@@ -195,4 +211,11 @@
   .theme-option__text b { font-weight: var(--w-semibold); }
   .theme-option__text small { color: var(--forum-ink-soft); }
   .theme-form .atm-btn { justify-self: start; }
+
+  .skins { display: grid; gap: var(--space-3); justify-items: start; }
+  .skins__check { display: flex; gap: var(--space-2); align-items: flex-start; font: var(--type-ui); }
+  .skins__check input { margin-top: 4px; }
+  .skins__check span { display: grid; gap: 2px; }
+  .skins__check b { font-weight: var(--w-semibold); }
+  .skins__check small { color: var(--forum-ink-soft); }
 </style>

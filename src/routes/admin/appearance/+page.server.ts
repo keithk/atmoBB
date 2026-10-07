@@ -10,6 +10,7 @@ export const load: PageServerLoad = async () => {
   return {
     theme: normalizeTheme(profile.theme),
     forumName: profile.name,
+    hideProfileSkins: profile.hideProfileSkins === true,
   };
 };
 
@@ -31,5 +32,21 @@ export const actions: Actions = {
       return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t save the theme. Try again.' });
     }
     await profileRedirect('/admin/appearance?saved=theme', profile);
+  },
+  setHideProfileSkins: async ({ request, locals }) => {
+    if (!(await adminActor(locals))) return fail(403, { message: 'Only admins can make this change.' });
+    const form = await request.formData();
+    const hide = form.get('hideProfileSkins') === 'on';
+    let profile: ForumProfile;
+    try {
+      profile = await currentProfile();
+      // Omit the default so old and new records read the same way.
+      if (hide) profile.hideProfileSkins = true;
+      else delete profile.hideProfileSkins;
+      await saveProfile(profile);
+    } catch (e) {
+      return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t save the profile skins setting. Try again.' });
+    }
+    await profileRedirect('/admin/appearance?saved=profile-skins', profile);
   },
 };
