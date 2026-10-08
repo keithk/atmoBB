@@ -4,6 +4,13 @@ Versions follow [Semantic Versioning](https://semver.org) with the operator's
 workload in mind; [Releasing](docs/releasing.md) spells out what each level
 means. Every entry names the Happyview release it was tested against.
 
+## 0.7.1
+
+HappyView 2.16.0, unchanged from 0.7.0. No backfill is required.
+
+- Fixed typed and pasted @mentions in the rich text editor being split by automatic link formatting. Mentions remain whole and unlinked while ordinary links and other formatting are preserved.
+- Fixed editor mentions showing initials instead of a member's Bluesky avatar when no forum avatar is set. Forum avatars still take precedence, and failed avatar images fall back to initials.
+
 ## 0.7.0
 
 HappyView 2.16.0, unchanged from 0.6.0. No backfill is required.
