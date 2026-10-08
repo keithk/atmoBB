@@ -4,6 +4,7 @@ import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { MentionDecorations } from './mention-decorations';
 import { pasteMarkdown } from './markdown-paste';
+import { loadProfileCard, type ProfileCard } from '$lib/profile-card';
 
 vi.mock('$lib/profile-card', () => ({
   loadProfileCard: vi.fn(async (handle: string) => ({
@@ -14,6 +15,7 @@ vi.mock('$lib/profile-card', () => ({
 let editor: Editor;
 afterEach(() => {
   editor?.destroy();
+  vi.mocked(loadProfileCard).mockReset();
   vi.useRealTimers();
 });
 
@@ -29,7 +31,7 @@ it('keeps pasted handles whole and resolves their avatar without toggling link',
   expect(editor.view.dom.querySelector('a')).toBeNull();
   expect(editor.view.dom.querySelector('.atm-editor-mention')?.textContent).toBe('@erlend.sh');
   await vi.advanceTimersByTimeAsync(300);
-  expect(editor.view.dom.querySelector('.atm-editor-mention__avatar')?.textContent).toBe('E');
+  expect(editor.view.dom.querySelector('.atm-editor-mention__avatar img')?.getAttribute('src')).toBe('/avatar/did%3Aplc%3Atest');
 });
 
 it('removes a domain link when @ is typed before it, retaining other links and formatting', () => {
@@ -55,4 +57,30 @@ it('does not require a resolvable domain to keep @-prefixed text unlinked', () =
   editor.commands.insertContent('<p>(@<a href="https://example.com">someone</a>)</p>');
   expect(editor.view.dom.querySelector('a')).toBeNull();
   expect(editor.getText()).toBe('(@someone)');
+});
+
+it('prefers forum avatars, loads Bluesky avatars without a forum blob, and uses initials on image failure', async () => {
+  vi.useFakeTimers();
+  vi.mocked(loadProfileCard).mockImplementation(async (handle) => ({
+    did: `did:plc:${handle.split('.')[0]}`,
+    displayName: handle === 'forum.test' ? 'Forum member' : 'Bluesky member',
+    profile: handle === 'forum.test' ? { avatar: { ref: { $link: 'bafyavatar' } } } : null,
+  } as ProfileCard));
+  editor = new Editor({
+    element: document.createElement('div'),
+    extensions: [StarterKit, MentionDecorations],
+    content: '<p>@forum.test @bluesky.test</p>',
+  });
+  await vi.advanceTimersByTimeAsync(250);
+
+  const avatars = editor.view.dom.querySelectorAll('.atm-editor-mention__avatar');
+  expect(avatars).toHaveLength(2);
+  expect(avatars[0].querySelector('img')?.getAttribute('src')).toBe('/avatar/did%3Aplc%3Aforum/bafyavatar');
+  const bsky = avatars[1].querySelector('img')!;
+  expect(bsky.getAttribute('src')).toBe('/avatar/did%3Aplc%3Abluesky');
+  expect(avatars[1].textContent).toBe('');
+  bsky.dispatchEvent(new Event('error'));
+  expect(avatars[1].querySelector('img')).toBeNull();
+  expect(avatars[1].textContent).toBe('B');
+  expect(editor.getText()).toBe('@forum.test @bluesky.test');
 });

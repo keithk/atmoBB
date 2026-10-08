@@ -24,15 +24,13 @@ function avatar(card: ProfileCard): HTMLElement {
   el.setAttribute('aria-hidden', 'true');
   el.title = card.displayName;
 
-  const src = profileImagePath(card.did, card.profile?.avatar);
-  if (src) {
-    const image = document.createElement('img');
-    image.src = src;
-    image.alt = '';
-    el.append(image);
-  } else {
+  const image = document.createElement('img');
+  image.src = profileImagePath(card.did, card.profile?.avatar) ?? `/avatar/${encodeURIComponent(card.did)}`;
+  image.alt = '';
+  image.onerror = () => {
     el.textContent = card.displayName.trim().charAt(0).toUpperCase() || '@';
-  }
+  };
+  el.append(image);
   return el;
 }
 
