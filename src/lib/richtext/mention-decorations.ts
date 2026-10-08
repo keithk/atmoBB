@@ -76,6 +76,23 @@ export const MentionDecorations = Extension.create({
     return [
       new Plugin<DecorationSet>({
         key: mentionDecorationsKey,
+        appendTransaction: (transactions, _oldState, state) => {
+          if (!transactions.some((transaction) => transaction.docChanged)) return;
+          const link = state.schema.marks.link;
+          if (!link) return;
+          const tr = state.tr;
+          state.doc.descendants((node, pos) => {
+            if (!node.isTextblock || node.type.name === 'codeBlock') return;
+            // Read across mark boundaries: autolinking can split @ from its handle.
+            const text = node.textBetween(0, node.content.size, undefined, ' ');
+            for (const match of text.matchAll(/(^|[\s(\[])@\S+/g)) {
+              const from = pos + 1 + match.index + match[1].length;
+              const to = pos + 1 + match.index + match[0].length;
+              if (state.doc.rangeHasMark(from, to, link)) tr.removeMark(from, to, link);
+            }
+          });
+          if (tr.steps.length) return tr.setMeta('preventAutolink', true);
+        },
         state: {
           init: (_config, state) => buildDecorations(state, cards),
           apply: (transaction, decorations, _oldState, newState) =>
