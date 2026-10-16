@@ -4,6 +4,13 @@ Versions follow [Semantic Versioning](https://semver.org) with the operator's
 workload in mind; [Releasing](docs/releasing.md) spells out what each level
 means. Every entry names the Happyview release it was tested against.
 
+## 0.7.2
+
+HappyView 2.16.0, unchanged from 0.7.1. No backfill is required.
+
+- Fixed the userpic maker forcing portrait and landscape photos into a cropped square with no way to zoom out. The zoom slider now reaches a full-image fit, and a Fit image button keeps the whole photo visible. Empty space uses the selected border and background color.
+- Fixed public notification delivery through the live atmo.pub relay by sending actor DIDs in the format the deployed relay accepts.
+
 ## 0.7.1
 
 HappyView 2.16.0, unchanged from 0.7.0. No backfill is required.
