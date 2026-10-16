@@ -112,9 +112,10 @@ export const load: PageServerLoad = async ({ params, url, parent, locals, isData
     ? threadPath(uri, board?.name, page.thread.value.title)
     : threadPath(uri);
   // Old links and stale title slugs remain resolvable, then converge on the
-  // current readable URL. Keep query state and post fragments intact.
+  // current readable URL. Keep query state; fragments are browser-only and
+  // must not be read from SvelteKit's server URL.
   if (page.thread && board?.name && url.pathname !== canonicalPath) {
-    redirect(308, `${canonicalPath}${url.search}${url.hash}`);
+    redirect(308, `${canonicalPath}${url.search}`);
   }
   await resolveBodyImages([
     ...(page.thread ? [{ author: page.thread.author, body: page.thread.value.body }] : []),
