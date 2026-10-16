@@ -4,6 +4,15 @@ Versions follow [Semantic Versioning](https://semver.org) with the operator's
 workload in mind; [Releasing](docs/releasing.md) spells out what each level
 means. Every entry names the Happyview release it was tested against.
 
+## 0.8.0
+
+HappyView 2.16.0, unchanged from 0.7.2. No schema migration, new OAuth consent, or backfill is required for this release.
+
+- Fixed legacy and stale-slug thread links returning a server error when redirecting to their readable URL. Redirects preserve query parameters without reading browser-only URL fragments on the server.
+- Added an opt-in host watchdog for stalled Jetstream ingestion. It checks cursor progress every minute, gives HappyView five minutes of startup grace, and requires five minutes of observed inactivity before restarting only that instance's running HappyView container. It skips maintenance and upgrades, records the restart attempt before acting, and prevents repeated recovery attempts until live cursor progress confirms recovery. Restarts remain at least fifteen minutes apart.
+- Operator setup: after upgrading, run `sudo ./atmobb watchdog install` from the updated release bundle directory to enable the timer for that instance. New and existing forums remain opted out until this command runs. Use `sudo ./atmobb watchdog status` and the instance's `atmobb-ingestion-watchdog.service` journal to inspect failures. No email or webhook alerts are configured automatically.
+- The watchdog does not reset cursors, upgrade images, or backfill missed records. After an ingestion outage, operators should still assess whether history is missing and run the documented backfill when needed.
+
 ## 0.7.2
 
 HappyView 2.16.0, unchanged from 0.7.1. No backfill is required.
