@@ -3,12 +3,19 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { P256Keypair } from '@atproto/crypto';
+import { Lexicons, type LexiconDoc } from '@atproto/lexicon';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { composeNotification } from '$lib/notify/compose';
+import sendLexicon from './fixtures/pub.atmo.notify.send.json';
 import { RELAY_AUD, RELAY_DID, relaySigningKey, requestPermission, resetRelayForTests, send, setFetchForTests } from './relay';
 import { resetSenderForTests } from './sender';
 
 const relayBase = 'https://relay.atmo.pub/xrpc';
 const decodePart = (part: string) => JSON.parse(Buffer.from(part, 'base64url').toString('utf8'));
+
+// Snapshot of https://relay.atmo.pub/lexicons/pub.atmo.notify.send.
+// The deployed relay accepts actor strings, not the actor objects in upstream main.
+const relayLexicons = new Lexicons([sendLexicon as LexiconDoc]);
 
 let dataDir: string;
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -39,6 +46,29 @@ afterEach(async () => {
 
 describe('send', () => {
   const input = { recipient: 'did:plc:alice', title: 'New reply', body: 'Bob replied', uri: 'https://forum.test/t/1', threadKey: 't1' };
+
+  it.each(['thread-reply', 'post-reply', 'mention', 'board-watch'] as const)(
+    'serializes a public %s notification that the deployed relay accepts',
+    async (kind) => {
+      const notification = composeNotification({
+        kind,
+        authorDid: 'did:plc:bob',
+        authorHandle: 'bob.test',
+        threadTitle: 'Hello',
+        boardName: 'General',
+        threadUri: 'at://did:plc:alice/app.atmobb.discussion.thread/t1',
+        ownText: 'A new post',
+        permalink: 'https://forum.test/t/1',
+        membersOnly: false,
+      });
+      fetchMock.mockResolvedValueOnce(Response.json({ id: 'n1', delivered: 1 }));
+      await send({ recipient: input.recipient, ...notification });
+
+      const payload = JSON.parse(lastRequest().init.body as string);
+      expect(() => relayLexicons.assertValidXrpcInput(sendLexicon.id, payload)).not.toThrow();
+      expect(payload.actors).toEqual(['did:plc:bob']);
+    },
+  );
 
   it('posts the alert to the relay as the forum with a sender JWT', async () => {
     fetchMock.mockResolvedValueOnce(Response.json({ id: 'n1', delivered: 0 }));

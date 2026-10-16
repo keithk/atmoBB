@@ -128,7 +128,7 @@ describe('relay outcomes', () => {
       `https://forum.test/t/general/hello/${alice}/t1/p/${bob}/r1?via=notify`,
     );
     expect(toAlice.threadKey).toBe(thread);
-    expect(toAlice.actors).toEqual([{ did: bob, handle: 'bob.test' }]);
+    expect(toAlice.actors).toEqual([bob]);
   });
 
   it('marks entries undelivered on 429 and leaves status alone', async () => {
