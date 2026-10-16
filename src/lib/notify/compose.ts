@@ -33,7 +33,7 @@ export interface NotificationBody {
   category: RecipientKind;
   categoryDescription: string;
   threadKey?: string;
-  actors?: { did: string; handle: string }[];
+  actors?: string[];
 }
 
 const CATEGORY_DESCRIPTION: Record<RecipientKind, string> = {
@@ -97,7 +97,7 @@ export function composeNotification(input: ComposeInput): NotificationBody {
     uri: withMarker(input.permalink),
     ...category,
     threadKey: input.threadUri,
-    actors: [{ did: input.authorDid, handle: input.authorHandle }],
+    actors: [input.authorDid],
   };
 }
 

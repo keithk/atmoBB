@@ -26,7 +26,7 @@ describe('composeNotification on a public board', () => {
     expect(out.categoryDescription).toBeTruthy();
     expect(out.uri).toBe(`https://forum.test/t/${alice}/t1?via=notify#post-t1`);
     expect(out.threadKey).toBe(thread);
-    expect(out.actors).toEqual([{ did: 'did:plc:bob', handle: 'bob.test' }]);
+    expect(out.actors).toEqual(['did:plc:bob']);
   });
 
   it('appends the marker to a link that already has a query and no fragment', () => {
