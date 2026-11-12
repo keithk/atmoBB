@@ -4,12 +4,15 @@
   let {
     title,
     heading,
+    crumb,
     description,
     children,
   }: {
     title?: string;
     /** Rich heading content, for a title that is more than text. */
     heading?: Snippet;
+    /** Where this page sits, for pages that carry their own h1 in the content. */
+    crumb?: Snippet;
     description?: string;
     /** View switches and page actions, shown after the title. */
     children?: Snippet;
@@ -18,7 +21,11 @@
 
 <!-- The page's heading and controls, pinned to the top of the content panel. -->
 <header class="atm-pagebar">
-  <h1 class="atm-pagebar__title">{#if heading}{@render heading()}{:else}{title}{/if}</h1>
+  {#if crumb}
+    <div class="atm-pagebar__title">{@render crumb()}</div>
+  {:else}
+    <h1 class="atm-pagebar__title">{#if heading}{@render heading()}{:else}{title}{/if}</h1>
+  {/if}
   {#if description}<p class="atm-pagebar__desc">{description}</p>{/if}
   {#if children}<div class="atm-pagebar__actions">{@render children()}</div>{/if}
 </header>
@@ -32,14 +39,13 @@
     display: flex;
     align-items: center;
     gap: var(--space-3) var(--space-4);
-    min-height: var(--header-h);
+    min-height: 46px;
     /* Span the panel edge to edge, over its padding. */
-    margin: calc(-1 * var(--main-pad-y)) calc(-1 * var(--main-pad-x)) var(--space-4);
-    padding: var(--space-2) var(--main-pad-x);
+    margin: calc(-1 * var(--main-pad-y)) calc(-1 * var(--main-pad-x)) var(--space-3);
+    padding: 6px var(--main-pad-x);
     background: var(--forum-cat-bg);
     border-bottom: var(--border-solid) solid var(--forum-cat-edge);
     border-radius: calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0;
-    box-shadow: inset 0 1px 0 var(--forum-bevel);
   }
   .atm-pagebar__title {
     display: flex;
@@ -48,9 +54,12 @@
     gap: var(--space-2);
     max-width: 100%;
     margin: 0;
-    font: var(--w-bold) var(--text-lg)/1.2 var(--font-display);
+    font: var(--w-bold) var(--text-md)/1.2 var(--font-display);
+    letter-spacing: var(--ls-tight);
     color: var(--forum-cat-ink);
   }
+  .atm-pagebar__title :global(a) { color: inherit; }
+  .atm-pagebar__title :global(a:hover) { color: var(--forum-link); text-decoration: none; }
   .atm-pagebar__desc {
     flex: 1;
     min-width: 0;

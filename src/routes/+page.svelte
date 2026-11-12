@@ -27,8 +27,8 @@
   const showBoards = $derived(activeView === 'categories');
 </script>
 
-{#snippet topicList(threads: LatestThreads['threads'], emptyMessage: string)}
-  <TopicList {threads} {emptyMessage} accountDid={data.user?.did} forumDid={data.forumDid} showBoard embedded />
+{#snippet topicList(threads: LatestThreads['threads'], emptyMessage: string, flush = false)}
+  <TopicList {threads} {emptyMessage} {flush} accountDid={data.user?.did} forumDid={data.forumDid} showBoard />
 {/snippet}
 
 {#if data.appviewDown}
@@ -55,11 +55,8 @@
     <LoginCard />
   {:else if !data.user && data.homepage.welcome === 'compact'}
     <section class="atm-card atm-card--edge atm-home-welcome atm-home-welcome--compact compact-welcome">
-      <div>
-        <div class="atm-eyebrow">Welcome</div>
-        <p>Join the conversation with your atmosphere account.</p>
-      </div>
-      <a class="atm-btn atm-btn--primary" href="/login">log in</a>
+      <p>Join the conversation with your atmosphere account.</p>
+      <a class="atm-btn atm-btn--primary atm-btn--sm" href="/login">log in</a>
     </section>
   {/if}
 
@@ -75,14 +72,13 @@
   {/if}
 
   {#if data.homeView === 'hot'}
-    <section class="atm-panel atm-home-hot" id="hot">
-      <div class="atm-board-section">Hot among recent topics</div>
-      <p class="atm-home-section-note">Ranked by replies among the 100 most recently active visible topics.</p>
-      {@render topicList(data.hot, 'No recent topics have replies yet.')}
+    <section class="atm-home-hot" id="hot">
+      <p class="atm-home-note">Ranked by replies among the 100 most recently active visible topics.</p>
+      {@render topicList(data.hot, 'No recent topics have replies yet.', true)}
     </section>
   {:else if data.homeView === 'latest' || (!data.homeView && data.homepage.layout === 'latest')}
     <section class="atm-home-latest" id="latest">
-      {@render topicList(data.latest, 'No activity yet. Start the first thread.')}
+      {@render topicList(data.latest, 'No activity yet. Start the first thread.', true)}
       {#if data.latest.length}<p class="atm-more"><a href="/latest">older activity →</a></p>{/if}
     </section>
   {:else if !data.homeView && data.homepage.layout === 'boards' && data.hot.length}
@@ -245,7 +241,7 @@
   .stack {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-5);
+    gap: var(--space-3);
   }
 
   .compact-welcome {
@@ -253,11 +249,12 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
-    padding: var(--space-4) var(--space-5);
+    padding: var(--space-2) var(--space-4);
   }
-  .compact-welcome p { margin: var(--space-1) 0 0; color: var(--forum-ink-soft); font: var(--type-ui); }
+  .compact-welcome p { margin: 0; color: var(--forum-ink-soft); font: var(--type-ui); }
 
   .atm-home-intro { max-width: 70ch; }
+  .atm-home-note { margin: 0 0 var(--space-2); color: var(--forum-ink-faint); font: var(--type-meta); }
 
   /* A view switcher, not site navigation: a segmented control in the same
      material as the pager and webring nav. */
@@ -298,7 +295,6 @@
     background: var(--forum-accent);
     color: var(--forum-accent-ink);
     border-right-color: color-mix(in oklch, var(--forum-accent) 78%, #000);
-    box-shadow: var(--shadow-well);
   }
   @media (prefers-reduced-motion: reduce) {
     .atm-home-nav__item { transition: none; }
@@ -311,24 +307,9 @@
     border-bottom: var(--border-hair) solid var(--forum-line);
     font: var(--type-meta);
   }
-  /* Topic metadata and generous row padding already separate homepage items.
-     One rule below each section label is enough structure for the feed. */
-  .atm-home-featured,
-  .atm-home-latest,
-  .atm-home-hot {
-    border: none;
-    border-radius: 0;
-    box-shadow: none;
-  }
-  .atm-home-featured :global(.atm-threadrow),
-  .atm-home-latest :global(.atm-threadrow),
-  .atm-home-hot :global(.atm-threadrow) {
-    border-bottom: none;
-    box-shadow: none;
-  }
-  .atm-home-main { display: grid; gap: var(--space-5); min-width: 0; }
+  .atm-home-main { display: grid; gap: var(--space-3); min-width: 0; }
   .atm-home-main--split { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
-  .atm-home-categories { display: grid; gap: var(--space-5); min-width: 0; }
+  .atm-home-categories { display: grid; gap: var(--space-3); min-width: 0; }
   .atm-home-main--split .atm-boardrow {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: var(--space-3);

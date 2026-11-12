@@ -111,7 +111,7 @@
   boardName={data.board?.name}
   tagHref={(tag) => `${basePath}?tag=${encodeURIComponent(tag)}`}
   actions={staff ? modActions : undefined}
-  embedded
+  flush
   emptyMessage={filtered ? 'No topics match these filters.' : 'No threads yet. Start the first one.'}
 />
 

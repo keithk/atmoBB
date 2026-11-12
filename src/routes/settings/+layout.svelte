@@ -1,7 +1,10 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import PageBar from '$lib/components/PageBar.svelte';
   let { children } = $props();
 </script>
+
+<PageBar title="Settings" />
 
 <div class="settings">
   <nav class="atm-tabs" aria-label="Settings">

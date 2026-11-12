@@ -1,6 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import Card from '$lib/components/Card.svelte';
+  import PageBar from '$lib/components/PageBar.svelte';
   import NotifyDelivery from '$lib/components/NotifyDelivery.svelte';
   import { relTime } from '$lib/reltime';
   import type { PageData } from './$types';
@@ -16,15 +17,15 @@
 
 <svelte:head><title>Notifications</title></svelte:head>
 
+<PageBar title="Notifications">
+  {#if unread > 0}
+    <form method="POST" action="?/readAll" use:enhance>
+      <button class="atm-btn atm-btn--secondary atm-btn--sm">Mark all read</button>
+    </form>
+  {/if}
+</PageBar>
+
 <div class="wrap">
-  <header class="head">
-    <h1 class="title">Notifications</h1>
-    {#if unread > 0}
-      <form method="POST" action="?/readAll" use:enhance>
-        <button class="atm-btn atm-btn--secondary atm-btn--sm">Mark all read</button>
-      </form>
-    {/if}
-  </header>
   <NotifyDelivery
     status={data.status}
     canSend={data.canSend}
@@ -66,9 +67,7 @@
 
 <style>
   @layer atmobb {
-  .wrap { display: flex; flex-direction: column; gap: var(--space-4); }
-  .head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
-  .title { font: var(--type-page-title); color: var(--forum-ink); margin: 0; }
+  .wrap { display: flex; flex-direction: column; gap: var(--space-3); }
   .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
   .atm-notification {
     display: flex;

@@ -1,6 +1,9 @@
 <script lang="ts">
+  import PageBar from '$lib/components/PageBar.svelte';
   import AtmosphereExplainer from '$lib/components/AtmosphereExplainer.svelte';
 </script>
+
+<PageBar title="Register" />
 
 <div class="register">
   <h2 class="atm-headline register__headline">
@@ -25,7 +28,7 @@
 
 <style>
   @layer atmobb {
-  .register { max-width: 560px; }
+  .register { max-width: 560px; margin-inline: auto; padding-block: var(--space-4); }
   .register__headline { margin-bottom: var(--space-4); }
   .register__body {
     font: var(--type-body);

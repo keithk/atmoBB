@@ -139,15 +139,15 @@
   .atm-sidebar-nav { min-height: 0; }
   ul { list-style: none; margin: 0; padding: 0; }
   .atm-sidebar-nav__primary {
-    padding-bottom: var(--space-3);
+    padding-bottom: var(--space-2);
     border-bottom: var(--border-hair) solid var(--forum-line);
   }
   .atm-sidebar-nav__link {
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    min-height: 38px;
-    padding: 7px var(--space-3);
+    min-height: 30px;
+    padding: 4px var(--space-3);
     border-radius: var(--radius-md);
     color: var(--forum-ink);
     font: var(--w-semibold) var(--text-sm)/1.25 var(--font-body);
@@ -176,8 +176,8 @@
     text-align: center;
     font-variant-numeric: tabular-nums;
   }
-  .atm-sidebar-nav__boards { padding-top: var(--space-3); }
-  .atm-sidebar-nav__group + .atm-sidebar-nav__group { margin-top: var(--space-3); }
+  .atm-sidebar-nav__boards { padding-top: var(--space-2); }
+  .atm-sidebar-nav__group + .atm-sidebar-nav__group { margin-top: var(--space-2); }
   .atm-sidebar-nav__heading {
     margin: 0;
     padding: 5px var(--space-3);

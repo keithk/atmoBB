@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageBar from '$lib/components/PageBar.svelte';
   import TopicList from '$lib/components/TopicList.svelte';
   import { threadFilterHref } from '$lib/thread-filters';
 
@@ -6,6 +7,8 @@
 
   const filtered = $derived(!!(data.filters.q || data.filters.board || data.filters.tag));
 </script>
+
+<PageBar title={filtered ? 'Matching topics' : 'Latest'} />
 
 <div class="atm-topic-filters">
   <form class="atm-topic-filters__form" method="GET">
@@ -31,11 +34,10 @@
 
 <TopicList
   threads={data.threads}
- 
   accountDid={data.user?.did}
   forumDid={data.forumDid}
   showBoard
-  sectionTitle={filtered ? 'Matching topics' : 'Latest activity'}
+  flush
   emptyMessage={filtered ? 'No topics match these filters.' : 'No activity yet. Start the first thread.'}
 />
 

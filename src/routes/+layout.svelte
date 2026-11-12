@@ -1,6 +1,7 @@
 <script lang="ts">
   import '$lib/styles/index.css';
   import { page } from '$app/state';
+  import { onNavigate } from '$app/navigation';
   import Logo from '$lib/components/Logo.svelte';
   import Avatar from '$lib/components/Avatar.svelte';
   import ForumSidebarNav from '$lib/components/ForumSidebarNav.svelte';
@@ -10,6 +11,17 @@
   import { themeColor, themeCss } from '$lib/themes';
 
   let { data, children } = $props();
+
+  // Cross-fade the content panel between pages where the browser supports it.
+  onNavigate((navigation) => {
+    if (!document.startViewTransition) return;
+    return new Promise((resolve) => {
+      document.startViewTransition(async () => {
+        resolve();
+        await navigation.complete;
+      });
+    });
+  });
 
   const sidebarGroups = $derived(groupBoards(data.sidebarBoards, data.sidebarCategories));
   let sidebarDrawer = $state<ForumSidebarDrawer>();
@@ -225,6 +237,13 @@
 
 <style>
   @layer atmobb {
+  /* Page changes fade the content panel only; the sidebar holds still. */
+  :global(::view-transition-old(root)), :global(::view-transition-new(root)) { animation-duration: 140ms; }
+  .atm-sidebar { view-transition-name: atm-sidebar; }
+  @media (prefers-reduced-motion: reduce) {
+    :global(::view-transition-group(*)), :global(::view-transition-old(*)), :global(::view-transition-new(*)) { animation: none !important; }
+  }
+
   /* Sidebar-first shell: navigation in a fixed column, content in one panel. */
   .atm-page {
     display: grid;
@@ -245,8 +264,8 @@
     flex: none;
     align-items: center;
     gap: var(--space-2);
-    min-height: 60px;
-    padding: var(--space-3) var(--space-4);
+    min-height: 48px;
+    padding: var(--space-2) var(--space-4);
     text-decoration: none;
   }
   .atm-sidebar__brand:hover { text-decoration: none; }
@@ -287,8 +306,8 @@
     padding: var(--space-2) var(--space-2) var(--space-8) 0;
   }
   .atm-main {
-    --main-pad-x: var(--space-5);
-    --main-pad-y: var(--space-5);
+    --main-pad-x: var(--space-4);
+    --main-pad-y: var(--space-4);
     min-width: 0;
     padding: var(--main-pad-y) var(--main-pad-x);
     background: var(--forum-surface);
@@ -352,7 +371,7 @@
     flex-direction: column;
     align-items: center;
     gap: var(--space-3);
-    padding: var(--space-6) 0 var(--space-2);
+    padding: var(--space-4) 0 var(--space-2);
   }
   .atm-webring {
     display: flex;
@@ -422,7 +441,7 @@
     .atm-sidebar { display: none; }
     .atm-mobilebar { display: flex; }
     .atm-shell { max-width: none; padding: 0 0 var(--space-8); }
-    .atm-main { --main-pad-x: var(--space-3); --main-pad-y: var(--space-4); border-width: 0 0 var(--border-hair); border-radius: 0; box-shadow: none; }
+    .atm-main { --main-pad-x: var(--space-3); --main-pad-y: var(--space-3); border-width: 0 0 var(--border-hair); border-radius: 0; box-shadow: none; }
   }
   @media (max-width: 480px) {
     .atm-webring { flex-direction: column; gap: var(--space-2); }

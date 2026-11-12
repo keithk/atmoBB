@@ -13,8 +13,7 @@
     accountDid,
     forumDid,
     showBoard = false,
-    embedded = false,
-    sectionTitle,
+    flush = false,
     emptyMessage = 'No topics found.',
     boardName,
     tagHref = (tag: string) => `/latest?tag=${encodeURIComponent(tag)}`,
@@ -24,8 +23,8 @@
     accountDid?: string | null;
     forumDid?: string;
     showBoard?: boolean;
-    embedded?: boolean;
-    sectionTitle?: string;
+    /** The list is the page's own content, not inside a framed panel: titles line up with the page edge. */
+    flush?: boolean;
     emptyMessage?: string;
     /** Board name for thread links when the list is one board's and rows don't carry it. */
     boardName?: string;
@@ -37,8 +36,7 @@
   const href = (thread: Topic) => threadPath(thread.uri, thread.boardName ?? boardName, thread.title);
 </script>
 
-<div class="atm-topic-list" class:atm-topic-list--boards={showBoard} class:atm-panel={!embedded}>
-  {#if sectionTitle}<div class="atm-board-section">{sectionTitle}</div>{/if}
+<div class="atm-topic-list" class:atm-topic-list--boards={showBoard} class:atm-topic-list--flush={flush}>
   {#each threads as thread}
     <article class="atm-threadrow atm-threadrow--compact" class:atm-threadrow--pinned={thread.pinned} class:atm-threadrow--locked={thread.locked}>
       <div class="atm-threadrow__status">
@@ -97,13 +95,29 @@
 
     /* One line per topic: read dot, title, who's in it, where, how much, when. */
     .atm-threadrow--compact {
-      grid-template-columns: 10px minmax(0, 1fr) auto 84px 96px;
+      position: relative;
+      grid-template-columns: minmax(0, 1fr) auto 84px 96px;
       gap: var(--space-3);
-      padding: 9px var(--space-3);
+      padding: 7px var(--space-4);
       box-shadow: none;
     }
-    .atm-topic-list--boards .atm-threadrow--compact { grid-template-columns: 10px minmax(0, 1fr) auto 180px 84px 96px; }
-    .atm-threadrow__status { display: flex; justify-content: center; }
+    /* A list with no frame of its own lines its titles up with the page's
+       content edge; the hover tint and read dot use the gutter. */
+    .atm-topic-list--flush .atm-threadrow--compact {
+      margin-inline: calc(-1 * var(--space-4));
+      border-bottom: none;
+    }
+    /* The hairline stops at the content edge even though the hover tint doesn't. */
+    .atm-topic-list--flush .atm-threadrow--compact:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      inset: auto var(--space-4) 0;
+      border-bottom: var(--border-hair) solid var(--forum-line);
+    }
+    .atm-topic-list--boards .atm-threadrow--compact { grid-template-columns: minmax(0, 1fr) auto 180px 84px 96px; }
+    /* The read dot sits in the row's left padding, so titles line up whether
+       or not there is one. */
+    .atm-threadrow__status { position: absolute; left: 4px; top: 50%; display: flex; transform: translateY(-50%); }
     .atm-threadrow__status :global(.atm-topic-read-status__dot) { background: var(--forum-accent); }
     .atm-threadrow__status :global(.atm-topic-read-status--read .atm-topic-read-status__dot) { opacity: 0; }
     /* The pinned and locked tints carry their own edge stripe. */
@@ -132,7 +146,10 @@
     @media (hover: none) { .atm-threadrow__actions { opacity: 1; } }
     .atm-threadrow__via { flex: none; font: var(--type-meta); color: var(--forum-ink-faint); white-space: nowrap; }
     .atm-threadrow--compact .atm-topic-participants { padding-left: 6px; }
-    .atm-threadrow--compact .atm-topic-participants :global(a) { display: flex; margin-left: -6px; }
+    .atm-threadrow--compact .atm-topic-participants :global(a) { display: flex; margin-left: -6px; transition: margin-left var(--dur) var(--ease); }
+    /* The pile fans out when you point at a row, so you can see who's in it. */
+    .atm-threadrow--compact:hover .atm-topic-participants :global(a) { margin-left: 2px; }
+    @media (prefers-reduced-motion: reduce) { .atm-threadrow--compact .atm-topic-participants :global(a) { transition: none; } }
     .atm-threadrow--compact .atm-topic-participants :global(a:last-child) { margin-left: 0; }
     .atm-threadrow--compact .atm-topic-participants :global(.atm-avatar) { margin-left: 0; }
     .atm-threadrow__board { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--type-meta); }
@@ -149,8 +166,8 @@
 
     @container (max-width: 820px) {
       .atm-threadrow--compact,
-      .atm-topic-list--boards .atm-threadrow--compact { grid-template-columns: 10px minmax(0, 1fr) 150px 96px; }
-      .atm-topic-list:not(.atm-topic-list--boards) .atm-threadrow--compact { grid-template-columns: 10px minmax(0, 1fr) 84px 96px; }
+      .atm-topic-list--boards .atm-threadrow--compact { grid-template-columns: minmax(0, 1fr) 150px 96px; }
+      .atm-topic-list:not(.atm-topic-list--boards) .atm-threadrow--compact { grid-template-columns: minmax(0, 1fr) 84px 96px; }
       .atm-threadrow--compact .atm-topic-participants,
       .atm-threadrow--compact .atm-topic-tags,
       .atm-topic-list--boards .atm-threadrow__nums { display: none; }
@@ -158,7 +175,7 @@
     @container (max-width: 520px) {
       .atm-threadrow--compact,
       .atm-topic-list--boards .atm-threadrow--compact,
-      .atm-topic-list:not(.atm-topic-list--boards) .atm-threadrow--compact { grid-template-columns: 10px minmax(0, 1fr) auto; }
+      .atm-topic-list:not(.atm-topic-list--boards) .atm-threadrow--compact { grid-template-columns: minmax(0, 1fr) auto; }
       .atm-threadrow__board, .atm-threadrow--compact .atm-threadrow__nums, .atm-threadrow__via { display: none; }
       .atm-threadrow__main { flex-wrap: wrap; }
       .atm-threadrow--compact .atm-threadrow__title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
