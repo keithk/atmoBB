@@ -32,50 +32,50 @@
   const href = (thread: ThreadSummary) => threadPath(thread.uri, thread.boardName, thread.title);
 </script>
 
-<div class="atm-topic-list" class:atm-panel={!embedded}>
+<div class="atm-topic-list" class:atm-topic-list--boards={showBoard} class:atm-panel={!embedded}>
   {#if sectionTitle}<div class="atm-board-section">{sectionTitle}</div>{/if}
   {#each threads as thread}
-    <article class="atm-threadrow">
+    <article class="atm-threadrow atm-threadrow--compact">
+      <div class="atm-threadrow__status">
+        {#if forumDid}
+          <TopicReadStatus
+            compact
+            {accountDid}
+            {forumDid}
+            threadUri={thread.uri}
+            canonicalHref={href(thread)}
+            createdAt={thread.createdAt}
+            lastActivity={thread.lastActivity}
+            replyCount={thread.replyCount}
+            lastPostBy={thread.replyCount === 0 ? thread.author : thread.lastReplyBy}
+          />
+        {/if}
+      </div>
       <div class="atm-threadrow__main">
-        <div class="atm-threadrow__title"><a href={href(thread)}>{thread.title}</a></div>
+        <a class="atm-threadrow__title" href={href(thread)}>{thread.title}</a>
         {#if thread.tags?.length}
-          <div class="atm-topic-tags" aria-label="Tags">
+          <span class="atm-topic-tags" aria-label="Tags">
             {#each thread.tags as tag}
               <a class="atm-topic-tag" href="/latest?tag={encodeURIComponent(tag)}">{tag}</a>
             {/each}
-          </div>
+          </span>
         {/if}
-        <div class="atm-threadrow__sub">
-          <span>by <MemberLink did={thread.author}>{name(thread)}</MemberLink></span>
-          {#if showBoard && thread.boardName}
-            <span>in <a href={boardPath(thread.board, forumDid ?? '')}><BoardLabel uri={thread.board} name={thread.boardName} /></a></span>
-          {/if}
-          {#if thread.origin}
-            <span>· via <span class="atm-via">{thread.origin.name ?? thread.origin.did.slice(8, 24)}</span></span>
-          {/if}
-          {#if forumDid}
-            <TopicReadStatus
-              {accountDid}
-              {forumDid}
-              threadUri={thread.uri}
-              canonicalHref={href(thread)}
-              createdAt={thread.createdAt}
-              lastActivity={thread.lastActivity}
-              replyCount={thread.replyCount}
-              lastPostBy={thread.replyCount === 0 ? thread.author : thread.lastReplyBy}
-            />
-          {/if}
-        </div>
+        {#if thread.origin}
+          <span class="atm-threadrow__via">via <span class="atm-via">{thread.origin.name ?? thread.origin.did.slice(8, 24)}</span></span>
+        {/if}
       </div>
-      <div class="atm-threadrow__nums"><b>{thread.replyCount}</b> {thread.replyCount === 1 ? 'reply' : 'replies'}</div>
-      <div class="atm-threadrow__last">
-        <div class="atm-topic-participants" aria-label="Participants">
-          {#each thread.participants?.length ? thread.participants : [{ did: thread.author, profile: thread.authorProfile }] as participant}
-            <Avatar seed={participant.did} profile={participant.profile} size={30} alt="" />
-          {/each}
-        </div>
-        <span>{relTime(thread.lastActivity)}</span>
+      <div class="atm-topic-participants" aria-label="Participants">
+        {#each thread.participants?.length ? thread.participants : [{ did: thread.author, profile: thread.authorProfile }] as participant}
+          <MemberLink did={participant.did}><Avatar seed={participant.did} profile={participant.profile} size={24} alt="" /></MemberLink>
+        {/each}
       </div>
+      {#if showBoard}
+        <div class="atm-threadrow__board">
+          {#if thread.boardName}<a href={boardPath(thread.board, forumDid ?? '')}><BoardLabel uri={thread.board} name={thread.boardName} /></a>{/if}
+        </div>
+      {/if}
+      <div class="atm-threadrow__nums">{thread.replyCount} {thread.replyCount === 1 ? 'reply' : 'replies'}</div>
+      <time class="atm-threadrow__age" datetime={thread.lastActivity}>{relTime(thread.lastActivity)}</time>
     </article>
   {:else}
     <p class="atm-empty">{emptyMessage}</p>
@@ -86,13 +86,64 @@
   @layer atmobb {
     .atm-topic-list { container-type: inline-size; }
     .atm-topic-list > :last-child { border-bottom: none; }
-    .atm-threadrow { grid-template-columns: minmax(0, 1fr) 70px 200px; }
-    .atm-threadrow__main { min-width: 0; overflow-wrap: anywhere; }
-    .atm-threadrow__last { flex-wrap: wrap; }
-    @container (max-width: 650px) {
-      .atm-threadrow { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
-      .atm-threadrow__nums { display: block; grid-column: 1; text-align: left; }
-      .atm-threadrow__last { display: flex; grid-column: 1; }
+
+    /* One line per topic: read dot, title, who's in it, where, how much, when. */
+    .atm-threadrow--compact {
+      grid-template-columns: 10px minmax(0, 1fr) auto 84px 96px;
+      gap: var(--space-3);
+      padding: 9px var(--space-3);
+      box-shadow: none;
+    }
+    .atm-topic-list--boards .atm-threadrow--compact { grid-template-columns: 10px minmax(0, 1fr) auto 180px 84px 96px; }
+    .atm-threadrow__status { display: flex; justify-content: center; }
+    .atm-threadrow__status :global(.atm-topic-read-status__dot) { background: var(--forum-accent); }
+    .atm-threadrow__status :global(.atm-topic-read-status--read .atm-topic-read-status__dot) { opacity: 0; }
+    .atm-threadrow__main { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+    .atm-threadrow--compact .atm-threadrow__title {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font: var(--w-regular) var(--text-base)/1.35 var(--font-display);
+      color: var(--forum-ink);
+      text-decoration: none;
+    }
+    .atm-threadrow--compact .atm-threadrow__title:hover { color: var(--forum-link); }
+    /* Weight carries read state: bold until you've caught up, quiet after. */
+    .atm-threadrow--compact:has(:global(.atm-topic-read-status--new), :global(.atm-topic-read-status--unread)) .atm-threadrow__title { font-weight: var(--w-bold); }
+    .atm-threadrow--compact:has(:global(.atm-topic-read-status--read)) .atm-threadrow__title { color: var(--forum-ink-soft); }
+    .atm-threadrow--compact .atm-topic-tags { flex: none; flex-wrap: nowrap; margin-top: 0; }
+    .atm-threadrow__via { flex: none; font: var(--type-meta); color: var(--forum-ink-faint); white-space: nowrap; }
+    .atm-threadrow--compact .atm-topic-participants { padding-left: 6px; }
+    .atm-threadrow--compact .atm-topic-participants :global(a) { display: flex; margin-left: -6px; }
+    .atm-threadrow--compact .atm-topic-participants :global(a:last-child) { margin-left: 0; }
+    .atm-threadrow--compact .atm-topic-participants :global(.atm-avatar) { margin-left: 0; }
+    .atm-threadrow__board { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--type-meta); }
+    .atm-threadrow__board a { color: var(--forum-ink-soft); }
+    .atm-threadrow__board a:hover { color: var(--forum-link); }
+    .atm-threadrow--compact .atm-threadrow__nums,
+    .atm-threadrow__age {
+      font: var(--w-regular) var(--text-xs)/1.3 var(--font-mono);
+      color: var(--forum-ink-faint);
+      text-align: right;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    @container (max-width: 820px) {
+      .atm-threadrow--compact,
+      .atm-topic-list--boards .atm-threadrow--compact { grid-template-columns: 10px minmax(0, 1fr) 150px 96px; }
+      .atm-topic-list:not(.atm-topic-list--boards) .atm-threadrow--compact { grid-template-columns: 10px minmax(0, 1fr) 84px 96px; }
+      .atm-threadrow--compact .atm-topic-participants,
+      .atm-threadrow--compact .atm-topic-tags,
+      .atm-topic-list--boards .atm-threadrow__nums { display: none; }
+    }
+    @container (max-width: 520px) {
+      .atm-threadrow--compact,
+      .atm-topic-list--boards .atm-threadrow--compact,
+      .atm-topic-list:not(.atm-topic-list--boards) .atm-threadrow--compact { grid-template-columns: 10px minmax(0, 1fr) auto; }
+      .atm-threadrow__board, .atm-threadrow--compact .atm-threadrow__nums, .atm-threadrow__via { display: none; }
+      .atm-threadrow--compact .atm-threadrow__title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
     }
   }
 </style>
