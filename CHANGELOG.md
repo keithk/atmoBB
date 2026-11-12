@@ -4,6 +4,15 @@ Versions follow [Semantic Versioning](https://semver.org) with the operator's
 workload in mind; [Releasing](docs/releasing.md) spells out what each level
 means. Every entry names the Happyview release it was tested against.
 
+## 0.9.3
+
+HappyView 2.16.0, unchanged from 0.9.2. No backfill is required.
+
+- Browsers that reach a forum in maintenance get a maintenance page instead of one line of text. It checks every five seconds and returns the visitor to the address they asked for when the forum reopens, and it has a small waiting room thread to react in while they wait. Other clients and the Happyview hostname still get the plain-text `503`.
+- Host configuration: the page lives in the bundle's `Caddyfile`, which upgrades do not replace. To get it on an existing installation, copy the new `Caddyfile` into the bundle, or re-render it into host Caddy as described under [HTTPS and network exposure](docs/self-hosting.md#https-and-network-exposure). It needs Caddy 2.7 or later.
+- atmo.pub alerts with long titles or excerpts are no longer refused by the relay. Titles and excerpts are cut to the relay's limits in UTF-8 bytes, on whole characters.
+- When the relay refuses an alert, its status and reason are stored on the member's notification entry, so the cause survives a redeploy.
+
 ## 0.9.2
 
 HappyView 2.16.0, unchanged from 0.9.1. No backfill is required.
