@@ -2,6 +2,7 @@
   import { invalidateAll } from '$app/navigation';
   import { enhance } from '$app/forms';
   import PostMeta from '$lib/components/PostMeta.svelte';
+  import PageBar from '$lib/components/PageBar.svelte';
   import BoardLabel from '$lib/components/BoardLabel.svelte';
   import RichText from '$lib/components/RichText.svelte';
   import PostContent from '$lib/components/PostContent.svelte';
@@ -67,17 +68,21 @@
 </script>
 
 {#if data.thread}
-  <nav class="atm-crumbs atm-crumbs--spaced">
-    <a href="/">{data.forum.name}</a><span class="atm-crumbs__sep">›</span>
-    <a href={data.boardPath}><BoardLabel uri={data.thread.value.board} name={data.boardName} /></a><span class="atm-crumbs__sep">›</span>
-    <span class="atm-crumbs__current">{data.thread.value.title}</span>
-    <span class="atm-chip" title="members-only board">🔒 members-only</span>
-  </nav>
-  {#if data.thread.value.tags?.length}
-    <div class="atm-topic-tags atm-topic-tags--thread" aria-label="Tags">
-      {#each data.thread.value.tags as tag}<a class="atm-topic-tag" href="{data.boardPath}?tag={encodeURIComponent(tag)}">{tag}</a>{/each}
-    </div>
-  {/if}
+  {@const board = data.thread.value.board}
+  <PageBar>
+    {#snippet crumb()}
+      <a href={data.boardPath}><BoardLabel uri={board} name={data.boardName} /></a>
+      <span class="atm-chip" title="members-only board">🔒 members-only</span>
+    {/snippet}
+  </PageBar>
+  <header class="atm-thread-head">
+    {#if data.thread.value.tags?.length}
+      <div class="atm-topic-tags" aria-label="Tags">
+        {#each data.thread.value.tags as tag}<a class="atm-topic-tag" href="{data.boardPath}?tag={encodeURIComponent(tag)}">{tag}</a>{/each}
+      </div>
+    {/if}
+    <h1 class="atm-thread-head__title">{data.thread.value.title}</h1>
+  </header>
 
   {#if saved}
     <p class="atm-ok">Saved.</p>

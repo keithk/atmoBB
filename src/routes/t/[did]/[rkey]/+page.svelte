@@ -2,6 +2,7 @@
   import { boardPath, postAnchor, postAuthor, postPath, replyPath } from '$lib/appview-paths';
   import { invalidateAll } from '$app/navigation';
   import { enhance } from '$app/forms';
+  import PageBar from '$lib/components/PageBar.svelte';
   import PostMeta from '$lib/components/PostMeta.svelte';
   import BoardLabel from '$lib/components/BoardLabel.svelte';
   import RichText from '$lib/components/RichText.svelte';
@@ -60,6 +61,9 @@
   // Answering a specific post (from ?to= / ?quote=); cleared once it's sent.
   let replyingTo = $state(data.replyTo);
   let composerDoc = $state(data.composerDoc);
+  // Once a reply is under way the composer pins to the bottom of the window,
+  // so the post being answered stays in view.
+  let docked = $state(false);
   let composerEditor = $state<{ focus: () => void; insertContent: (content: import('@tiptap/core').JSONContent[]) => void }>();
   const startReply = (post: { uri: string; cid?: string; author: string; body?: RichTextBlock[] }, quote = false) => {
     if (!post.cid) return;
@@ -74,7 +78,22 @@
     } else {
       composerEditor?.focus();
     }
-    document.getElementById('reply')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    docked = true;
+  };
+  const openReply = (event: Event) => {
+    event.preventDefault();
+    docked = true;
+    composerEditor?.focus();
+  };
+  let copied = $state('');
+  const copyLink = async (uri: string, href: string) => {
+    try {
+      await navigator.clipboard.writeText(new URL(href, location.href).href);
+      copied = uri;
+      setTimeout(() => { if (copied === uri) copied = ''; }, 1500);
+    } catch {
+      // Clipboard access can be refused; the timestamp beside it is the same link.
+    }
   };
   const clearReplyTo = () => {
     replyingTo = null;
@@ -135,18 +154,27 @@
     <p class="atm-notice">Thread not found. It may not have synced yet.</p>
   {/if}
 {:else}
-  <nav class="atm-crumbs atm-crumbs--spaced">
-    <a href="/">{data.forum.name}</a><span class="atm-crumbs__sep">›</span>
-    <a href={boardPath(data.thread.value.board, data.forumDid)}><BoardLabel uri={data.thread.value.board} name={data.boardName} /></a><span class="atm-crumbs__sep">›</span>
-    <span class="atm-crumbs__current">{data.thread.value.title}</span>
-    {#if data.thread.pinned}<span class="atm-chip" title="pinned to the top of its board">📌 pinned</span>{/if}
-    {#if data.thread.locked}<span class="atm-chip" title="no new replies">🔒 locked</span>{/if}
-  </nav>
-  {#if data.thread.value.tags?.length}
-    <div class="atm-topic-tags atm-topic-tags--thread" aria-label="Tags">
-      {#each data.thread.value.tags as tag}<a class="atm-topic-tag" href="/latest?tag={encodeURIComponent(tag)}">{tag}</a>{/each}
-    </div>
-  {/if}
+  {@const board = data.thread.value.board}
+  <PageBar>
+    {#snippet crumb()}
+      <a href={boardPath(board, data.forumDid)}><BoardLabel uri={board} name={data.boardName} /></a>
+    {/snippet}
+    {#if composerOpen}<a class="atm-btn atm-btn--primary atm-btn--sm" href="#reply" onclick={openReply}>↩ reply</a>{/if}
+  </PageBar>
+  <header class="atm-thread-head">
+    {#if data.thread.value.tags?.length}
+      <div class="atm-topic-tags" aria-label="Tags">
+        {#each data.thread.value.tags as tag}<a class="atm-topic-tag" href="/latest?tag={encodeURIComponent(tag)}">{tag}</a>{/each}
+      </div>
+    {/if}
+    <h1 class="atm-thread-head__title">{data.thread.value.title}</h1>
+    {#if data.thread.pinned || data.thread.locked}
+      <div class="atm-thread-head__flags">
+        {#if data.thread.pinned}<span class="atm-chip" title="pinned to the top of its board">📌 pinned</span>{/if}
+        {#if data.thread.locked}<span class="atm-chip" title="no new replies">🔒 locked</span>{/if}
+      </div>
+    {/if}
+  </header>
 
   {#if data.thread.hidden}
     <p class="atm-notice">This thread is hidden. Only staff can see it.</p>
@@ -220,9 +248,8 @@
       <div class="atm-post__meta">
         <a class="atm-post__permalink" href="#{postAnchor(data.thread.uri)}">{when(data.thread.value.createdAt)}</a>
         {@render edited(data.thread.value.editedAt)}
-        {@render own(data.thread.uri, data.thread.author)}
-        {@render respond(data.thread)}
       </div>
+      {@render tools(data.thread, `#${postAnchor(data.thread.uri)}`)}
       {#if data.editing?.uri === data.thread.uri}
         <PostEditor uri={data.thread.uri} title={data.thread.value.title} tags={data.editing.tags} doc={data.editing.doc} cancelHref="{basePath}#{postAnchor(data.thread.uri)}" message={form?.message} />
       {:else}
@@ -272,9 +299,8 @@
               · <a href={postPath(data.threadUri, reply.value.parent.uri, data.threadPath)}>↩ replying to @{shortName(postAuthor(reply.value.parent.uri))}</a>
             </span>
           {/if}
-          {@render own(reply.uri, reply.author)}
-          {@render respond(reply)}
         </div>
+        {@render tools(reply, replyPath(data.threadUri, reply.uri, data.threadPath))}
         {#if data.editing?.uri === reply.uri}
           <PostEditor uri={reply.uri} doc={data.editing.doc} cancelHref="{basePath}{page.url.search.replace(/[?&]edit=[^&]*/, '')}#{postAnchor(reply.uri)}" message={form?.message} />
         {:else}
@@ -296,10 +322,13 @@
   {#if data.thread.locked && !composerOpen}
     <p class="atm-notice">🔒 This thread is locked. No new replies.</p>
   {:else if composerOpen}
-    <section class="atm-card atm-card--edge atm-composer atm-composer--reply" id="reply">
+    <section class="atm-card atm-card--edge atm-composer atm-composer--reply" class:atm-composer--docked={docked} id="reply" onfocusin={() => (docked = true)}>
       <div class="atm-card__header atm-composer__header">
         <h3 class="atm-composer__title">Reply</h3>
         {#if user}<span class="atm-composer__identity">posting as @{user.handle}</span>{/if}
+        {#if docked}
+          <button type="button" class="atm-post__action" onclick={() => (docked = false)} title="Send the reply box back to the end of the thread" aria-label="Send the reply box back to the end of the thread">×</button>
+        {/if}
       </div>
       <div class="atm-card__body atm-composer__body">
         {#if data.thread.locked}
@@ -330,6 +359,7 @@
               posting = false;
               if (result.type === 'success') {
                 composerKey++;
+                docked = false;
                 replyingTo = null;
                 composerDoc = null;
               }
@@ -360,29 +390,25 @@
   {/key}
 {/if}
 
-{#snippet respond(post: { uri: string; cid?: string; author: string; value: { body?: RichTextBlock[] } })}
-  {#if user && mayPost}
-    <span class="atm-post__own">
+{#snippet tools(post: { uri: string; cid?: string; author: string; value: { body?: RichTextBlock[] } }, href: string)}
+  <div class="atm-post__tools" role="toolbar" aria-label="Post actions">
+    {#if user && mayPost}
       <button type="button" class="atm-post__action" onclick={() => startReply({ ...post, body: post.value.body })} title="Answer this post">reply</button>
       <button type="button" class="atm-post__action" onclick={() => startReply({ ...post, body: post.value.body }, true)} title="Answer this post, quoting it">quote</button>
-    </span>
-  {/if}
+    {/if}
+    <button type="button" class="atm-post__action" onclick={() => copyLink(post.uri, href)}>{copied === post.uri ? 'copied' : 'copy link'}</button>
+    {#if user?.did === post.author && data.editing?.uri !== post.uri}
+      <button type="button" class="atm-post__action" onclick={() => location.assign(editHref(post.uri))}>edit</button>
+      <form method="POST" action="?/delete" onsubmit={confirmDelete}>
+        <input type="hidden" name="uri" value={post.uri} />
+        <button class="atm-post__action">delete</button>
+      </form>
+    {/if}
+  </div>
 {/snippet}
 
 {#snippet edited(at?: string)}
   {#if at}<span class="atm-post__edited" title={when(at)}>· edited</span>{/if}
-{/snippet}
-
-{#snippet own(uri: string, author: string)}
-  {#if user?.did === author && data.editing?.uri !== uri}
-    <span class="atm-post__own">
-      <button type="button" class="atm-post__action" onclick={() => location.assign(editHref(uri))}>edit</button>
-      <form method="POST" action="?/delete" onsubmit={confirmDelete}>
-        <input type="hidden" name="uri" value={uri} />
-        <button class="atm-post__action">delete</button>
-      </form>
-    </span>
-  {/if}
 {/snippet}
 
 {#snippet pager()}
@@ -409,3 +435,35 @@
     {/if}
   </div>
 {/snippet}
+
+<style>
+  @layer atmobb {
+  /* Post actions wait in the corner until the post is hovered or focused. */
+  :global(.atm-post__body) { position: relative; }
+  .atm-post__tools {
+    position: absolute;
+    top: var(--space-2);
+    right: var(--space-3);
+    display: flex;
+    gap: var(--space-1);
+    opacity: 0;
+    transition: opacity var(--dur-fast) var(--ease);
+  }
+  .atm-post__tools form { display: contents; }
+  :global(.atm-post):hover .atm-post__tools,
+  :global(.atm-post):focus-within .atm-post__tools { opacity: 1; }
+  @media (hover: none), (max-width: 720px) {
+    .atm-post__tools { position: static; opacity: 1; flex-wrap: wrap; margin-bottom: var(--space-2); }
+  }
+  @media (prefers-reduced-motion: reduce) { .atm-post__tools { transition: none; } }
+
+  .atm-composer--docked {
+    position: sticky;
+    bottom: var(--space-2);
+    z-index: 6;
+    max-height: min(70vh, 560px);
+    overflow-y: auto;
+    box-shadow: var(--shadow-lg);
+  }
+  }
+</style>
