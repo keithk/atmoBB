@@ -4,6 +4,15 @@ Versions follow [Semantic Versioning](https://semver.org) with the operator's
 workload in mind; [Releasing](docs/releasing.md) spells out what each level
 means. Every entry names the Happyview release it was tested against.
 
+## 0.9.2
+
+HappyView 2.16.0, unchanged from 0.9.1. No backfill is required.
+
+- The page panel is the only framed surface. Posts, the reply box, the new thread form, profile sections, home page sections, and Admin and Settings sections no longer sit in their own bordered cards. Posts are separated by a hairline, and a member's profile fills the panel edge to edge.
+- Section headings are small labels on their list's top edge, in the same style as the sidebar's group headings. The accent rule now belongs to the page bar alone.
+- The reply box shows "posting as" beside the post button, and its pinned state has an unpin button.
+- Custom CSS: `.atm-card` and `.atm-panel` no longer draw a border, fill or shadow, and `.atm-board-section` is a text label.
+
 ## 0.9.1
 
 HappyView 2.16.0, unchanged from 0.9.0. No backfill is required.
