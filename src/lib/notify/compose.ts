@@ -75,7 +75,27 @@ function publicTitle({ kind, authorHandle, threadTitle, boardName }: ComposeInpu
   }
 }
 
-const cut = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
+// The relay's lexicon counts maxLength in UTF-8 bytes, so a limit measured in
+// characters lets accented or emoji-heavy text through at two to four times
+// the size and the relay refuses the whole alert. Cut on whole graphemes so an
+// emoji or accented letter is never split in half.
+const utf8 = new TextEncoder();
+const byteLength = (s: string) => utf8.encode(s).length;
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+function cut(s: string, maxBytes: number, ellipsis = ''): string {
+  if (byteLength(s) <= maxBytes) return s;
+  const budget = maxBytes - byteLength(ellipsis);
+  let out = '';
+  let used = 0;
+  for (const { segment } of graphemes.segment(s)) {
+    const size = byteLength(segment);
+    if (used + size > budget) break;
+    out += segment;
+    used += size;
+  }
+  return out + ellipsis;
+}
 
 /** `via=notify` as a query parameter, kept ahead of any fragment. */
 function withMarker(url: string): string {
@@ -92,8 +112,8 @@ export function composeNotification(input: ComposeInput): NotificationBody {
     return { ...MEMBERS_ONLY[kind], uri: input.openUrl, ...category };
   }
   return {
-    title: cut(publicTitle(input), TITLE_MAX),
-    body: input.ownText.slice(0, BODY_MAX),
+    title: cut(publicTitle(input), TITLE_MAX, '…'),
+    body: cut(input.ownText, BODY_MAX),
     uri: withMarker(input.permalink),
     ...category,
     threadKey: input.threadUri,

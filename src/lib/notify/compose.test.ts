@@ -3,6 +3,7 @@ import { composeNotification, ownPlainText } from './compose';
 import type { RichTextBlock } from '$lib/richtext/bbcode';
 
 const NS = 'app.atmobb.richtext';
+const bytes = (s: string) => new TextEncoder().encode(s).length;
 const alice = 'did:plc:alice';
 const thread = `at://${alice}/app.atmobb.discussion.thread/t1`;
 
@@ -44,10 +45,20 @@ describe('composeNotification on a public board', () => {
     expect(new Set(categories).size).toBe(4);
   });
 
-  it('cuts a long title to 100 characters with an ellipsis', () => {
+  it('cuts a long title to 100 bytes with an ellipsis', () => {
     const out = composeNotification({ ...base, kind: 'thread-reply', threadTitle: 't'.repeat(200) });
-    expect(out.title).toHaveLength(100);
+    expect(bytes(out.title)).toBe(100);
     expect(out.title.endsWith('…')).toBe(true);
+  });
+
+  it('measures the body in bytes and never splits an emoji or accented letter', () => {
+    const out = composeNotification({ ...base, kind: 'thread-reply', ownText: 'é'.repeat(300) + '👋🏽'.repeat(100) });
+    expect(bytes(out.body)).toBeLessThanOrEqual(500);
+    expect(out.body).toBe('é'.repeat(250));
+    // 5 + 61 × 8 bytes leaves room for the wave but not its skin-tone modifier.
+    const waves = composeNotification({ ...base, kind: 'thread-reply', ownText: 'abcde' + '👋🏽'.repeat(100) });
+    expect(bytes(waves.body)).toBeLessThanOrEqual(500);
+    expect(waves.body).toBe('abcde' + '👋🏽'.repeat(61));
   });
 });
 

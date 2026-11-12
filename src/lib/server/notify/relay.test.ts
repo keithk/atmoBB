@@ -70,6 +70,25 @@ describe('send', () => {
     },
   );
 
+  it('serializes a long accented, emoji-heavy post within the relay byte limits', async () => {
+    const notification = composeNotification({
+      kind: 'thread-reply',
+      authorDid: 'did:plc:bob',
+      authorHandle: 'bob.test',
+      threadTitle: 'Café ☕ '.repeat(30),
+      boardName: 'General',
+      threadUri: 'at://did:plc:alice/app.atmobb.discussion.thread/t1',
+      ownText: 'Ça marche 👋🏽 '.repeat(100),
+      permalink: 'https://forum.test/t/1',
+      membersOnly: false,
+    });
+    fetchMock.mockResolvedValueOnce(Response.json({ id: 'n1', delivered: 1 }));
+    await send({ recipient: input.recipient, ...notification });
+
+    const payload = JSON.parse(lastRequest().init.body as string);
+    expect(() => relayLexicons.assertValidXrpcInput(sendLexicon.id, payload)).not.toThrow();
+  });
+
   it('posts the alert to the relay as the forum with a sender JWT', async () => {
     fetchMock.mockResolvedValueOnce(Response.json({ id: 'n1', delivered: 0 }));
     const result = await send(input);
