@@ -171,6 +171,57 @@ HAPPYVIEW_API_KEY="$(sudo sed -n 's/^HAPPYVIEW_API_KEY=//p' /etc/atmobb/happyvie
 
 It backfills every record collection, waits for completion, then rebuilds counts and moderation state. It can use substantial CPU, network, and database capacity. Permissioned-space content is local and is never backfilled from the network.
 
+### Monitor ingestion (optional, release bundles)
+
+HappyView can keep answering HTTP requests while its Jetstream connection is
+stuck. The host watchdog checks the persisted Jetstream cursor, not the time of
+the last forum post or the HTTP health endpoint.
+
+Enable it explicitly for this instance:
+
+```sh
+cd /srv/atmobb
+sudo ./atmobb watchdog install
+sudo ./atmobb watchdog status
+sudo journalctl -u atmobb-ingestion-watchdog.service
+```
+
+The systemd timer checks once a minute. It gives a newly started HappyView five
+minutes of grace, then requires five minutes of observed inactivity and at least
+three unchanged samples before restarting **only that instance's running
+HappyView container**. It never starts a stopped service, pulls an image, changes
+the cursor, runs a backfill, or restarts Postgres or the web app.
+
+The watchdog skips maintenance and shares the updater's host and per-instance
+maintenance locks. A moving cursor counts as progress even during an old replay.
+A restart attempt is recorded before the command runs, so a timeout or a failed
+restart cannot cause a retry loop. It allows no further automatic restart for
+that stall until the cursor advances close to live time. Even after recovery,
+restarts are at least fifteen minutes apart. Missing cursors, database errors,
+corrupt state and gaps between checks do not count as proof of a stall.
+
+Persistent stalls and probe failures produce a failed systemd service result and
+JSON diagnostics in the journal. **No email, webhook, or off-host notification is
+configured by default.** Connect the service to your existing systemd failure
+monitoring if you need those alerts. `watchdog status` reads the last recorded
+result; it does not probe Docker or prove that the timer is still running.
+Check the timer separately with `sudo systemctl status atmobb-ingestion-watchdog.timer`.
+
+After investigating a failed recovery, `sudo ./atmobb watchdog reset` rearms the
+one-attempt budget and starts a new observation window; it retains the cooldown.
+`sudo ./atmobb watchdog check` runs a check immediately and **may restart
+HappyView**. Reinstalling the timer preserves the budget. State is root-only
+under the instance's updater state directory, in `ingestion/state.json`.
+
+For a hosted tenant, run the commands from its own bundle directory. Its unit
+names have the instance ID appended, for example
+`atmobb-ingestion-watchdog-<instance-id>.service` and `.timer`. Installing a new
+forum does not opt it in automatically. To disable recovery, stop and disable
+that instance's timer with `sudo systemctl disable --now atmobb-ingestion-watchdog.timer`.
+
+After an outage, a caught-up cursor does not prove that every missed record was
+replayed. Use the backfill procedure above when history may be missing.
+
 ## 4. Enable private boards (optional)
 
 > [!CAUTION]

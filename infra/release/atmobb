@@ -34,6 +34,9 @@ Usage: ./atmobb <command> [options]
   maintenance on|off|status|recover
                      Gate public traffic and stop writes; reopen only after
                      the durable target passes setup and health checks.
+  watchdog install|check|status|reset
+                     Opt in to cursor monitoring and bounded Happyview recovery.
+                     check may restart Happyview; status is read-only.
   logs [ARGS]        docker compose logs ARGS
   help
 
@@ -239,7 +242,7 @@ prepare_target() {
     : > "$prepared/backup-complete"
   else
     mkdir "$prepared/payload"
-    for file in compose.yml compose.hosting.yml atmobb updater.py updater-page.html env.example SELF-HOSTING.md LICENSE; do
+    for file in compose.yml compose.hosting.yml atmobb updater.py updater-page.html watchdog.py env.example SELF-HOSTING.md LICENSE; do
       [ ! -f "$source_bundle/$file" ] || cp "$source_bundle/$file" "$prepared/payload/$file"
     done
   fi
@@ -294,14 +297,15 @@ resume_target() {
     for file in "$RECOVERY"/payload/*; do
       [ -f "$file" ] || continue
       name=${file##*/}
-      case "$name" in atmobb|updater.py) mode=755 ;; *) mode=644 ;; esac
+      case "$name" in atmobb|updater.py|watchdog.py) mode=755 ;; *) mode=644 ;; esac
       install -m "$mode" "$file" "$BUNDLE_DIR/$name.maintenance-tmp"
       mv "$BUNDLE_DIR/$name.maintenance-tmp" "$BUNDLE_DIR/$name"
     done
     if [ -f "$BUNDLE_DIR/updater.py" ]; then
       updater_lib=${ATMOBB_UPDATER_LIB_DIR:-$UPDATER_LIB_DIR}
       install -d -m 755 "$updater_lib"
-      for name in updater.py atmobb updater-page.html; do
+      for name in updater.py atmobb updater-page.html watchdog.py; do
+        [ -f "$BUNDLE_DIR/$name" ] || continue
         case "$name" in updater-page.html) mode=644 ;; *) mode=755 ;; esac
         install -m "$mode" "$BUNDLE_DIR/$name" "$updater_lib/$name.maintenance-tmp"
         mv "$updater_lib/$name.maintenance-tmp" "$updater_lib/$name"
@@ -453,6 +457,72 @@ prompt() {
   IFS= read -r value
   [ -n "$value" ] || die "$label cannot be empty"
   printf '%s' "$value"
+}
+
+cmd_watchdog() {
+  need python3
+  watchdog_name=atmobb-ingestion-watchdog
+  [ "$INSTANCE_ID" = atmobb ] || watchdog_name=$watchdog_name-$INSTANCE_ID
+  watchdog_config=${ATMOBB_WATCHDOG_CONFIG:-/etc/atmobb/$watchdog_name.json}
+  watchdog_lib=${ATMOBB_UPDATER_LIB_DIR:-$UPDATER_LIB_DIR}
+  case "${1:-status}" in
+    install)
+      need systemctl
+      [ -f "$ENV_FILE" ] || die "no .env here; install the forum first"
+      [ -f "$BUNDLE_DIR/watchdog.py" ] || die "this bundle lacks watchdog.py"
+      watchdog_units=${ATMOBB_SYSTEMD_DIR:-/etc/systemd/system}
+      watchdog_work=$(mktemp -d)
+      trap 'rm -rf "$watchdog_work"' EXIT HUP INT TERM
+      python_bin=$(command -v python3)
+      python3 - "$PROJECT" "$state_dir" "$MAINTENANCE_DIR" \
+        "${ATMOBB_HOST_UPDATE_LOCK:-/var/lock/atmobb-hosting.lock}" > "$watchdog_work/config.json" <<'PY'
+import json, sys
+project, state, maintenance, host_lock = sys.argv[1:]
+json.dump(dict(project=project, state_dir=state + "/ingestion", maintenance_dir=maintenance,
+               updater_state_dir=state, host_lock=host_lock), sys.stdout)
+PY
+      cat > "$watchdog_work/service" <<EOF
+[Unit]
+Description=atmobb Jetstream ingestion watchdog ($PROJECT)
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=$python_bin "$watchdog_lib/watchdog.py" --config "$watchdog_config" check
+TimeoutStartSec=90
+NoNewPrivileges=true
+PrivateTmp=true
+EOF
+      cat > "$watchdog_work/timer" <<EOF
+[Unit]
+Description=Check atmobb Jetstream cursor every minute ($PROJECT)
+
+[Timer]
+OnBootSec=60
+OnUnitInactiveSec=60
+AccuracySec=5
+Unit=$watchdog_name.service
+
+[Install]
+WantedBy=timers.target
+EOF
+      as_root install -d -m 755 "$watchdog_lib" "$(dirname "$watchdog_config")" "$watchdog_units"
+      as_root install -m 755 "$BUNDLE_DIR/watchdog.py" "$watchdog_lib/watchdog.py"
+      as_root install -m 600 "$watchdog_work/config.json" "$watchdog_config"
+      as_root install -m 644 "$watchdog_work/service" "$watchdog_units/$watchdog_name.service"
+      as_root install -m 644 "$watchdog_work/timer" "$watchdog_units/$watchdog_name.timer"
+      as_root systemctl daemon-reload
+      as_root systemctl enable --now "$watchdog_name.timer"
+      echo "Watchdog enabled for $PROJECT. Persistent failures are reported by $watchdog_name.service."
+      echo "Inspect: sudo journalctl -u $watchdog_name.service"
+      ;;
+    check|status|reset)
+      [ -f "$watchdog_config" ] || die "watchdog is not installed; run: sudo $0 watchdog install"
+      as_root python3 "$watchdog_lib/watchdog.py" --config "$watchdog_config" "${1:-status}"
+      ;;
+    *) die "usage: ./atmobb watchdog install|check|status|reset" ;;
+  esac
 }
 
 cmd_install() {
@@ -880,6 +950,8 @@ cmd_internal_update() {
     for file in compose.yml compose.caddy.yml compose.hosting.yml Caddyfile atmobb updater.py updater-page.html env.example; do
       cp "$work/source/infra/release/$file" "$work/bundle/$file"
     done
+    [ ! -f "$work/source/infra/release/watchdog.py" ] ||
+      cp "$work/source/infra/release/watchdog.py" "$work/bundle/watchdog.py"
     cp "$work/source/docs/self-hosting.md" "$work/bundle/SELF-HOSTING.md"
     cp "$work/source/LICENSE" "$work/bundle/"
     sed "s#ghcr.io/keithk/atmobb:[0-9][0-9A-Za-z.+-]*#$image#g" "$work/bundle/compose.yml" > "$work/bundle/compose.yml.tmp"
@@ -907,6 +979,12 @@ cmd_internal_update() {
 
 command=${1:-help}
 [ "$#" -eq 0 ] || shift
+# Status/installation need neither a Docker connection nor Compose. Checks
+# use label-selected containers, never recreate services or pull images.
+if [ "$command" = watchdog ]; then
+  cmd_watchdog "$@"
+  exit
+fi
 # Read-only status needs neither Docker nor access to the private updater
 # directory. It is safe to read concurrently with the atomic public marker.
 if [ "$command" = maintenance ] && [ "${1:-status}" = status ]; then

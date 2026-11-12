@@ -152,6 +152,9 @@ def provision(instance):
                 temporary.mkdir(parents=True, mode=0o700)
                 for name in ('atmobb', 'updater.py', 'updater-page.html', 'compose.yml', 'compose.caddy.yml', 'Caddyfile', 'env.example'):
                     shutil.copy2(Path(config['template']) / name, temporary / name)
+                # Older installed templates predate the opt-in watchdog.
+                if (Path(config['template']) / 'watchdog.py').is_file():
+                    shutil.copy2(Path(config['template']) / 'watchdog.py', temporary / 'watchdog.py')
                 app_host = f"{instance['subdomain']}.{config['domain']}"
                 (temporary / '.env').write_text(
                     f"ATMOBB_INSTANCE_ID={identifier}\nATMOBB_APP_PORT={instance['appPort']}\n"

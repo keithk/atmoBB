@@ -2,6 +2,7 @@
   import { enhance } from '$app/forms';
   import { onDestroy } from 'svelte';
   import Card from '$lib/components/Card.svelte';
+  import { fitImageZoom, photoRect } from '$lib/avatar/crop';
   import type { PageData } from './$types';
 
   interface BorderOption {
@@ -43,6 +44,9 @@
   let localMessage = $state('');
 
   const ready = $derived(sourceImage !== null);
+  const minimumZoom = $derived(sourceImage
+    ? fitImageZoom(sourceImage.naturalWidth, sourceImage.naturalHeight)
+    : 1);
 
   onDestroy(() => {
     if (sourceObjectUrl) URL.revokeObjectURL(sourceObjectUrl);
@@ -59,14 +63,9 @@
 
   function paintPhoto(context: CanvasRenderingContext2D, size: number): void {
     if (!sourceImage) return;
-    const baseScale = Math.max(size / sourceImage.naturalWidth, size / sourceImage.naturalHeight);
-    const scale = baseScale * zoom;
-    const width = sourceImage.naturalWidth * scale;
-    const height = sourceImage.naturalHeight * scale;
-    const horizontalRoom = Math.max(0, (width - size) / 2);
-    const verticalRoom = Math.max(0, (height - size) / 2);
-    const x = (size - width) / 2 + (positionX / 100) * horizontalRoom;
-    const y = (size - height) / 2 + (positionY / 100) * verticalRoom;
+    const { x, y, width, height } = photoRect(
+      sourceImage.naturalWidth, sourceImage.naturalHeight, size, zoom, positionX, positionY,
+    );
     context.drawImage(sourceImage, x, y, width, height);
   }
 
@@ -161,6 +160,11 @@
     zoom = 1;
     positionX = 0;
     positionY = 0;
+  }
+
+  function fitImage(): void {
+    resetCrop();
+    zoom = minimumZoom;
   }
 
   function startDrag(event: PointerEvent): void {
@@ -309,9 +313,13 @@
           <h2 id="crop-title"><span>2</span> Crop</h2>
           <label class="range-control">
             <span>Zoom <output>{Math.round(zoom * 100)}%</output></span>
-            <input type="range" min="1" max="3" step="0.01" bind:value={zoom} disabled={!ready} />
+            <input type="range" min={minimumZoom} max="3" step="any" bind:value={zoom} disabled={!ready} />
           </label>
-          <button class="atm-linkbtn reset-crop" type="button" onclick={resetCrop} disabled={!ready}>Reset crop</button>
+          <div class="crop-actions">
+            <button class="atm-linkbtn" type="button" onclick={fitImage} disabled={!ready}>Fit image</button>
+            <button class="atm-linkbtn" type="button" onclick={resetCrop} disabled={!ready}>Reset crop</button>
+          </div>
+          <p class="atm-hint">Zoom out to keep the whole picture. Empty space uses the border color.</p>
         </section>
 
         <section class="control-group" aria-labelledby="border-title">
@@ -334,8 +342,8 @@
             {/each}
           </div>
           <label class="color-control">
-            <span>Border color</span>
-            <input type="color" bind:value={borderColor} disabled={borderWidth === 0} />
+            <span>Border & background color</span>
+            <input type="color" bind:value={borderColor} disabled={borderWidth === 0 && zoom >= 1} />
             <code>{borderColor.toUpperCase()}</code>
           </label>
         </section>
@@ -503,8 +511,8 @@
   output { color: var(--forum-ink); font: var(--type-handle); }
   input[type="range"] { width: 100%; accent-color: var(--forum-accent); cursor: ew-resize; }
   input[type="range"]:disabled { cursor: not-allowed; }
-  .reset-crop { margin-top: var(--space-2); }
-  .reset-crop:disabled { opacity: .5; cursor: not-allowed; }
+  .crop-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-2); }
+  .crop-actions button:disabled { opacity: .5; cursor: not-allowed; }
 
   .border-options {
     display: grid;

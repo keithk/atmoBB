@@ -131,6 +131,51 @@ else:
         self.assertFalse(self.marker.exists())
         self.assertNotIn("remove-orphans", self.log.read_text())
 
+    def test_watchdog_install_is_opt_in_rerunnable_and_does_not_contact_docker(self):
+        shutil.copy(SCRIPT.with_name("watchdog.py"), self.bundle / "watchdog.py")
+        config = self.root / "watchdog.json"
+        units = self.root / "systemd"
+        self.env.update(ATMOBB_WATCHDOG_CONFIG=str(config), ATMOBB_SYSTEMD_DIR=str(units))
+        self.stub("systemctl", '''
+import os, sys
+with open(os.environ["FIXTURE_LOG"], "a") as log:
+    log.write("systemctl "+" ".join(sys.argv[1:])+"\\n")
+''')
+        self.run_cli("watchdog", "install")
+        settings = json.loads(config.read_text())
+        self.assertEqual(settings["project"], "atmobb")
+        self.assertEqual(settings["state_dir"], str(self.state / "ingestion"))
+        self.assertEqual(settings["updater_state_dir"], str(self.state))
+        self.assertEqual(settings["maintenance_dir"], str(self.marker.parent))
+        self.assertNotIn("secret", config.read_text())
+        self.assertEqual(config.stat().st_mode & 0o777, 0o600)
+        service = (units / "atmobb-ingestion-watchdog.service").read_text()
+        timer = (units / "atmobb-ingestion-watchdog.timer").read_text()
+        self.assertIn("Type=oneshot", service)
+        self.assertIn("TimeoutStartSec=90", service)
+        self.assertIn("OnUnitInactiveSec=60", timer)
+        self.assertIn("enable --now atmobb-ingestion-watchdog.timer", self.log.read_text())
+        self.assertNotIn("docker", self.log.read_text())
+        self.assertEqual(json.loads(self.run_cli("watchdog", "status").stdout)["status"], "uninitialized")
+        (self.state / "ingestion").mkdir(parents=True)
+        budget = self.state / "ingestion" / "state.json"
+        budget.write_text("keep restart budget")
+        self.run_cli("watchdog", "install")
+        self.assertEqual(budget.read_text(), "keep restart budget")
+
+    def test_watchdog_install_uses_tenant_specific_units_and_project(self):
+        shutil.copy(SCRIPT.with_name("watchdog.py"), self.bundle / "watchdog.py")
+        with (self.bundle / ".env").open("a") as env:
+            env.write("ATMOBB_INSTANCE_ID=tenant1\n")
+        config = self.root / "tenant-watchdog.json"
+        units = self.root / "systemd"
+        self.env.update(ATMOBB_WATCHDOG_CONFIG=str(config), ATMOBB_SYSTEMD_DIR=str(units))
+        self.stub("systemctl", "pass\n")
+        self.run_cli("watchdog", "install")
+        self.assertEqual(json.loads(config.read_text())["project"], "atmobb-tenant1")
+        self.assertTrue((units / "atmobb-ingestion-watchdog-tenant1.timer").exists())
+        self.assertFalse((units / "atmobb-ingestion-watchdog.timer").exists())
+
     def test_numeric_guard_with_immutable_running_image(self):
         for current, target, allowed in (
             ("2.16.0", "2.16.0", True),

@@ -167,7 +167,7 @@ class HostingTest(unittest.TestCase):
         instance = hosting.reserve(self.request(1))
         template = self.root / 'template'
         template.mkdir()
-        for name in ('atmobb', 'compose.yml', 'updater.py', 'updater-page.html', 'compose.caddy.yml', 'env.example'):
+        for name in ('atmobb', 'compose.yml', 'updater.py', 'updater-page.html', 'watchdog.py', 'compose.caddy.yml', 'env.example'):
             (template / name).write_text('# ATMOBB_INSTANCE_CONFIG_VERSION=1\n# ATMOBB_MAINTENANCE_VERSION=1\n')
         (template / 'Caddyfile').write_text((Path(__file__).parent / 'release' / 'Caddyfile').read_text())
         routes = self.root / 'routes'
@@ -191,6 +191,7 @@ class HostingTest(unittest.TestCase):
             hosting.provision(instance)
         self.assertEqual(hosting.load()['instances'][0]['status'], 'live')
         self.assertEqual((hosting.bundle(instance) / '.env').read_text(), initial_env)
+        self.assertEqual((hosting.bundle(instance) / 'watchdog.py').read_text(), (template / 'watchdog.py').read_text())
         self.assertIn('ATMOBB_APP_PORT=12000\nATMOBB_HAPPYVIEW_PORT=12001', initial_env)
         self.assertIn(f"ATMOBB_INSTANCE_ID={instance['id']}", initial_env)
         self.assertNotIn('COMPOSE_FILE', initial_env)

@@ -47,8 +47,8 @@ export interface SendInput {
   category?: string;
   categoryDescription?: string;
   threadKey?: string;
-  // pub.atmo.notify.send#actor: the people behind the alert, for the avatar stack.
-  actors?: { did: string; handle?: string }[];
+  // The deployed relay expects handles/DIDs, not upstream main's actor objects.
+  actors?: string[];
 }
 
 export interface SendResult {

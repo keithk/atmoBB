@@ -1,0 +1,64 @@
+{
+  "lexicon": 1,
+  "id": "pub.atmo.notify.send",
+  "defs": {
+    "main": {
+      "type": "procedure",
+      "description": "Send a notification to a recipient who has granted the sender permission. Sender-authenticated.",
+      "input": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["recipient", "title", "body"],
+          "properties": {
+            "recipient": { "type": "string", "format": "did" },
+            "title": { "type": "string", "maxLength": 100 },
+            "body": { "type": "string", "maxLength": 500 },
+            "uri": {
+              "type": "string",
+              "description": "Optional link opened when the notification is tapped."
+            },
+            "threadKey": {
+              "type": "string",
+              "description": "Optional opaque key for grouping related notifications."
+            },
+            "category": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "Optional free-form category (e.g. 'mention', 'reply') used for per-category routing."
+            },
+            "categoryDescription": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "Optional human description of the category, shown in the routing UI."
+            },
+            "actors": {
+              "type": "array",
+              "maxLength": 8,
+              "items": { "type": "string" },
+              "description": "Optional handles/DIDs of the people behind this notification (for avatar stacks)."
+            }
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["id", "delivered"],
+          "properties": {
+            "id": { "type": "string" },
+            "delivered": {
+              "type": "integer",
+              "description": "Number of channels the notification was dispatched to."
+            }
+          }
+        }
+      },
+      "errors": [
+        { "name": "NotAuthorized" },
+        { "name": "RateLimitExceeded" }
+      ]
+    }
+  }
+}
