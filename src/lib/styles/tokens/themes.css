@@ -15,7 +15,7 @@
   --forum-line: var(--line-1);
   --forum-line-strong: var(--line-2);
   --forum-edge: var(--line-2);            /* panel outer edge */
-  --forum-bevel: var(--bevel-hl);         /* inset top highlight */
+  --forum-bevel: transparent;             /* inset top highlight; flat by default, a theme can bring it back */
 
   /* text */
   --forum-ink: var(--ink-0);
@@ -30,8 +30,8 @@
   --forum-link: var(--coral-3);
   --forum-link-hover: var(--coral-4);
 
-  /* category bar (the classic gradient section header) */
-  --forum-cat-bg: linear-gradient(180deg, #f3f0ec, #e9e4de);
+  /* category bar (the tinted section header) */
+  --forum-cat-bg: #f1eeea;
   --forum-cat-ink: var(--ink-0);
   --forum-cat-edge: var(--coral-1);       /* accent underline */
 

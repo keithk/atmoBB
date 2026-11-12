@@ -277,8 +277,7 @@
   position: relative;
   display: grid;
   grid-template-columns: 132px minmax(0, 1fr);
-  background:
-    linear-gradient(125deg, var(--forum-surface) 55%, color-mix(in oklch, var(--forum-accent-soft) 65%, var(--forum-surface)));
+  background: var(--forum-surface);
 }
 .atm-pitch__art {
   position: relative;
