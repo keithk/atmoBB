@@ -180,35 +180,23 @@
   border-radius: var(--radius-xs);
 }
 
-/* ---- Card (surface) ---- */
-.atm-card {
-  background: var(--forum-surface);
-  border: var(--border-hair) solid var(--forum-line);
-  border-radius: var(--radius-lg);
-  box-shadow: inset 0 1px 0 var(--forum-bevel), var(--shadow-sm);
-  overflow: hidden;
-}
-.atm-card--flat { box-shadow: none; }
-.atm-card--raised { box-shadow: var(--shadow-md); }
-/* page-level surfaces (hero, masthead, posts) take the stronger panel edge */
-.atm-card--edge { border-color: var(--forum-edge); }
+/* ---- Card (a titled section of a page) ----
+   The page panel is the only framed surface, so a card is a heading and its
+   content with no border of its own. */
+.atm-card { min-width: 0; }
 .atm-card__header {
-  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  background: var(--forum-surface-2);
-  border-bottom: var(--border-hair) solid var(--forum-line);
-  font: var(--type-board-title);
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3);
+  padding-bottom: 6px;
+  border-bottom: var(--border-hair) solid var(--forum-line-strong);
+  font: var(--w-bold) var(--text-xs)/1.25 var(--font-body);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--forum-ink-soft);
 }
-.atm-card__body { padding: var(--space-4); }
+.atm-card__body { padding: var(--space-3) 0 0; }
 
-/* ---- Panel (edge-framed page list: boards, threads, members) ---- */
-.atm-panel {
-  border: var(--border-hair) solid var(--forum-edge);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-}
-/* rows carry their own bottom hairline; the frame supplies the last one */
+/* ---- Panel (a headed list: boards, featured topics) ---- */
+/* rows carry their own bottom hairline; the last one doesn't need it */
 .atm-panel > :last-child { border-bottom: none; }
 
 /* ---- Empty state (a list with nothing in it yet) ---- */
@@ -277,7 +265,11 @@
   position: relative;
   display: grid;
   grid-template-columns: 132px minmax(0, 1fr);
+  /* The one illustrated unit on the page, so it keeps a frame. */
   background: var(--forum-surface);
+  border: var(--border-hair) solid var(--forum-edge);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
 .atm-pitch__art {
   position: relative;

@@ -231,7 +231,7 @@
   {/if}
 
   <article
-    class="atm-card atm-card--edge atm-post atm-post--op"
+    class="atm-post atm-post--op"
     id={postAnchor(data.thread.uri)}
     data-atm-post-position="0"
     data-atm-post-at={data.thread.value.createdAt ?? ''}
@@ -277,7 +277,7 @@
 
   {#each data.replies as reply, i}
     <article
-      class="atm-card atm-card--edge atm-post"
+      class="atm-post"
       id={postAnchor(reply.uri)}
       data-atm-post-position={data.offset + i + 1}
       data-atm-post-at={reply.value.createdAt ?? reply.indexedAt ?? ''}
@@ -322,15 +322,8 @@
   {#if data.thread.locked && !composerOpen}
     <p class="atm-notice">🔒 This thread is locked. No new replies.</p>
   {:else if composerOpen}
-    <section class="atm-card atm-card--edge atm-composer atm-composer--reply" class:atm-composer--docked={docked} id="reply" onfocusin={() => (docked = true)}>
-      <div class="atm-card__header atm-composer__header">
-        <h3 class="atm-composer__title">Reply</h3>
-        {#if user}<span class="atm-composer__identity">posting as @{user.handle}</span>{/if}
-        {#if docked}
-          <button type="button" class="atm-post__action" onclick={() => (docked = false)} title="Send the reply box back to the end of the thread" aria-label="Send the reply box back to the end of the thread">×</button>
-        {/if}
-      </div>
-      <div class="atm-card__body atm-composer__body">
+    <section class="atm-composer atm-composer--reply" class:atm-composer--docked={docked} id="reply" aria-label="Reply" onfocusin={() => (docked = true)}>
+      <div class="atm-composer__body">
         {#if data.thread.locked}
           <p class="atm-hint">This thread is locked. Staff can still add a closing word.</p>
         {/if}
@@ -373,6 +366,10 @@
             <RichTextEditor bind:this={composerEditor} name="body" placeholder="Add to the discussion…" initial={composerDoc ?? undefined} />
           {/key}
           <div class="atm-composer__actions">
+            {#if user}<span class="atm-composer__identity">posting as @{user.handle}</span>{/if}
+            {#if docked}
+              <button type="button" class="atm-btn atm-btn--ghost atm-btn--sm" onclick={() => (docked = false)} title="Send the reply box back to the end of the thread">unpin</button>
+            {/if}
             <button class="atm-btn atm-btn--primary atm-composer__submit" disabled={posting}>
               {#if posting}<span class="atm-spinner" aria-hidden="true"></span> Posting…{:else}↩ post reply{/if}
             </button>
@@ -442,8 +439,8 @@
   :global(.atm-post__body) { position: relative; }
   .atm-post__tools {
     position: absolute;
-    top: var(--space-2);
-    right: var(--space-3);
+    top: var(--space-3);
+    right: 0;
     display: flex;
     gap: var(--space-1);
     opacity: 0;
@@ -457,13 +454,16 @@
   }
   @media (prefers-reduced-motion: reduce) { .atm-post__tools { transition: none; } }
 
+  /* Pinned, the reply box floats over the thread, so it needs its own surface. */
   .atm-composer--docked {
     position: sticky;
-    bottom: var(--space-2);
+    bottom: 0;
     z-index: 6;
     max-height: min(70vh, 560px);
     overflow-y: auto;
-    box-shadow: var(--shadow-lg);
+    padding: var(--space-3) 0;
+    background: var(--forum-surface);
+    border-top: var(--border-hair) solid var(--forum-line-strong);
   }
   }
 </style>

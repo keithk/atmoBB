@@ -27,8 +27,8 @@
   const showBoards = $derived(activeView === 'categories');
 </script>
 
-{#snippet topicList(threads: LatestThreads['threads'], emptyMessage: string, flush = false)}
-  <TopicList {threads} {emptyMessage} {flush} accountDid={data.user?.did} forumDid={data.forumDid} showBoard />
+{#snippet topicList(threads: LatestThreads['threads'], emptyMessage: string)}
+  <TopicList {threads} {emptyMessage} accountDid={data.user?.did} forumDid={data.forumDid} showBoard />
 {/snippet}
 
 {#if data.appviewDown}
@@ -74,11 +74,11 @@
   {#if data.homeView === 'hot'}
     <section class="atm-home-hot" id="hot">
       <p class="atm-home-note">Ranked by replies among the 100 most recently active visible topics.</p>
-      {@render topicList(data.hot, 'No recent topics have replies yet.', true)}
+      {@render topicList(data.hot, 'No recent topics have replies yet.')}
     </section>
   {:else if data.homeView === 'latest' || (!data.homeView && data.homepage.layout === 'latest')}
     <section class="atm-home-latest" id="latest">
-      {@render topicList(data.latest, 'No activity yet. Start the first thread.', true)}
+      {@render topicList(data.latest, 'No activity yet. Start the first thread.')}
       {#if data.latest.length}<p class="atm-more"><a href="/latest">older activity →</a></p>{/if}
     </section>
   {:else if !data.homeView && data.homepage.layout === 'boards' && data.hot.length}
@@ -249,7 +249,8 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
-    padding: var(--space-2) var(--space-4);
+    padding: 0 0 var(--space-3);
+    border-bottom: var(--border-hair) solid var(--forum-line);
   }
   .compact-welcome p { margin: 0; color: var(--forum-ink-soft); font: var(--type-ui); }
 

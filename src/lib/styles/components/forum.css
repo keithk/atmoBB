@@ -10,9 +10,8 @@
   align-items: center;
   gap: 6px;
   width: var(--rail-w);
-  padding: var(--space-3);
-  background: var(--forum-surface-2);
-  border-right: var(--border-hair) solid var(--forum-line);
+  flex: none;
+  padding: var(--space-4) var(--space-3) var(--space-4) 0;
   text-align: center;
 }
 .atm-postmeta__name {
@@ -48,11 +47,12 @@
 }
 
 /* ---- Post (shared by public and members-only thread pages) ---- */
+/* Posts sit directly on the page panel, one hairline between them: the panel
+   is the only card. */
 .atm-post {
   display: flex;
-  margin-bottom: var(--space-2);
+  border-bottom: var(--border-hair) solid var(--forum-line);
 }
-.atm-post--op { border-color: var(--forum-line-strong); }
 a.atm-postmeta__name { text-decoration: none; }
 a.atm-postmeta__name:hover { color: var(--forum-link); text-decoration: none; }
 a.atm-post__avatar-link {
@@ -62,7 +62,7 @@ a.atm-post__avatar-link {
   border-radius: var(--radius-sm);
 }
 .atm-post__body {
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-4) 0 var(--space-4) var(--space-3);
   flex: 1;
   min-width: 0;
   max-width: 75ch;
@@ -79,7 +79,7 @@ a.atm-post__permalink {
 }
 a.atm-post__permalink:hover { text-decoration: underline; }
 /* Landing on a permalink picks the post out of the page. */
-.atm-post:target { border-color: var(--forum-pin-edge); }
+.atm-post:target { background: var(--forum-pin-bg); }
 
 /* ---- Inline moderation buttons (thread rows, thread page) ---- */
 .atm-modact { display: inline; }
@@ -125,31 +125,40 @@ a.atm-post__permalink:hover { text-decoration: underline; }
 .atm-post__action:hover { border-color: var(--forum-accent); color: var(--forum-link); }
 
 /* ---- Thread/board composer ---- */
+/* No frame of its own: the editor box is the composer's only border. */
 .atm-composer {
-  margin-top: var(--space-6);
+  margin-top: var(--space-5);
   max-width: 72ch;
+}
+.atm-composer__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 .atm-composer__title { margin: 0; font: var(--type-thread-title); }
 .atm-composer__form { display: grid; gap: var(--space-3); }
-.atm-composer__identity { font: var(--type-handle); color: var(--forum-ink-soft); }
-.atm-composer__submit { margin-top: var(--space-2); }
-.atm-composer--reply { width: 100%; }
-.atm-composer__header { min-height: 48px; }
-.atm-composer__header .atm-composer__identity {
+.atm-composer__identity {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font: var(--type-handle);
+  color: var(--forum-ink-soft);
 }
-.atm-composer--reply .atm-composer__body { padding: var(--space-5); }
+.atm-composer__submit { margin-top: var(--space-2); }
+.atm-composer--reply { width: 100%; }
 .atm-composer--reply .atm-composer__form { display: block; }
 .atm-composer--reply .atm-composer__submit { min-width: 140px; margin-top: 0; }
 .atm-composer__actions {
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  gap: var(--space-3);
   margin-top: var(--space-3);
 }
+.atm-composer__actions .atm-composer__identity { margin-right: auto; }
 .atm-loginhint {
   margin-top: var(--space-5);
   font: var(--type-ui);
@@ -248,13 +257,10 @@ a.atm-post__permalink:hover { text-decoration: underline; }
   grid-template-columns: minmax(0, 1fr) 130px 220px;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-3) 0;
   border-bottom: var(--border-hair) solid var(--forum-line);
-  background: var(--forum-surface);
-  box-shadow: inset 0 1px 0 var(--forum-bevel);
   transition: background var(--dur) var(--ease);
 }
-.atm-boardrow:hover { background: var(--forum-surface-2); }
 .atm-boardrow__icon {
   width: 34px; height: 34px; border-radius: var(--radius-md);
   display: grid; place-items: center;
@@ -275,15 +281,16 @@ a.atm-post__permalink:hover { text-decoration: underline; }
 .atm-boardrow__last-body { min-width: 0; }
 .atm-boardrow__last-title { color: var(--forum-ink); font-weight: var(--w-semibold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* section header above a group of board rows — the tinted category bar with its accent rule */
+/* Section label above a list. It speaks the same small-caps language as the
+   sidebar's group headings and sits on the list's top edge, so it reads as
+   the list's own label. */
 .atm-board-section {
-  font: var(--w-bold) var(--text-md)/1 var(--font-display);
-  letter-spacing: -0.01em;
-  color: var(--forum-cat-ink);
-  background: var(--forum-cat-bg);
-  padding: var(--space-2) var(--space-4);
-  border-bottom: var(--border-solid) solid var(--forum-cat-edge);
-  box-shadow: inset 0 1px 0 var(--forum-bevel);
+  font: var(--w-bold) var(--text-xs)/1.25 var(--font-body);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--forum-ink-soft);
+  padding: 0 0 6px;
+  border-bottom: var(--border-hair) solid var(--forum-line-strong);
 }
 
 /* ---- ThreadRow (thread list) ---- */
@@ -410,9 +417,9 @@ a.atm-memberrow__name:hover { color: var(--forum-link); text-decoration: none; }
     flex-direction: row;
     align-items: center;
     text-align: left;
-    border-right: none;
-    border-bottom: var(--border-hair) solid var(--forum-line);
+    padding: var(--space-3) 0 0;
   }
+  .atm-post__body { padding: var(--space-2) 0 var(--space-3); }
   .atm-postmeta__identity {
     display: flex;
     flex: 1;
@@ -430,6 +437,5 @@ a.atm-memberrow__name:hover { color: var(--forum-link); text-decoration: none; }
   .atm-post > .atm-postmeta .atm-postmeta__stats { width: auto; flex: none; }
 }
 @media (max-width: 480px) {
-  .atm-composer--reply .atm-composer__body { padding: var(--space-3); }
   .atm-composer__actions .atm-composer__submit { width: 100%; }
 }

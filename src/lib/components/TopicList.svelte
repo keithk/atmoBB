@@ -13,7 +13,6 @@
     accountDid,
     forumDid,
     showBoard = false,
-    flush = false,
     emptyMessage = 'No topics found.',
     boardName,
     tagHref = (tag: string) => `/latest?tag=${encodeURIComponent(tag)}`,
@@ -23,8 +22,6 @@
     accountDid?: string | null;
     forumDid?: string;
     showBoard?: boolean;
-    /** The list is the page's own content, not inside a framed panel: titles line up with the page edge. */
-    flush?: boolean;
     emptyMessage?: string;
     /** Board name for thread links when the list is one board's and rows don't carry it. */
     boardName?: string;
@@ -36,7 +33,7 @@
   const href = (thread: Topic) => threadPath(thread.uri, thread.boardName ?? boardName, thread.title);
 </script>
 
-<div class="atm-topic-list" class:atm-topic-list--boards={showBoard} class:atm-topic-list--flush={flush}>
+<div class="atm-topic-list" class:atm-topic-list--boards={showBoard}>
   {#each threads as thread}
     <article class="atm-threadrow atm-threadrow--compact" class:atm-threadrow--pinned={thread.pinned} class:atm-threadrow--locked={thread.locked}>
       <div class="atm-threadrow__status">
@@ -101,14 +98,14 @@
       padding: 10px var(--space-4);
       box-shadow: none;
     }
-    /* A list with no frame of its own lines its titles up with the page's
-       content edge; the hover tint and read dot use the gutter. */
-    .atm-topic-list--flush .atm-threadrow--compact {
+    /* Titles line up with the page's content edge; the hover tint and read
+       dot use the gutter. */
+    .atm-threadrow--compact.atm-threadrow--compact {
       margin-inline: calc(-1 * var(--space-4));
       border-bottom: none;
     }
     /* The hairline stops at the content edge even though the hover tint doesn't. */
-    .atm-topic-list--flush .atm-threadrow--compact:not(:last-child)::after {
+    .atm-threadrow--compact:not(:last-child)::after {
       content: '';
       position: absolute;
       inset: auto var(--space-4) 0;

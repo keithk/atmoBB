@@ -111,7 +111,6 @@
   boardName={data.board?.name}
   tagHref={(tag) => `${basePath}?tag=${encodeURIComponent(tag)}`}
   actions={staff ? modActions : undefined}
-  flush
   emptyMessage={filtered ? 'No topics match these filters.' : 'No threads yet. Start the first one.'}
 />
 
@@ -172,12 +171,12 @@
 {/if}
 
 {#if user && mayPost}
-  <div class="atm-card atm-composer" id="composer">
-    <div class="atm-card__header">
-      <span>Start a new thread</span>
+  <div class="atm-composer" id="composer">
+    <div class="atm-composer__header">
+      <h2 class="atm-composer__title">Start a new thread</h2>
       <span class="atm-composer__identity">posting as @{user.handle}</span>
     </div>
-    <div class="atm-card__body">
+    <div class="atm-composer__body">
       {#if form?.message && !form.watch}<p class="atm-err">{form.message}</p>{/if}
       <form
         class="atm-composer__form"

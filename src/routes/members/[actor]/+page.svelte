@@ -504,12 +504,13 @@
   }
   .atm-profile-preview a { color: var(--forum-link); }
 
+  /* The member's page fills the panel under the page bar, edge to edge, so
+     their skin has no second frame around it. */
   .atm-profile {
-    border: var(--border-hair) solid var(--forum-edge);
-    border-radius: var(--radius-lg);
+    margin: calc(-1 * var(--space-3)) calc(-1 * var(--main-pad-x)) calc(-1 * var(--main-pad-y));
+    border-radius: 0 0 calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px);
     background: var(--forum-bg);
     color: var(--forum-ink);
-    box-shadow: inset 0 1px 0 var(--forum-bevel), var(--shadow-sm);
     overflow: hidden;
   }
 
@@ -534,7 +535,7 @@
     flex-wrap: wrap;
     align-items: flex-start;
     gap: var(--space-4);
-    padding: var(--space-5);
+    padding: var(--space-5) var(--main-pad-x);
   }
   /* With a banner the avatar overlaps its lower edge. */
   .atm-profile__head--banner .atm-profile__cover { padding-top: 0; }
@@ -572,11 +573,11 @@
   .atm-profile__layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-4);
-    padding: var(--space-4) var(--space-5) var(--space-5);
+    gap: var(--space-6);
+    padding: var(--space-4) var(--main-pad-x) var(--space-6);
   }
   .atm-profile__panels, .atm-profile__side, .atm-profile__staff {
-    display: flex; flex-direction: column; gap: var(--space-4); min-width: 0;
+    display: flex; flex-direction: column; gap: var(--space-6); min-width: 0;
   }
   .atm-profile__chips { display: none; }
 

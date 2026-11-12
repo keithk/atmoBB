@@ -37,7 +37,6 @@
   accountDid={data.user?.did}
   forumDid={data.forumDid}
   showBoard
-  flush
   emptyMessage={filtered ? 'No topics match these filters.' : 'No activity yet. Start the first thread.'}
 />
 

@@ -95,7 +95,7 @@
   {/if}
 
   <article
-    class="atm-card atm-card--edge atm-post atm-post--op"
+    class="atm-post atm-post--op"
     id={postAnchor(data.thread.uri)}
     data-atm-post-position="0"
     data-atm-post-at={data.thread.value.createdAt ?? ''}
@@ -128,7 +128,7 @@
 
   {#each data.replies as reply, i}
     <article
-      class="atm-card atm-card--edge atm-post"
+      class="atm-post"
       id={postAnchor(reply.uri)}
       data-atm-post-position={i + 1}
       data-atm-post-at={reply.value.createdAt ?? reply.indexedAt ?? ''}
@@ -166,12 +166,8 @@
   {/each}
 
   {#if user && mayPost}
-    <section class="atm-card atm-card--edge atm-composer atm-composer--reply" id="reply">
-      <div class="atm-card__header atm-composer__header">
-        <h3 class="atm-composer__title">Reply</h3>
-        <span class="atm-composer__identity">posting as @{user.handle}</span>
-      </div>
-      <div class="atm-card__body atm-composer__body">
+    <section class="atm-composer atm-composer--reply" id="reply" aria-label="Reply">
+      <div class="atm-composer__body">
         {#if replyingTo}
           <p class="atm-composer__replyto">
             <span>↩ replying to <a href={postPath(data.threadUri, replyingTo.uri)}>@{shortName(replyingTo.author)}</a></span>
@@ -204,6 +200,7 @@
             <RichTextEditor bind:this={composerEditor} name="body" placeholder="Add to the discussion…" initial={composerDoc ?? undefined} allowImages={false} />
           {/key}
           <div class="atm-composer__actions">
+            <span class="atm-composer__identity">posting as @{user.handle}</span>
             <button class="atm-btn atm-btn--primary atm-composer__submit" disabled={posting}>
               {#if posting}<span class="atm-spinner" aria-hidden="true"></span> Posting…{:else}↩ post reply{/if}
             </button>
