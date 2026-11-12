@@ -56,6 +56,8 @@ export interface SendResult {
   // 0 when the relay never answered (network error or timeout).
   status: number;
   error?: string;
+  // The relay's explanation, e.g. which field failed validation on a 400.
+  message?: string;
   delivered?: number;
 }
 
@@ -76,7 +78,12 @@ export async function send(input: SendInput): Promise<SendResult> {
     }
     const retryAfter = res.headers.get('retry-after');
     if (retryAfter) console.warn(`[notify] relay answered ${res.status} with Retry-After ${retryAfter} (not honored)`);
-    return { ok: false, status: res.status, error: typeof body.error === 'string' ? body.error : undefined };
+    return {
+      ok: false,
+      status: res.status,
+      error: typeof body.error === 'string' ? body.error : undefined,
+      message: typeof body.message === 'string' ? body.message : undefined,
+    };
   } catch (err) {
     return { ok: false, status: 0, error: err instanceof Error ? err.message : String(err) };
   }

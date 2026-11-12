@@ -21,6 +21,9 @@ export interface NotifyEntry {
   url: string;
   read: boolean;
   delivery: NotifyDelivery;
+  // Why an undelivered alert failed, from the relay's answer. Kept here
+  // because container logs do not survive a redeploy and this file does.
+  failure?: string;
 }
 
 export interface MemberNotifyState {

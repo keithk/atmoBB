@@ -139,6 +139,19 @@ describe('relay outcomes', () => {
     expect((await readMember(alice))?.status).toBe('on');
   });
 
+  it("keeps the relay's reason on an undelivered entry", async () => {
+    const deps = fakeDeps({
+      send: vi
+        .fn<DispatchDeps['send']>()
+        .mockResolvedValueOnce(result({ status: 400, error: 'InvalidRequest', message: 'Input/body must not be longer than 500 characters' }))
+        .mockResolvedValueOnce(result({ status: 0, error: 'The operation was aborted due to timeout' })),
+    });
+    await notifyForPost(publicReply, deps);
+    const failures = [(await entriesOf(alice))[0].failure, (await entriesOf(carol))[0].failure];
+    expect(failures).toContain('HTTP 400 InvalidRequest: Input/body must not be longer than 500 characters');
+    expect(failures).toContain('no answer: The operation was aborted due to timeout');
+  });
+
   it('turns a member off on 403 NotAuthorized', async () => {
     const deps = fakeDeps({ send: vi.fn(async () => result({ status: 403, error: 'NotAuthorized' })) });
     await notifyForPost(publicReply, deps);

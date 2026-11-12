@@ -63,6 +63,14 @@ const defaultDeps: DispatchDeps = {
   now: Date.now,
 };
 
+const FAILURE_MAX = 300;
+
+/** One line saying why the relay did not take an alert, for the member's send log. */
+export function describeFailure({ status, error, message }: SendResult): string {
+  const reason = status === 0 ? `no answer${error ? `: ${error}` : ''}` : `HTTP ${status}${error ? ` ${error}` : ''}`;
+  return (message ? `${reason}: ${message}` : reason).slice(0, FAILURE_MAX);
+}
+
 // author|recipient → last send time. In memory only; a restart errs toward sending.
 let lastSend = new Map<string, number>();
 
@@ -182,11 +190,16 @@ async function dispatch(input: NotifyForPostInput, deps: DispatchDeps) {
           })
         : local;
       const res = await deps.send({ recipient: r.did, ...payload });
-      await deps.store.updateEntry(r.did, entry.id, { delivery: res.ok ? 'sent' : 'undelivered' });
-      // Only a delivered alert starts the cool-down; a refused one should not
-      // also silence the next five minutes.
-      if (res.ok) lastSend.set(key, deps.now());
-      else console.warn(`[notify] relay refused ${entry.id} for ${r.did}: ${res.status} ${res.error ?? ''}`);
+      if (res.ok) {
+        await deps.store.updateEntry(r.did, entry.id, { delivery: 'sent' });
+        // Only a delivered alert starts the cool-down; a refused one should
+        // not also silence the next five minutes.
+        lastSend.set(key, deps.now());
+      } else {
+        const failure = describeFailure(res);
+        await deps.store.updateEntry(r.did, entry.id, { delivery: 'undelivered', failure });
+        console.warn(`[notify] relay refused ${entry.id} for ${r.did}: ${failure}`);
+      }
       // Only the relay saying there is no grant turns a member off; a quota
       // or outage answer must never silence anyone.
       if (!res.ok && res.status === 403 && res.error === 'NotAuthorized') {
