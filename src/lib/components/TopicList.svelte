@@ -1,4 +1,5 @@
-<script lang="ts">
+<script lang="ts" generics="Topic extends ThreadSummary & { pinned?: boolean; locked?: boolean }">
+  import type { Snippet } from 'svelte';
   import { boardPath, threadPath } from '$lib/appview-paths';
   import type { ThreadSummary } from '$lib/server/appview';
   import { relTime } from '$lib/reltime';
@@ -9,33 +10,37 @@
 
   let {
     threads,
-    handles = {},
     accountDid,
     forumDid,
     showBoard = false,
     embedded = false,
     sectionTitle,
     emptyMessage = 'No topics found.',
+    boardName,
+    tagHref = (tag: string) => `/latest?tag=${encodeURIComponent(tag)}`,
+    actions,
   }: {
-    threads: ThreadSummary[];
-    handles?: Record<string, string>;
+    threads: Topic[];
     accountDid?: string | null;
     forumDid?: string;
     showBoard?: boolean;
     embedded?: boolean;
     sectionTitle?: string;
     emptyMessage?: string;
+    /** Board name for thread links when the list is one board's and rows don't carry it. */
+    boardName?: string;
+    tagHref?: (tag: string) => string;
+    /** Per-row controls, shown after the title. */
+    actions?: Snippet<[Topic]>;
   } = $props();
 
-  const name = (thread: ThreadSummary) =>
-    thread.authorProfile?.displayName ?? handles[thread.author] ?? thread.author.slice(8, 18);
-  const href = (thread: ThreadSummary) => threadPath(thread.uri, thread.boardName, thread.title);
+  const href = (thread: Topic) => threadPath(thread.uri, thread.boardName ?? boardName, thread.title);
 </script>
 
 <div class="atm-topic-list" class:atm-topic-list--boards={showBoard} class:atm-panel={!embedded}>
   {#if sectionTitle}<div class="atm-board-section">{sectionTitle}</div>{/if}
   {#each threads as thread}
-    <article class="atm-threadrow atm-threadrow--compact">
+    <article class="atm-threadrow atm-threadrow--compact" class:atm-threadrow--pinned={thread.pinned} class:atm-threadrow--locked={thread.locked}>
       <div class="atm-threadrow__status">
         {#if forumDid}
           <TopicReadStatus
@@ -53,16 +58,19 @@
       </div>
       <div class="atm-threadrow__main">
         <a class="atm-threadrow__title" href={href(thread)}>{thread.title}</a>
+        {#if thread.pinned}<span class="atm-chip atm-threadrow__flag">pinned</span>{/if}
+        {#if thread.locked}<span class="atm-chip atm-threadrow__flag">locked</span>{/if}
         {#if thread.tags?.length}
           <span class="atm-topic-tags" aria-label="Tags">
             {#each thread.tags as tag}
-              <a class="atm-topic-tag" href="/latest?tag={encodeURIComponent(tag)}">{tag}</a>
+              <a class="atm-topic-tag" href={tagHref(tag)}>{tag}</a>
             {/each}
           </span>
         {/if}
         {#if thread.origin}
           <span class="atm-threadrow__via">via <span class="atm-via">{thread.origin.name ?? thread.origin.did.slice(8, 24)}</span></span>
         {/if}
+        {#if actions}<span class="atm-threadrow__actions">{@render actions(thread)}</span>{/if}
       </div>
       <div class="atm-topic-participants" aria-label="Participants">
         {#each thread.participants?.length ? thread.participants : [{ did: thread.author, profile: thread.authorProfile }] as participant}
@@ -98,6 +106,9 @@
     .atm-threadrow__status { display: flex; justify-content: center; }
     .atm-threadrow__status :global(.atm-topic-read-status__dot) { background: var(--forum-accent); }
     .atm-threadrow__status :global(.atm-topic-read-status--read .atm-topic-read-status__dot) { opacity: 0; }
+    /* The pinned and locked tints carry their own edge stripe. */
+    .atm-threadrow--compact.atm-threadrow--pinned { box-shadow: inset 3px 0 0 var(--forum-pin-edge); }
+    .atm-threadrow--compact.atm-threadrow--locked { box-shadow: inset 3px 0 0 var(--forum-lock-edge); }
     .atm-threadrow__main { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
     .atm-threadrow--compact .atm-threadrow__title {
       min-width: 0;
@@ -113,6 +124,12 @@
     .atm-threadrow--compact:has(:global(.atm-topic-read-status--new), :global(.atm-topic-read-status--unread)) .atm-threadrow__title { font-weight: var(--w-bold); }
     .atm-threadrow--compact:has(:global(.atm-topic-read-status--read)) .atm-threadrow__title { color: var(--forum-ink-soft); }
     .atm-threadrow--compact .atm-topic-tags { flex: none; flex-wrap: nowrap; margin-top: 0; }
+    .atm-threadrow__flag { flex: none; }
+    /* Row controls stay out of the way until the row is hovered or focused. */
+    .atm-threadrow__actions { display: flex; flex: none; gap: var(--space-2); opacity: 0; }
+    .atm-threadrow--compact:hover .atm-threadrow__actions,
+    .atm-threadrow--compact:focus-within .atm-threadrow__actions { opacity: 1; }
+    @media (hover: none) { .atm-threadrow__actions { opacity: 1; } }
     .atm-threadrow__via { flex: none; font: var(--type-meta); color: var(--forum-ink-faint); white-space: nowrap; }
     .atm-threadrow--compact .atm-topic-participants { padding-left: 6px; }
     .atm-threadrow--compact .atm-topic-participants :global(a) { display: flex; margin-left: -6px; }
@@ -143,6 +160,7 @@
       .atm-topic-list--boards .atm-threadrow--compact,
       .atm-topic-list:not(.atm-topic-list--boards) .atm-threadrow--compact { grid-template-columns: 10px minmax(0, 1fr) auto; }
       .atm-threadrow__board, .atm-threadrow--compact .atm-threadrow__nums, .atm-threadrow__via { display: none; }
+      .atm-threadrow__main { flex-wrap: wrap; }
       .atm-threadrow--compact .atm-threadrow__title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
     }
   }

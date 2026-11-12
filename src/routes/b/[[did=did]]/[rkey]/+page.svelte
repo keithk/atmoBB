@@ -1,13 +1,10 @@
 <script lang="ts">
-  import { threadPath } from '$lib/appview-paths';
   import { enhance } from '$app/forms';
   import { page } from '$app/state';
-  import { relTime } from '$lib/reltime';
-  import Avatar from '$lib/components/Avatar.svelte';
   import BoardLabel from '$lib/components/BoardLabel.svelte';
-  import MemberLink from '$lib/components/MemberLink.svelte';
+  import PageBar from '$lib/components/PageBar.svelte';
   import RichTextEditor from '$lib/components/RichTextEditor.svelte';
-  import TopicReadStatus from '$lib/components/TopicReadStatus.svelte';
+  import TopicList from '$lib/components/TopicList.svelte';
   import JoinNotice from '$lib/components/JoinNotice.svelte';
   import { threadFilterHref } from '$lib/thread-filters';
   import { canPost } from '$lib/membership';
@@ -21,14 +18,14 @@
   // On a gated forum, non-members read but see no write controls (R22).
   const mayPost = $derived(canPost(page.data.standing));
   const staff = $derived(data.canModerate);
-  const name = (t: { authorProfile?: { displayName?: string }; author: string }) =>
-    t.authorProfile?.displayName ?? data.handles[t.author] ?? t.author.slice(8, 20);
-  const href = (t: { uri: string; title: string; boardName?: string }) =>
-    threadPath(t.uri, t.boardName ?? data.board?.name, t.title);
-
   const filtered = $derived(!!(data.filters.q || data.filters.tag));
   const boardThreads = $derived(data.board?.threadCount ?? 0);
   const totalPosts = $derived(boardThreads + (data.board?.replyCount ?? 0));
+  const summary = $derived(
+    [data.board?.description, `${boardThreads.toLocaleString()} threads`, `${totalPosts.toLocaleString()} posts`]
+      .filter(Boolean)
+      .join(' · '),
+  );
   const filteredThreads = $derived(data.filteredCount ?? boardThreads);
   const totalPages = $derived(Math.max(1, Math.ceil(filteredThreads / data.limit)));
   const currentPage = $derived(Math.floor(data.offset / data.limit) + 1);
@@ -45,40 +42,27 @@
   });
 </script>
 
-<nav class="atm-crumbs">
-  <a href="/">{data.forum.name}</a><span class="atm-crumbs__sep">›</span>
-  <span class="atm-crumbs__current"><BoardLabel uri={data.boardUri} name={data.board?.name} /></span>
-</nav>
-
-<div class="head">
-  <div>
-    <h1 class="head__title">
-      <BoardLabel uri={data.boardUri} name={data.board?.name} />
-      {#if data.private}
-        <span class="atm-chip" title="members-only board">🔒 members-only</span>
-      {/if}
-      {#if data.board?.topic}
-        <span class="atm-chip atm-chip--topic">⁂ {data.board.topic}</span>
-      {/if}
-    </h1>
-    <p class="head__desc">
-      {#if data.board?.description}{data.board.description} &middot;{/if}
-      <b>{boardThreads.toLocaleString()}</b> threads &middot; <b>{totalPosts.toLocaleString()}</b> posts
-    </p>
-  </div>
+<PageBar description={summary}>
+  {#snippet heading()}
+    <BoardLabel uri={data.boardUri} name={data.board?.name} />
+    {#if data.private}
+      <span class="atm-chip" title="members-only board">🔒 members-only</span>
+    {/if}
+    {#if data.board?.topic}
+      <span class="atm-chip atm-chip--topic">⁂ {data.board.topic}</span>
+    {/if}
+  {/snippet}
   {#if user}
-    <div class="head__actions">
-      {#if data.watching !== null}
-        <form method="POST" action={data.watching ? '?/unwatch' : '?/watch'} use:enhance>
-          <button class="atm-btn atm-btn--secondary">{data.watching ? 'Unwatch' : 'Watch this board'}</button>
-        </form>
-      {/if}
-      {#if !data.locked && mayPost}
-        <a class="atm-btn atm-btn--primary" href="#composer">✎ new thread</a>
-      {/if}
-    </div>
+    {#if data.watching !== null}
+      <form method="POST" action={data.watching ? '?/unwatch' : '?/watch'} use:enhance>
+        <button class="atm-btn atm-btn--secondary atm-btn--sm">{data.watching ? 'Unwatch' : 'Watch'}</button>
+      </form>
+    {/if}
+    {#if !data.locked && mayPost}
+      <a class="atm-btn atm-btn--primary atm-btn--sm" href="#composer">✎ new thread</a>
+    {/if}
   {/if}
-</div>
+</PageBar>
 {#if form?.watch && form.message}<p class="atm-err">{form.message}</p>{/if}
 
 {#if data.locked}
@@ -120,74 +104,45 @@
   <button class="atm-btn atm-btn--primary">Filter</button>
   {#if filtered}<a class="atm-btn atm-btn--ghost" href={basePath}>Clear</a>{/if}
 </form>
-<div class="atm-panel">
-  <div class="atm-board-section">{filtered ? 'Matching topics' : 'Threads'}</div>
-  {#each data.threads as t}
-    <article class="atm-threadrow" class:atm-threadrow--pinned={t.pinned} class:atm-threadrow--locked={t.locked}>
-      <div>
-        <div class="atm-threadrow__title"><a href={href(t)}>{t.title}</a></div>
-        {#if t.tags?.length}
-          <div class="atm-topic-tags" aria-label="Tags">
-            {#each t.tags as tag}<a class="atm-topic-tag" href="{basePath}?tag={encodeURIComponent(tag)}">{tag}</a>{/each}
-          </div>
-        {/if}
-        <div class="atm-threadrow__sub">
-          <span>by <MemberLink did={t.author}>{name(t)}</MemberLink></span>
-          {#if t.origin}
-            <span>&middot; via <span class="atm-via">{t.origin.name ?? t.origin.did.slice(8, 24)}</span></span>
-          {/if}
-          <span>&middot; started {relTime(t.createdAt)}</span>
-          <TopicReadStatus accountDid={user?.did} forumDid={data.forumDid} threadUri={t.uri} canonicalHref={href(t)} createdAt={t.createdAt} lastActivity={t.lastActivity} replyCount={t.replyCount} lastPostBy={t.replyCount === 0 ? t.author : t.lastReplyBy} />
-          {#if staff}
-            {#snippet modact(action: string, label: string, title: string)}
-              <form class="atm-modact" method="POST" action="?/moderateThread">
-                <input type="hidden" name="action" value={action} />
-                <input type="hidden" name="uri" value={t.uri} />
-                <input type="hidden" name="cid" value={t.cid ?? ''} />
-                <button class="atm-linkbtn atm-modact__btn" {title}>{label}</button>
-              </form>
-            {/snippet}
-            {@render modact('hide', 'hide', 'Hide this thread from this forum')}
-            {#if t.origin}
-              <form class="atm-modact" method="POST" action="?/blockForum">
-                <input type="hidden" name="did" value={t.origin.did} />
-                <button class="atm-linkbtn atm-modact__btn" title="Block {t.origin.name ?? t.origin.did} from this board">block forum</button>
-              </form>
-            {:else}
-              {#if t.locked}
-                {@render modact('unlock', 'unlock', 'Let members reply again')}
-              {:else}
-                {@render modact('lock', 'lock', 'Stop new replies')}
-              {/if}
-              {#if t.pinned}
-                {@render modact('unpin', 'unpin', 'Let this thread sort by activity again')}
-              {:else}
-                {@render modact('pin', 'pin', 'Keep this thread at the top of the board')}
-              {/if}
-            {/if}
-          {/if}
-        </div>
-      </div>
-      <div class="atm-threadrow__nums"><b>{t.replyCount}</b> {t.replyCount === 1 ? 'reply' : 'replies'}</div>
-      <div class="atm-threadrow__last">
-        <div class="atm-topic-participants" aria-label="Participants">
-          {#each t.participants?.length ? t.participants : [{ did: t.author, profile: t.authorProfile }] as participant}
-            <Avatar seed={participant.did} profile={participant.profile} size={30} />
-          {/each}
-        </div>
-        <span>{relTime(t.lastActivity)}</span>
-      </div>
-    </article>
+<TopicList
+  threads={data.threads}
+  accountDid={user?.did}
+  forumDid={data.forumDid}
+  boardName={data.board?.name}
+  tagHref={(tag) => `${basePath}?tag=${encodeURIComponent(tag)}`}
+  actions={staff ? modActions : undefined}
+  embedded
+  emptyMessage={filtered ? 'No topics match these filters.' : 'No threads yet. Start the first one.'}
+/>
+
+{#snippet modActions(t: (typeof data.threads)[number])}
+  {#snippet modact(action: string, label: string, title: string)}
+    <form class="atm-modact" method="POST" action="?/moderateThread">
+      <input type="hidden" name="action" value={action} />
+      <input type="hidden" name="uri" value={t.uri} />
+      <input type="hidden" name="cid" value={t.cid ?? ''} />
+      <button class="atm-linkbtn atm-modact__btn" {title}>{label}</button>
+    </form>
+  {/snippet}
+  {@render modact('hide', 'hide', 'Hide this thread from this forum')}
+  {#if t.origin}
+    <form class="atm-modact" method="POST" action="?/blockForum">
+      <input type="hidden" name="did" value={t.origin.did} />
+      <button class="atm-linkbtn atm-modact__btn" title="Block {t.origin.name ?? t.origin.did} from this board">block forum</button>
+    </form>
   {:else}
-    <p class="atm-empty">{filtered ? 'No topics match these filters.' : 'No threads yet. Start the first one.'}</p>
-  {/each}
-  {#if data.threads.some((t) => t.pinned || t.locked)}
-    <p class="atm-threadlist-legend">
-      {#if data.threads.some((t) => t.pinned)}<span class="atm-threadlist-legend__item atm-threadlist-legend__item--pinned">pinned</span>{/if}
-      {#if data.threads.some((t) => t.locked)}<span class="atm-threadlist-legend__item atm-threadlist-legend__item--locked">locked</span>{/if}
-    </p>
+    {#if t.locked}
+      {@render modact('unlock', 'unlock', 'Let members reply again')}
+    {:else}
+      {@render modact('lock', 'lock', 'Stop new replies')}
+    {/if}
+    {#if t.pinned}
+      {@render modact('unpin', 'unpin', 'Let this thread sort by activity again')}
+    {:else}
+      {@render modact('pin', 'pin', 'Keep this thread at the top of the board')}
+    {/if}
   {/if}
-</div>
+{/snippet}
 
 {#if totalPages > 1}
   <div class="atm-pager-row">
@@ -275,19 +230,6 @@
 
 <style>
   @layer atmobb {
-  .head {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    gap: var(--space-4);
-    margin: var(--space-4) 0;
-    flex-wrap: wrap;
-  }
-  .head__title { font: var(--type-page-title); color: var(--forum-ink); margin: 0; }
-  .head__desc { font: var(--type-meta); color: var(--forum-ink-soft); margin: 5px 0 0; }
-  .head__desc b { color: var(--forum-ink); }
-  .head__actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
-
   .locked { margin-top: var(--space-4); }
   .locked__body { text-align: center; display: grid; justify-items: center; gap: var(--space-3); padding: var(--space-8) var(--space-4); }
   .locked__icon { font-size: 2rem; }

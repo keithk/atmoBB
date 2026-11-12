@@ -31,7 +31,7 @@
 
 <TopicList
   threads={data.threads}
-  handles={data.handles}
+ 
   accountDid={data.user?.did}
   forumDid={data.forumDid}
   showBoard

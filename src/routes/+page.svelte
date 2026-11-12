@@ -28,7 +28,7 @@
 </script>
 
 {#snippet topicList(threads: LatestThreads['threads'], emptyMessage: string)}
-  <TopicList {threads} {emptyMessage} handles={data.handles} accountDid={data.user?.did} forumDid={data.forumDid} showBoard embedded />
+  <TopicList {threads} {emptyMessage} accountDid={data.user?.did} forumDid={data.forumDid} showBoard embedded />
 {/snippet}
 
 {#if data.appviewDown}

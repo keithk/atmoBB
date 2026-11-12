@@ -3,10 +3,13 @@
 
   let {
     title,
+    heading,
     description,
     children,
   }: {
-    title: string;
+    title?: string;
+    /** Rich heading content, for a title that is more than text. */
+    heading?: Snippet;
     description?: string;
     /** View switches and page actions, shown after the title. */
     children?: Snippet;
@@ -15,7 +18,7 @@
 
 <!-- The page's heading and controls, pinned to the top of the content panel. -->
 <header class="atm-pagebar">
-  <h1 class="atm-pagebar__title">{title}</h1>
+  <h1 class="atm-pagebar__title">{#if heading}{@render heading()}{:else}{title}{/if}</h1>
   {#if description}<p class="atm-pagebar__desc">{description}</p>{/if}
   {#if children}<div class="atm-pagebar__actions">{@render children()}</div>{/if}
 </header>
@@ -39,7 +42,11 @@
     box-shadow: inset 0 1px 0 var(--forum-bevel);
   }
   .atm-pagebar__title {
+    display: flex;
     flex: none;
+    align-items: center;
+    gap: var(--space-2);
+    max-width: 100%;
     margin: 0;
     font: var(--w-bold) var(--text-lg)/1.2 var(--font-display);
     color: var(--forum-cat-ink);
