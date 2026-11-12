@@ -4,6 +4,21 @@ Versions follow [Semantic Versioning](https://semver.org) with the operator's
 workload in mind; [Releasing](docs/releasing.md) spells out what each level
 means. Every entry names the Happyview release it was tested against.
 
+## 0.9.0
+
+HappyView 2.16.0, unchanged from 0.8.0. No schema migration, new OAuth consent, or backfill is required for this release.
+
+- The forum has a sidebar-first layout. The sidebar is always on and holds the forum name, navigation, a Notifications link with the unread count, the boards under their categories, and the account controls. It replaces the masthead, hero and tab row. Under 860px it becomes a drawer opened from a slim header. The "Show the forum sidebar" setting is removed.
+- The home page opens on the flat list of latest topics. Latest is now the default homepage layout; the board index is one click away on the Boards view and is still available as the default under Admin → Appearance → Homepage. Who's online and Board stats show on the Boards view only.
+- Every page has a sticky page bar with its title, description and actions: home, boards, threads, Latest, Members, profiles, Rules, Notifications, Settings, Admin, extension pages, Log in and Register.
+- Topic lists are compact one-line rows showing the title, participants, board, reply count and last activity. Unread topics are bold with a dot that links to where you stopped reading. Board pages use the same rows, with pinned and locked chips and staff actions that appear on hover or focus.
+- Thread pages put the title above the first post and move reply, quote, copy link, edit and delete into a toolbar on each post. Copy link is new. The reply box pins to the bottom of the window once a reply is under way.
+- A flatter look across all five themes: category bars and the page bar use one flat tint, the inset bevel highlight is off by default, and buttons lose their gloss. Spacing is tighter throughout, the post author rail is narrower with 72px avatars, and the topic filter is a single slim row.
+- Added an error page for missing pages and failures, with links back to the forum.
+- Page changes cross-fade in browsers that support view transitions. Scrollbars, checkboxes and the text cursor take the forum's palette.
+- Fixed stamps stacking vertically in the member list.
+- Custom CSS: `.atm-masthead` and `.atm-mastnav` no longer exist. The shell hooks are now `.atm-page`, `.atm-sidebar`, `.atm-sidebar-nav`, `.atm-shell`, `.atm-main`, `.atm-pagebar` and `.atm-mobilebar`. Set `--forum-bevel` to bring the bevel highlight back. See [Forum theming](docs/theming.md).
+
 ## 0.8.0
 
 HappyView 2.16.0, unchanged from 0.7.2. No schema migration, new OAuth consent, or backfill is required for this release.
