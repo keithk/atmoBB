@@ -9,6 +9,8 @@
     pathname,
     admin = false,
     forumUnclaimed = false,
+    signedIn = false,
+    unread = 0,
     onNavigate,
   }: {
     groups: BoardGroup[];
@@ -16,6 +18,8 @@
     pathname: string;
     admin?: boolean;
     forumUnclaimed?: boolean;
+    signedIn?: boolean;
+    unread?: number;
     onNavigate?: () => void;
   } = $props();
 
@@ -25,6 +29,7 @@
     { label: 'Members', href: '/members', icon: 'M15 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M3 21v-2a6 6 0 0 1 12 0v2M18 3a4 4 0 0 1 0 8M21 21v-2a6 6 0 0 0-3-5.2' },
     { label: 'Rules', href: '/rules', icon: 'M14 2H5v20h14V7ZM14 2v5h5M8 12h8M8 16h8' },
   ];
+  const bellIcon = 'M6 9a6 6 0 0 1 12 0v5l2 3H4l2-3zM10 20a2 2 0 0 0 4 0';
   const lockIcon = 'M5 10h14v11H5ZM8 10V7a4 4 0 0 1 8 0v3';
   const active = (href: string) =>
     href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
@@ -52,6 +57,21 @@
         </a>
       </li>
     {/each}
+    {#if signedIn}
+      <li>
+        <a
+          class:atm-sidebar-nav__link--active={active('/notifications')}
+          class="atm-sidebar-nav__link"
+          href="/notifications"
+          aria-current={active('/notifications') ? 'page' : undefined}
+          onclick={onNavigate}
+        >
+          <span class="atm-sidebar-nav__icon">{@render icon(bellIcon)}</span>
+          Notifications
+          {#if unread > 0}<span class="atm-sidebar-nav__count" aria-label="{unread} unread">{unread}</span>{/if}
+        </a>
+      </li>
+    {/if}
     {#if admin || forumUnclaimed}
       <li>
         <a
@@ -145,6 +165,17 @@
   .atm-sidebar-nav__icon { display: flex; justify-content: center; width: 18px; flex: none; color: var(--forum-ink-soft); }
   .atm-sidebar-nav__link:hover .atm-sidebar-nav__icon,
   .atm-sidebar-nav__link--active .atm-sidebar-nav__icon { color: inherit; }
+  .atm-sidebar-nav__count {
+    margin-left: auto;
+    min-width: 20px;
+    padding: 2px 6px;
+    border-radius: var(--radius-round);
+    background: var(--forum-link);
+    color: var(--forum-surface);
+    font: var(--w-semibold) var(--text-2xs)/1.3 var(--font-mono);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
   .atm-sidebar-nav__boards { padding-top: var(--space-3); }
   .atm-sidebar-nav__group + .atm-sidebar-nav__group { margin-top: var(--space-3); }
   .atm-sidebar-nav__heading {

@@ -25,7 +25,7 @@ describe('threadUriFromReference', () => {
 });
 
 describe('normalizeHomepage', () => {
-  it('keeps classic defaults for old records', () => {
+  it('gives old records the defaults', () => {
     expect(normalizeHomepage(undefined)).toEqual(DEFAULT_HOMEPAGE);
     expect(normalizeHomepage({})).toEqual(DEFAULT_HOMEPAGE);
   });
@@ -33,7 +33,6 @@ describe('normalizeHomepage', () => {
   it('round trips valid settings and preserves featured order', () => {
     const settings = {
       layout: 'categories-latest',
-      sidebar: true,
       welcome: 'compact',
       featuredThreads: [thread('third'), thread('first')],
     };
@@ -43,7 +42,6 @@ describe('normalizeHomepage', () => {
   it('defaults invalid scalars and drops invalid or excess featured values', () => {
     expect(normalizeHomepage({
       layout: 'popular',
-      sidebar: 'yes',
       welcome: 'large',
       featuredThreads: [
         thread('one'),
@@ -54,8 +52,7 @@ describe('normalizeHomepage', () => {
         thread('five'),
       ],
     })).toEqual({
-      layout: 'boards',
-      sidebar: false,
+      layout: 'latest',
       welcome: 'classic',
       featuredThreads: [thread('one'), thread('three'), thread('four')],
     });
@@ -73,7 +70,7 @@ describe('isThreadUri', () => {
 describe('homepageRecord', () => {
   it('omits the all-default object but stores configured values losslessly', () => {
     expect(homepageRecord(DEFAULT_HOMEPAGE)).toBeUndefined();
-    const configured = normalizeHomepage({ layout: 'latest', featuredThreads: [thread('one')] });
+    const configured = normalizeHomepage({ layout: 'boards', featuredThreads: [thread('one')] });
     expect(normalizeHomepage(homepageRecord(configured))).toEqual(configured);
   });
 });

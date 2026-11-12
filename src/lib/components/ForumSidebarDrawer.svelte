@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, type Snippet } from 'svelte';
   import type { BoardGroup } from '$lib/board-presentation';
   import ForumSidebarNav from './ForumSidebarNav.svelte';
 
@@ -10,6 +10,9 @@
     pathname,
     admin = false,
     forumUnclaimed = false,
+    signedIn = false,
+    unread = 0,
+    children,
   }: {
     groups: BoardGroup[];
     forumDid: string;
@@ -17,6 +20,10 @@
     pathname: string;
     admin?: boolean;
     forumUnclaimed?: boolean;
+    signedIn?: boolean;
+    unread?: number;
+    /** Account controls shown under the navigation. */
+    children?: Snippet;
   } = $props();
 
   let dialog: HTMLDialogElement;
@@ -90,9 +97,12 @@
         {pathname}
         {admin}
         {forumUnclaimed}
+        {signedIn}
+        {unread}
         onNavigate={close}
       />
     </div>
+    {#if children}<div class="atm-sidebar-drawer__account">{@render children()}</div>{/if}
   </div>
 </dialog>
 
@@ -142,7 +152,14 @@
     cursor: pointer;
   }
   .atm-sidebar-drawer__close:hover { color: var(--forum-ink); background: var(--forum-surface-2); }
-  .atm-sidebar-drawer__scroll { min-height: 0; padding: var(--space-3); overflow-y: auto; overscroll-behavior: contain; }
+  .atm-sidebar-drawer__account {
+    flex: none;
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border-top: var(--border-hair) solid var(--forum-line);
+  }
+  .atm-sidebar-drawer__scroll { flex: 1; min-height: 0; padding: var(--space-3); overflow-y: auto; overscroll-behavior: contain; }
 
   @media (min-width: 861px) {
     .atm-sidebar-drawer { display: none; }
