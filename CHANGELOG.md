@@ -4,6 +4,12 @@ Versions follow [Semantic Versioning](https://semver.org) with the operator's
 workload in mind; [Releasing](docs/releasing.md) spells out what each level
 means. Every entry names the Happyview release it was tested against.
 
+## 0.9.1
+
+HappyView 2.16.0, unchanged from 0.9.0. No backfill is required.
+
+- Small UI fix.
+
 ## 0.9.0
 
 HappyView 2.16.0, unchanged from 0.8.0. No schema migration, new OAuth consent, or backfill is required for this release.
