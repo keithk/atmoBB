@@ -8,7 +8,7 @@ const classic = {
   line: '#ddd8d3',
   lineStrong: '#c9c3bc',
   edge: '#c9c3bc',
-  bevel: 'rgba(255,255,255,0.85)',
+  bevel: 'transparent',
 
   ink: '#2b2a2e',
   inkSoft: '#6c6a70',
@@ -20,7 +20,7 @@ const classic = {
   accentSoft: '#fdeee7',
   link: '#c05a37',
 
-  catBg: 'linear-gradient(180deg,#f3f0ec,#e9e4de)',
+  catBg: '#f1eeea',
   catEdge: '#f79b7a',
 
 
@@ -28,7 +28,7 @@ const classic = {
   idle: '#d0951f',
   offline: '#a7a2ab',
   radius: 8,
-  shadow: '0 1px 0 rgba(33,28,22,0.04), 0 1px 2px rgba(33,28,22,0.06)',
+  shadow: '0 1px 2px rgba(33,28,22,0.05)',
 };
 
 export type OgSkin = { [K in keyof typeof classic]: (typeof classic)[K] extends number ? number : string };

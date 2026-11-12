@@ -20,24 +20,25 @@
     </p>
 
     <div class="preview" style={previewStyle} style:color-scheme={preset.dark ? 'dark' : 'light'} aria-hidden="true">
-      <div class="preview__masthead">
-        <div class="preview__bar">
-          <span class="preview__brand">{data.forumName}</span>
-          <span class="preview__btn preview__btn--ghost">log in</span>
-        </div>
-        <div class="preview__nav">
-          <span class="preview__nav-item preview__nav-item--active">Boards</span>
-          <span class="preview__nav-item">Latest</span>
-          <span class="preview__nav-item">Members</span>
-        </div>
+      <div class="preview__side">
+        <span class="preview__brand">{data.forumName}</span>
+        <span class="preview__nav-item preview__nav-item--active">Home</span>
+        <span class="preview__nav-item">Members</span>
+        <span class="preview__group">Boards</span>
+        <span class="preview__nav-item"><i class="preview__marker"></i>General</span>
+        <span class="preview__nav-item"><i class="preview__marker"></i>Help</span>
       </div>
-      <div class="preview__section">
-        <div class="preview__cat">General</div>
+      <div class="preview__main">
+        <div class="preview__bar">
+          <span class="preview__heading">General</span>
+          <span class="preview__btn preview__btn--secondary">watch</span>
+          <span class="preview__btn preview__btn--primary">new thread</span>
+        </div>
         <div class="preview__row preview__row--pinned">
           <span class="preview__title">Welcome! Read this first</span>
           <span class="preview__meta">pinned · <span class="preview__link">mod</span></span>
         </div>
-        <div class="preview__row">
+        <div class="preview__row preview__row--unread">
           <span class="preview__title">What are you playing this weekend?</span>
           <span class="preview__meta">42 replies · <span class="preview__rank">regular</span></span>
         </div>
@@ -45,10 +46,6 @@
           <span class="preview__title">Introduce yourself</span>
           <span class="preview__meta">7 replies · <span class="preview__link">newcomer</span></span>
         </div>
-      </div>
-      <div class="preview__actions">
-        <span class="preview__btn preview__btn--primary">new topic</span>
-        <span class="preview__btn preview__btn--secondary">watch board</span>
       </div>
     </div>
 
@@ -103,16 +100,45 @@
   /* Live preview: a compact mock that reads the same --forum-* tokens as the real pages.
      The inline style on the container re-skins it without touching the admin itself. */
   .preview {
-    padding: var(--space-4);
+    display: grid;
+    grid-template-columns: 9.5rem minmax(0, 1fr);
+    gap: var(--space-2);
+    padding: var(--space-2);
     border: var(--border-hair) solid var(--forum-line);
     border-radius: var(--radius-md);
     background: var(--forum-bg);
     color: var(--forum-ink);
     font: var(--type-ui);
-    display: grid;
-    gap: var(--space-3);
   }
-  .preview__masthead, .preview__section {
+  .preview__side { display: grid; align-content: start; gap: 2px; padding: var(--space-1); min-width: 0; }
+  .preview__brand {
+    padding: var(--space-1) var(--space-2) var(--space-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: var(--w-bold) var(--text-sm)/1.2 var(--font-display);
+    color: var(--forum-header-ink);
+  }
+  .preview__nav-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px var(--space-2);
+    border-radius: var(--radius-sm);
+    font: var(--w-medium) var(--text-xs)/1.3 var(--font-body);
+    color: var(--forum-ink);
+  }
+  .preview__nav-item--active { color: var(--forum-link); background: var(--forum-accent-soft); font-weight: var(--w-semibold); }
+  .preview__group {
+    padding: var(--space-2) var(--space-2) 2px;
+    font: var(--w-bold) var(--text-2xs)/1.3 var(--font-body);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--forum-ink-faint);
+  }
+  .preview__marker { width: 0.72em; height: 0.72em; border-radius: 2px; background: var(--forum-accent); }
+  .preview__main {
+    min-width: 0;
     background: var(--forum-surface);
     border: var(--border-hair) solid var(--forum-edge);
     border-radius: var(--radius-md);
@@ -121,47 +147,25 @@
   }
   .preview__bar {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: var(--space-2) var(--space-3);
-    border-bottom: var(--border-hair) solid var(--forum-line);
-    background: var(--forum-header-bg);
-  }
-  .preview__brand { font: var(--w-bold) var(--text-md)/1 var(--font-display); color: var(--forum-header-ink); }
-  .preview__nav {
-    display: flex;
-    gap: var(--space-1);
-    padding: 0 var(--space-2);
-    background: var(--forum-cat-bg);
-    box-shadow: inset 0 1px 0 var(--forum-bevel);
-  }
-  .preview__nav-item {
-    padding: 8px 10px 6px;
-    font: var(--w-semibold) var(--text-xs)/1 var(--font-body);
-    color: var(--forum-cat-ink);
-    border-bottom: var(--border-solid) solid transparent;
-  }
-  .preview__nav-item--active { color: var(--forum-ink); border-bottom-color: var(--forum-cat-edge); }
-  .preview__cat {
+    gap: var(--space-2);
     padding: 6px var(--space-3);
-    font: var(--w-bold) var(--text-xs)/1 var(--font-body);
-    letter-spacing: var(--ls-label);
-    text-transform: uppercase;
-    color: var(--forum-cat-ink);
     background: var(--forum-cat-bg);
     border-bottom: var(--border-solid) solid var(--forum-cat-edge);
   }
+  .preview__heading { margin-right: auto; font: var(--w-bold) var(--text-sm)/1.2 var(--font-display); color: var(--forum-cat-ink); }
   .preview__row {
     display: flex;
     justify-content: space-between;
     gap: var(--space-3);
-    padding: var(--space-2) var(--space-3);
+    padding: 6px var(--space-3);
     border-bottom: var(--border-hair) solid var(--forum-line);
   }
   .preview__row:last-child { border-bottom: 0; }
   .preview__row--alt { background: var(--forum-surface-2); }
   .preview__row--pinned { background: var(--forum-pin-bg); box-shadow: inset 3px 0 0 var(--forum-pin-edge); }
-  .preview__title { font-weight: var(--w-semibold); color: var(--forum-ink); }
+  .preview__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-display); color: var(--forum-ink-soft); }
+  .preview__row--unread .preview__title, .preview__row--pinned .preview__title { font-weight: var(--w-bold); color: var(--forum-ink); }
   .preview__meta { font: var(--type-meta); color: var(--forum-ink-faint); white-space: nowrap; }
   .preview__link { color: var(--forum-link); }
   .preview__rank {
@@ -171,21 +175,23 @@
     background: var(--forum-rank-bg);
     border: var(--border-hair) solid color-mix(in oklch, var(--forum-rank) 45%, transparent);
   }
-  .preview__actions { display: flex; gap: var(--space-2); }
   .preview__btn {
     display: inline-flex;
-    padding: 6px 11px;
+    padding: 5px 9px;
     border-radius: var(--radius-sm);
     border: var(--border-hair) solid transparent;
-    font: var(--w-semibold) var(--text-xs)/1 var(--font-body);
+    font: var(--w-semibold) var(--text-2xs)/1 var(--font-body);
   }
   .preview__btn--primary {
-    background: linear-gradient(180deg, color-mix(in oklch, var(--forum-accent) 86%, #fff), var(--forum-accent));
+    background: var(--forum-accent);
     color: var(--forum-accent-ink);
-    border-color: color-mix(in oklch, var(--forum-accent) 68%, #000);
+    border-color: color-mix(in oklch, var(--forum-accent) 78%, #000);
   }
   .preview__btn--secondary { background: var(--forum-surface); color: var(--forum-ink); border-color: var(--forum-line-strong); }
-  .preview__btn--ghost { color: var(--forum-ink-soft); }
+  @media (max-width: 520px) {
+    .preview { grid-template-columns: minmax(0, 1fr); }
+    .preview__side { display: none; }
+  }
 
   .theme-form { display: grid; gap: var(--space-3); margin-top: var(--space-4); }
   .theme-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: var(--space-2); padding: 0; border: 0; }
