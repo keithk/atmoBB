@@ -5,7 +5,13 @@
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body { overflow-x: clip; }
-html { -webkit-text-size-adjust: 100%; }
+html {
+  -webkit-text-size-adjust: 100%;
+  /* the parts the browser draws take the forum's palette too */
+  accent-color: var(--forum-accent);
+  scrollbar-color: var(--forum-line-strong) transparent;
+}
+input, textarea, [contenteditable] { caret-color: var(--forum-link); }
 
 body {
   margin: 0;
