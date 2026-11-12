@@ -146,6 +146,18 @@ class MaintenanceProxyTest(unittest.TestCase):
                             self.assertEqual(headers["Cache-Control"], "no-store")
                             self.assertEqual(headers["X-Atmobb-Maintenance"], "1")
                             self.assertIn(b"maintenance", body)
+                            self.assertEqual(headers["Content-Type"], "text/plain; charset=utf-8")
+                    browser = {"Accept": "text/html,application/xhtml+xml"}
+                    status, headers, body = self.request(ports[0], "/b/general", headers=browser)
+                    self.assertEqual(status, 503)
+                    self.assertEqual(headers["Retry-After"], "60")
+                    self.assertEqual(headers["Cache-Control"], "no-store")
+                    self.assertEqual(headers["X-Atmobb-Maintenance"], "1")
+                    self.assertEqual(headers["Content-Type"], "text/html; charset=utf-8")
+                    self.assertTrue(body.startswith(b"<!doctype html>"))
+                    self.assertIn(b"<strong>127.0.0.1</strong>", body)
+                    self.assertEqual(self.request(ports[1], headers=browser)[1]["Content-Type"],
+                                     "text/plain; charset=utf-8")
                     self.assertEqual(self.request(ports[1], "/admin/config")[0], 404)
                     self.assertEqual(self.request(ports[0], "/_atmobb/status")[2], b"/status")
                     self.assertEqual(self.request(ports[2])[0], 200)

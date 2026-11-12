@@ -17,6 +17,311 @@
 	                        Cache-Control no-store
 	                        X-Atmobb-Maintenance 1
 	                }
+	                # Browsers get a self-contained page: the app cannot serve
+	                # styles, scripts, or images while the gate is closed.
+	                @browser header Accept *text/html*
+	                handle @browser {
+	                        header Content-Type "text/html; charset=utf-8"
+	                        respond <<HTML
+	                        <!doctype html>
+	                        <html lang="en">
+	                        <head>
+	                        <meta charset="utf-8">
+	                        <meta name="viewport" content="width=device-width, initial-scale=1">
+	                        <title>Locked for maintenance</title>
+	                        <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 14'%3E%3Cpath fill='%23f79b7a' d='M2 0h12v1h1v7h-1v1H9v1H6v1H3V9H2V8H1V1h1z'/%3E%3Cpath fill='%23fff' d='M3 2h9v1H3zM3 4h9v1H3zM3 6h6v1H3z'/%3E%3C/svg%3E">
+	                        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&amp;family=IBM+Plex+Sans:wght@400;600&amp;display=swap">
+	                        <noscript><meta http-equiv="refresh" content="60"></noscript>
+	                        <style>
+	                        /* Values mirror the atmobb house skin in src/lib/styles/tokens. This page is
+	                           served by the proxy while the app is stopped, so it cannot load them. */
+	                        :root {
+	                          color-scheme: light;
+	                          --bg: #eceae7;
+	                          --surface: #ffffff;
+	                          --line: #ddd8d3;
+	                          --line-strong: #c9c3bc;
+	                          --ink: #2b2a2e;
+	                          --ink-body: #43424a;
+	                          --ink-soft: #6c6a70;
+	                          --accent: #f79b7a;
+	                          --accent-hover: #f2895f;
+	                          --accent-ink: #4a2a1c;
+	                          --accent-soft: #fdeee7;
+	                          --link: #c05a37;
+	                          --rank: #8a5a7a;
+	                          --rank-bg: #f3e7ef;
+	                          --lock-ink: #4d5868;
+	                          --lock-bg: #eef0f3;
+	                          --lock-edge: #97a1b0;
+	                          --ok: #2f7d55;
+	                          --ok-bg: #e0efe4;
+	                          --display: 'Trebuchet MS', 'IBM Plex Sans', system-ui, sans-serif;
+	                          --body: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+	                          --mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+	                          --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+	                        }
+	                        * { box-sizing: border-box; }
+	                        ::selection { background: var(--accent); color: var(--accent-ink); }
+	                        body {
+	                          margin: 0;
+	                          padding: clamp(32px, 9vh, 96px) 16px 48px;
+	                          background: var(--bg);
+	                          color: var(--ink-body);
+	                          font: 400 15.5px/1.7 var(--body);
+	                        }
+	                        main { max-width: 620px; margin-inline: auto; }
+	                        [hidden] { display: none !important; }
+	                        :focus-visible { outline: 3px solid color-mix(in oklch, var(--accent) 70%, var(--accent-ink)); outline-offset: 2px; }
+
+	                        .mark { display: block; width: 64px; height: 56px; margin-bottom: 24px; }
+	                        .mark .ink { fill: var(--accent); }
+	                        .mark .line { fill: var(--bg); transform-box: fill-box; transform-origin: left; }
+	                        h1 {
+	                          margin: 0 0 12px;
+	                          font: 400 32px/1.12 var(--display);
+	                          letter-spacing: -0.015em;
+	                          color: var(--ink);
+	                          text-wrap: balance;
+	                        }
+	                        p { margin: 0 0 12px; max-width: 62ch; }
+	                        strong { font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+	                        .status {
+	                          display: flex;
+	                          flex-wrap: wrap;
+	                          align-items: center;
+	                          gap: 8px;
+	                          margin: 20px 0 0;
+	                          font: 400 12.5px/1.3 var(--mono);
+	                          font-variant-numeric: tabular-nums;
+	                        }
+	                        .stamp {
+	                          display: inline-block;
+	                          padding: 4px 7px;
+	                          border: 1px solid color-mix(in oklch, var(--rank) 55%, var(--line-strong));
+	                          border-radius: 3px;
+	                          background: var(--rank-bg);
+	                          color: var(--rank);
+	                          font: 700 11px/1 var(--mono);
+	                          letter-spacing: 0.04em;
+	                          text-transform: uppercase;
+	                          white-space: nowrap;
+	                        }
+	                        .stamp--lock { border: 2px double var(--lock-edge); border-radius: 2px; background: var(--lock-bg); color: var(--lock-ink); }
+	                        .stamp--open { border: 2px double var(--ok); border-radius: 2px; background: var(--ok-bg); color: var(--ok); }
+	                        .stamp--staff { border-color: color-mix(in oklch, var(--link) 55%, var(--line-strong)); background: var(--accent-soft); color: var(--link); }
+
+	                        .room {
+	                          margin-top: 40px;
+	                          border: 1px solid var(--line-strong);
+	                          border-radius: 5px;
+	                          background: var(--surface);
+	                        }
+	                        .room__head { padding: 12px 16px; border-bottom: 2px solid var(--accent); }
+	                        .room__head h2 { margin: 0; font: 700 17px/1.3 var(--display); color: var(--ink); }
+	                        .room__head p { margin: 0; max-width: none; font: 400 12.5px/1.3 var(--body); color: var(--ink-soft); }
+	                        .posts { margin: 0; padding: 0; list-style: none; max-height: 46vh; overflow-y: auto; scrollbar-color: var(--line-strong) transparent; scrollbar-width: thin; }
+	                        .post {
+	                          display: flex;
+	                          gap: 12px;
+	                          padding: 12px 16px;
+	                          border-bottom: 1px solid var(--line);
+	                          transition: opacity 260ms var(--ease), translate 260ms var(--ease);
+	                        }
+	                        @starting-style { .post { opacity: 0; translate: 0 6px; } }
+	                        .post svg { flex: none; width: 32px; height: 28px; margin-top: 2px; }
+	                        .post__who { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font: 600 14px/1.3 var(--body); color: var(--ink); }
+	                        .post__who time { font: 400 12.5px/1.3 var(--mono); color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+	                        .post p { margin: 2px 0 0; }
+	                        .post--you p { font-size: 24px; line-height: 1.3; }
+	                        .replies { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px 16px; }
+	                        .replies button { min-width: 48px; min-height: 44px; padding: 6px 10px; font-size: 22px; }
+	                        button {
+	                          min-height: 40px;
+	                          padding: 9px 14px;
+	                          border: 1px solid var(--line-strong);
+	                          border-radius: 5px;
+	                          background: var(--surface);
+	                          color: var(--ink);
+	                          font: 600 14px/1 var(--body);
+	                          cursor: pointer;
+	                          transition: background 150ms var(--ease), transform 90ms var(--ease);
+	                        }
+	                        button:hover { background: var(--accent-soft); }
+	                        button:active { transform: translateY(1px); }
+	                        .enter {
+	                          display: inline-block;
+	                          padding: 9px 16px;
+	                          border: 1px solid color-mix(in oklch, var(--accent) 78%, #000);
+	                          border-radius: 5px;
+	                          background: var(--accent);
+	                          color: var(--accent-ink);
+	                          font: 600 14px/1 var(--body);
+	                          text-decoration: none;
+	                        }
+	                        .enter:hover { background: var(--accent-hover); }
+	                        #open { margin-top: 12px; }
+	                        #open:empty { display: none; }
+
+	                        /* The mark writes its three lines, holds, then clears. */
+	                        @media (prefers-reduced-motion: no-preference) {
+	                          .mark .line { animation: 5s infinite both; }
+	                          .mark .line:nth-of-type(1) { animation-name: write-1; animation-timing-function: steps(9, jump-none); }
+	                          .mark .line:nth-of-type(2) { animation-name: write-2; animation-timing-function: steps(9, jump-none); }
+	                          .mark .line:nth-of-type(3) { animation-name: write-3; animation-timing-function: steps(6, jump-none); }
+	                          @keyframes write-1 { 0% { scale: 0 1; } 20%, 90% { scale: 1 1; } 91%, 100% { scale: 0 1; } }
+	                          @keyframes write-2 { 0%, 24% { scale: 0 1; } 44%, 90% { scale: 1 1; } 91%, 100% { scale: 0 1; } }
+	                          @keyframes write-3 { 0%, 48% { scale: 0 1; } 62%, 90% { scale: 1 1; } 91%, 100% { scale: 0 1; } }
+	                        }
+	                        @media (prefers-reduced-motion: reduce) { .post, button { transition: none; } }
+	                        @media (max-width: 480px) { h1 { font-size: 26px; } .room { margin-top: 32px; } }
+	                        </style>
+	                        </head>
+	                        <body>
+	                        <main>
+	                          <svg class="mark" viewBox="0 0 16 14" shape-rendering="crispEdges" aria-hidden="true">
+	                            <path class="ink" d="M2 0h12v1h1v7h-1v1H9v1H6v1H3V9H2V8H1V1h1z"/>
+	                            <rect class="line" x="3" y="2" width="9" height="1"/>
+	                            <rect class="line" x="3" y="4" width="9" height="1"/>
+	                            <rect class="line" x="3" y="6" width="6" height="1"/>
+	                          </svg>
+	                          <h1>This board is locked for maintenance.</h1>
+	                          <p><strong>{http.request.host}</strong> is being worked on and will reopen shortly. Nothing is lost while it is closed: posts are kept in their authors' own accounts, not on this server.</p>
+	                          <p id="keep" hidden>Keep this tab open. It checks every few seconds and takes you back in when the forum reopens.</p>
+	                          <noscript><p>This page reloads itself every minute until the forum reopens.</p></noscript>
+	                          <p class="status" id="status" hidden><span class="stamp stamp--lock" id="state">Locked</span> <span id="checked">checking now</span></p>
+	                          <p id="open" role="status"></p>
+
+	                          <section class="room" id="room" aria-labelledby="room-title" hidden>
+	                            <div class="room__head">
+	                              <h2 id="room-title">Waiting room</h2>
+	                              <p>The one thread still open. Replies stay on this page and are gone when the forum reopens.</p>
+	                            </div>
+	                            <ol class="posts" id="posts" aria-live="polite"></ol>
+	                            <div class="replies" id="replies" role="group" aria-label="Reactions">
+	                              <button type="button" data-reply="bump" aria-label="bump">⬆️</button>
+	                              <button type="button" data-reply="first" aria-label="first">🥇</button>
+	                              <button type="button" data-reply="news" aria-label="any news?">👀</button>
+	                              <button type="button" data-reply="refresh" aria-label="refreshing">🔄</button>
+	                              <button type="button" data-reply="subscribe" aria-label="subscribing">🔔</button>
+	                            </div>
+	                          </section>
+	                        </main>
+
+	                        <template id="sysop-avatar">
+	                          <svg viewBox="0 0 16 14" shape-rendering="crispEdges" aria-hidden="true">
+	                            <path fill="#f79b7a" d="M2 0h12v1h1v7h-1v1H9v1H6v1H3V9H2V8H1V1h1z"/>
+	                            <path fill="#fff" d="M3 2h9v1H3zM3 4h9v1H3zM3 6h6v1H3z"/>
+	                          </svg>
+	                        </template>
+	                        <template id="you-avatar">
+	                          <svg viewBox="0 0 16 14" shape-rendering="crispEdges" aria-hidden="true">
+	                            <path fill="#8a5a7a" d="M6 1h4v1h1v4h-1v1H6V6H5V2h1zM4 8h8v1h1v5H3V9h1z"/>
+	                          </svg>
+	                        </template>
+
+	                        <script>
+	                        'use strict';
+	                        (function () {
+	                          var byId = function (id) { return document.getElementById(id); };
+	                          var posts = byId('posts');
+	                          var lastCheck = 0;
+	                          var open = false;
+	                          var count = 0;
+	                          var firsts = 0;
+	                          var turn = 0;
+
+	                          var ranks = [[16, 'lives here now'], [10, 'refresh veteran'], [6, 'thread bumper'], [3, 'regular'], [1, 'new here']];
+	                          var answers = {
+	                            bump: ["Bumped. It was already at the top. It's the only thread.", 'Still at the top.', "You can't bump past yourself."],
+	                            refresh: ['No need. This page checks for you every few seconds.', 'Put the F5 key down. The page has it covered.'],
+	                            subscribe: ['Subscribed. Staying on this page is the subscription.', 'You were already subscribed. You are looking at it.']
+	                          };
+
+	                          function ago() {
+	                            var seconds = Math.round((Date.now() - lastCheck) / 1000);
+	                            return seconds < 2 ? 'just now' : seconds + 's ago';
+	                          }
+
+	                          function post(who, text) {
+	                            var item = document.createElement('li');
+	                            var body = document.createElement('div');
+	                            var head = document.createElement('div');
+	                            var time = document.createElement('time');
+	                            var stamp = document.createElement('span');
+	                            var words = document.createElement('p');
+	                            var rank = who === 'sysop' ? 'staff' : (ranks.find(function (entry) { return count >= entry[0]; }) || [])[1];
+	                            item.className = who === 'sysop' ? 'post' : 'post post--you';
+	                            head.className = 'post__who';
+	                            head.append(who);
+	                            if (rank) {
+	                              stamp.className = who === 'sysop' ? 'stamp stamp--staff' : 'stamp';
+	                              stamp.textContent = rank;
+	                              head.append(stamp);
+	                            }
+	                            time.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+	                            head.append(time);
+	                            words.textContent = text;
+	                            body.append(head, words);
+	                            item.append(byId(who === 'sysop' ? 'sysop-avatar' : 'you-avatar').content.cloneNode(true), body);
+	                            posts.append(item);
+	                            while (posts.children.length > 40) posts.children[1].remove();
+	                            posts.scrollTop = posts.scrollHeight;
+	                          }
+
+	                          function answer(kind) {
+	                            if (kind === 'news') return open ? 'The doors are open.' : lastCheck ? 'Still locked. Last checked ' + ago() + '.' : 'Still locked. Checking now.';
+	                            if (kind === 'first') return firsts++ ? 'First was already claimed. By you.' : 'Confirmed. First.';
+	                            return answers[kind][turn++ % answers[kind].length];
+	                          }
+
+	                          byId('replies').addEventListener('click', function (event) {
+	                            var button = event.target.closest('button');
+	                            if (!button) return;
+	                            count++;
+	                            post('you', button.textContent);
+	                            setTimeout(function () { post('sysop', answer(button.dataset.reply)); }, 450);
+	                          });
+
+	                          function reopen() {
+	                            open = true;
+	                            var link = document.createElement('a');
+	                            link.className = 'enter';
+	                            link.href = location.href;
+	                            link.textContent = 'enter the forum';
+	                            byId('state').className = 'stamp stamp--open';
+	                            byId('state').textContent = 'Open';
+	                            byId('checked').textContent = 'the forum is back';
+	                            byId('keep').hidden = true;
+	                            byId('open').append(link);
+	                            post('sysop', 'Doors are open. Taking you in.');
+	                            setTimeout(function () { location.replace(location.href); }, 2000);
+	                          }
+
+	                          // The proxy marks every response with X-Atmobb-Maintenance while the gate is
+	                          // closed, so its absence on a healthy response means the forum is back.
+	                          function check() {
+	                            if (open || document.hidden) return;
+	                            fetch(location.href, { method: 'HEAD', cache: 'no-store', headers: { Accept: 'text/plain' } }).then(function (response) {
+	                              lastCheck = Date.now();
+	                              if (response.status < 500 && !response.headers.has('X-Atmobb-Maintenance')) reopen();
+	                            }).catch(function () {});
+	                          }
+
+	                          byId('keep').hidden = false;
+	                          byId('status').hidden = false;
+	                          byId('room').hidden = false;
+	                          post('sysop', 'Pull up a chair. Posting is off everywhere else, but the reactions in here still work.');
+	                          setInterval(function () { if (!open && lastCheck) byId('checked').textContent = 'checked ' + ago(); }, 1000);
+	                          setInterval(check, 5000);
+	                          document.addEventListener('visibilitychange', check);
+	                          check();
+	                        })();
+	                        </script>
+	                        </body>
+	                        </html>
+	                        HTML 503
+	                }
 	                respond "This forum is temporarily unavailable for maintenance. Please try again shortly." 503
 	        }
 	        handle {

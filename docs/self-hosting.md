@@ -392,6 +392,12 @@ remains `404`. Requests already being served drain when the worker stops the
 app and Happyview before taking an update backup. Direct local operator access
 and writes through unrelated AT Protocol clients are outside this public gate.
 
+Browsers on the forum hostname get a self-contained maintenance page instead of
+the plain-text response. It lives in the bundle's `Caddyfile` as a heredoc, which
+needs Caddy 2.7 or later. The page checks the gate every five seconds and returns
+the visitor to the address they asked for when the forum reopens. Other clients,
+and everything on the Happyview hostname, still get plain text.
+
 Enable maintenance from **Admin → Updates → Maintenance mode**, or run from the
 installation's bundle directory:
 
