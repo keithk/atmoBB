@@ -6,6 +6,8 @@
   import MemberLink from '$lib/components/MemberLink.svelte';
   import BoardLabel from '$lib/components/BoardLabel.svelte';
   import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
+  import PageBar from '$lib/components/PageBar.svelte';
+  import RichText from '$lib/components/RichText.svelte';
   import TopicList from '$lib/components/TopicList.svelte';
   import { relTime } from '$lib/reltime';
   import type { LatestThreads } from '$lib/server/appview';
@@ -16,7 +18,13 @@
     post
       ? (post.authorProfile?.displayName ?? data.handles[post.author] ?? post.author.slice(8, 18))
       : '';
+  const views = [
+    { value: 'latest', label: 'Latest' },
+    { value: 'hot', label: 'Hot' },
+    { value: 'categories', label: 'Boards' },
+  ];
   const activeView = $derived(data.homeView ?? (data.homepage.layout === 'latest' ? 'latest' : 'categories'));
+  const showBoards = $derived(activeView === 'categories');
 </script>
 
 {#snippet topicList(threads: LatestThreads['threads'], emptyMessage: string)}
@@ -30,7 +38,19 @@
   </p>
 {/if}
 
+<PageBar title={views.find((view) => view.value === activeView)?.label ?? data.forum.name} description={data.forum.description}>
+  <nav class="atm-home-nav" aria-label="Homepage views">
+    {#each views as view}
+      <a class:atm-home-nav__item--active={activeView === view.value} class="atm-home-nav__item" href="/?view={view.value}" aria-current={activeView === view.value ? 'page' : undefined}>{view.label}</a>
+    {/each}
+  </nav>
+</PageBar>
+
 <div class="stack">
+  {#if !data.homeView && data.forum.intro?.length}
+    <div class="atm-home-intro"><RichText body={data.forum.intro} /></div>
+  {/if}
+
   {#if !data.user && data.homepage.welcome === 'classic'}
     <LoginCard />
   {:else if !data.user && data.homepage.welcome === 'compact'}
@@ -47,12 +67,6 @@
     <NotifyPrompt next="/" />
   {/if}
 
-  <nav class="atm-home-nav" aria-label="Homepage views">
-    {#each [{ value: 'categories', label: 'Categories' }, { value: 'latest', label: 'Latest' }, { value: 'hot', label: 'Hot' }] as view}
-      <a class:atm-home-nav__item--active={activeView === view.value} class="atm-home-nav__item" href="/?view={view.value}" aria-current={activeView === view.value ? 'page' : undefined}>{view.label}</a>
-    {/each}
-  </nav>
-
   {#if data.featured.length}
     <section class="atm-panel atm-home-featured">
       <div class="atm-board-section">Featured topics</div>
@@ -67,9 +81,9 @@
       {@render topicList(data.hot, 'No recent topics have replies yet.')}
     </section>
   {:else if data.homeView === 'latest' || (!data.homeView && data.homepage.layout === 'latest')}
-    <section class="atm-panel atm-home-latest" id="latest">
-      <div class="atm-board-section">Latest activity</div>
+    <section class="atm-home-latest" id="latest">
       {@render topicList(data.latest, 'No activity yet. Start the first thread.')}
+      {#if data.latest.length}<p class="atm-more"><a href="/latest">older activity →</a></p>{/if}
     </section>
   {:else if !data.homeView && data.homepage.layout === 'boards' && data.hot.length}
     <section class="atm-panel atm-home-hot" id="hot">
@@ -172,6 +186,7 @@
     </div>
   {/if}
 
+  {#if showBoards}
   <div class="panels">
     <div class="panels__col">
       <Card title="Who's online">
@@ -222,6 +237,7 @@
       </div>
     </Card>
   </div>
+  {/if}
 </div>
 
 <style>
@@ -241,9 +257,10 @@
   }
   .compact-welcome p { margin: var(--space-1) 0 0; color: var(--forum-ink-soft); font: var(--type-ui); }
 
+  .atm-home-intro { max-width: 70ch; }
+
   /* A view switcher, not site navigation: a segmented control in the same
-     material as the pager and webring nav, so it doesn't read as a third
-     row of tabs under the masthead. */
+     material as the pager and webring nav. */
   .atm-home-nav {
     display: inline-flex;
     justify-self: start;
