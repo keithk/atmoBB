@@ -98,7 +98,7 @@
       position: relative;
       grid-template-columns: minmax(0, 1fr) auto 84px 96px;
       gap: var(--space-3);
-      padding: 7px var(--space-4);
+      padding: 10px var(--space-4);
       box-shadow: none;
     }
     /* A list with no frame of its own lines its titles up with the page's
