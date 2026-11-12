@@ -40,7 +40,7 @@ Just write normal CSS:
   --forum-accent-ink: #2a1710;
 }
 
-.atm-masthead {
+.atm-main {
   border-radius: 0;
 }
 ```
@@ -66,7 +66,7 @@ Reach for tokens on colors and typography, because every shared component reads 
 Generated Open Graph images use this same token cascade. The selected built-in
 theme is applied first, followed by `:root` overrides from Custom CSS. Color,
 presence, `--radius-lg`, and `--shadow-sm` tokens are supported by the image
-renderer. Selector rules such as `.atm-masthead { ... }` remain browser-only:
+renderer. Selector rules such as `.atm-main { ... }` remain browser-only:
 the lightweight image renderer does not run a browser or apply CSS classes.
 Admin → Appearance → Branding shows the resulting generated card.
 
@@ -76,7 +76,7 @@ Admin → Appearance → Branding shows the resulting generated card.
 
 Shared forum UI uses an `atm-` prefix with BEM-style parts and modifiers. The hooks worth knowing:
 
-- shell: `.atm-shell`, `.atm-main`, `.atm-masthead`, `.atm-mastnav`, `.atm-colophon`, `.atm-webring`
+- shell: `.atm-page`, `.atm-sidebar`, `.atm-sidebar-nav`, `.atm-shell`, `.atm-main`, `.atm-pagebar`, `.atm-mobilebar`, `.atm-colophon`, `.atm-webring`
 - surfaces: `.atm-card`, `.atm-panel`, `.atm-board-section`, `.atm-notice`, `.atm-empty`
 - lists: `.atm-boardrow`, `.atm-threadrow`, `.atm-memberrow`
 - threads: `.atm-post`, `.atm-postmeta`, `.atm-post__body`, `.atm-post__meta`, `.atm-composer`

@@ -36,7 +36,7 @@
             <option value="latest" selected={data.homepage.layout === 'latest'}>Latest</option>
             <option value="categories-latest" selected={data.homepage.layout === 'categories-latest'}>Categories + Latest</option>
           </select>
-          <span class="atm-hint">The default keeps the classic board index.</span>
+          <span class="atm-hint">Latest is the default. Boards shows the classic board index.</span>
         </label>
         <label class="atm-field">
           <span class="atm-label">Welcome panel</span>
@@ -48,13 +48,6 @@
           <span class="atm-hint">Shown only to visitors who are signed out.</span>
         </label>
       </div>
-      <label class="homepage-check">
-        <input type="checkbox" name="sidebar" checked={data.homepage.sidebar} />
-        <span>
-          <b>Show the forum sidebar</b>
-          <small>Keep forum navigation and board links close at hand.</small>
-        </span>
-      </label>
       <div class="featured-settings">
         <label class="homepage-check">
           <input type="checkbox" name="featuredEnabled" bind:checked={featuredEnabled} />

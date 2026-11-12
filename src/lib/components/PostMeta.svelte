@@ -39,7 +39,7 @@
 
 <aside class="atm-postmeta">
   <MemberLink {did} {handle} class="atm-post__avatar-link">
-    <Avatar seed={did} {profile} size={100} {presence} />
+    <Avatar seed={did} {profile} size={72} {presence} />
   </MemberLink>
   <div class="atm-postmeta__identity">
     <MemberLink {did} {handle} class="atm-postmeta__name">{displayName}</MemberLink>

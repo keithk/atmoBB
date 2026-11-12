@@ -53,7 +53,6 @@ export const actions: Actions = {
       profile = await currentProfile();
       const homepage = homepageRecord({
         layout: layout as HomepageLayout,
-        sidebar: form.get('sidebar') === 'on',
         welcome: welcome as HomepageWelcome,
         featuredThreads: featuredThreads as string[],
       });

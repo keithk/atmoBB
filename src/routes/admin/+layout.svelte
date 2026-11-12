@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import PageBar from '$lib/components/PageBar.svelte';
 
   let { data, children } = $props();
 
@@ -28,17 +29,17 @@
   const needsConnection = $derived(data.writeMode === 'pds' && !data.connected);
 </script>
 
+<PageBar title="Admin">
+  {#if data.writeMode === 'index'}
+    <span class="atm-chip admin__chip--dev">development mode</span>
+  {:else if data.connected}
+    <span class="atm-chip atm-chip--ok">forum account connected</span>
+  {:else}
+    <span class="atm-chip atm-chip--warn">forum account not connected</span>
+  {/if}
+</PageBar>
+
 <div class="admin">
-  <div class="admin__head">
-    <h1 class="admin__title">Admin</h1>
-    {#if data.writeMode === 'index'}
-      <span class="atm-chip admin__chip--dev">development mode</span>
-    {:else if data.connected}
-      <span class="atm-chip atm-chip--ok">forum account connected</span>
-    {:else}
-      <span class="atm-chip atm-chip--warn">forum account not connected</span>
-    {/if}
-  </div>
 
   <nav class="atm-tabs admin__nav" aria-label="Admin">
     {#each tabs as tab}
@@ -60,15 +61,8 @@
 </div>
 
 <style>
-  .admin__head {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-3);
-    margin-bottom: var(--space-3);
-  }
-  .admin__title { font: var(--type-page-title); color: var(--forum-ink); margin: 0; }
   .admin__chip--dev { color: var(--forum-ink-faint); }
-  .admin__nav { margin-bottom: var(--space-5); }
+  .admin__nav { margin-bottom: var(--space-4); }
 
   .admin__warn {
     background: var(--warn-bg);

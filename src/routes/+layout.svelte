@@ -1,27 +1,28 @@
 <script lang="ts">
   import '$lib/styles/index.css';
   import { page } from '$app/state';
+  import { onNavigate } from '$app/navigation';
   import Logo from '$lib/components/Logo.svelte';
   import Avatar from '$lib/components/Avatar.svelte';
-  import RichText from '$lib/components/RichText.svelte';
   import ForumSidebarNav from '$lib/components/ForumSidebarNav.svelte';
   import ForumSidebarDrawer from '$lib/components/ForumSidebarDrawer.svelte';
   import { groupBoards } from '$lib/board-presentation';
-  import { normalizeHomepage } from '$lib/homepage';
   import { resolveMetadata, serializeStructuredData, type PageMetadata } from '$lib/seo';
   import { themeColor, themeCss } from '$lib/themes';
 
   let { data, children } = $props();
 
-  const tabs = [
-    { label: 'Boards', href: '/' },
-    { label: 'Latest', href: '/latest' },
-    { label: 'Members', href: '/members' },
-    { label: 'Rules', href: '/rules' },
-  ];
-  const isActive = (href: string) =>
-    href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
-  const sidebarEnabled = $derived(normalizeHomepage(data.forum.homepage).sidebar);
+  // Cross-fade the content panel between pages where the browser supports it.
+  onNavigate((navigation) => {
+    if (!document.startViewTransition) return;
+    return new Promise((resolve) => {
+      document.startViewTransition(async () => {
+        resolve();
+        await navigation.complete;
+      });
+    });
+  });
+
   const sidebarGroups = $derived(groupBoards(data.sidebarBoards, data.sidebarCategories));
   let sidebarDrawer = $state<ForumSidebarDrawer>();
 
@@ -110,92 +111,76 @@
 
 {#if appearanceCss}{@html `<style id="forum-appearance">${appearanceCss}</style>`}{/if}
 
-<div class:atm-page--sidebar={sidebarEnabled} class="atm-page">
-  {#if sidebarEnabled}
-    <aside class="atm-sidebar" aria-label="Forum sidebar">
-      <div class="atm-sidebar__scroll">
-        <ForumSidebarNav
-          groups={sidebarGroups}
-          forumDid={data.forumDid}
-          pathname={page.url.pathname}
-          admin={data.admin}
-          forumUnclaimed={data.forumUnclaimed}
-        />
-      </div>
-    </aside>
+{#snippet account()}
+  {#if data.user}
+    {#if data.membership && !data.membership.joined}
+      {#if data.joinMode === 'open' || data.standing === 'accepted-undeclared'}
+        <form method="POST" action="/?/join">
+          <button class="atm-btn atm-btn--sm atm-account__join">{data.joinMode === 'open' ? 'join this forum' : 'finish joining'}</button>
+        </form>
+      {:else if data.joinMode === 'apply'}
+        <a class="atm-btn atm-btn--sm atm-account__join" href="/apply">apply to join</a>
+      {/if}
+    {/if}
+    <div class="atm-account">
+      <a class="atm-userchip" href="/settings/profile" title="Edit your profile">
+        <Avatar seed={data.user.did} profile={data.avatarProfile} size={36} />
+        <span class="atm-userchip__name">@{data.user.handle}</span>
+      </a>
+      <form method="POST" action="/login?/logout">
+        <button class="atm-btn atm-btn--ghost atm-btn--sm">log out</button>
+      </form>
+    </div>
+  {:else}
+    <div class="atm-account atm-account--guest">
+      <a class="atm-btn atm-btn--ghost atm-btn--sm" href="/login">log in</a>
+      <a class="atm-btn atm-btn--secondary atm-btn--sm" href="/register">register</a>
+    </div>
   {/if}
+{/snippet}
+
+<div class="atm-page">
+  <aside class="atm-sidebar" aria-label="Forum sidebar">
+    <a class="atm-sidebar__brand" href="/">
+      <Logo size={24} wordmark={false} />
+      <span class="atm-sidebar__forum">{data.forum.name}</span>
+    </a>
+    <div class="atm-sidebar__scroll">
+      <ForumSidebarNav
+        groups={sidebarGroups}
+        forumDid={data.forumDid}
+        pathname={page.url.pathname}
+        admin={data.admin}
+        forumUnclaimed={data.forumUnclaimed}
+        signedIn={!!data.user}
+        unread={data.unread}
+      />
+    </div>
+    <div class="atm-sidebar__account">
+      {@render account()}
+    </div>
+  </aside>
 
 <div class="atm-shell">
-  <header class="atm-masthead">
-    <div class="atm-masthead__bar">
-      {#if sidebarEnabled}
-        <button
-          class="atm-sidebar-toggle"
-          type="button"
-          aria-label="Open navigation"
-          aria-haspopup="dialog"
-          onclick={(event) => sidebarDrawer?.open(event.currentTarget)}
-        ><span aria-hidden="true">☰</span></button>
-      {/if}
-      <a class="atm-masthead__brand" href="/">
-        <Logo size={24} wordmark={false} />
-        <span class="atm-masthead__slash" aria-hidden="true">/</span>
-        <span class="atm-masthead__forum">{data.forum.name}</span>
+  <header class="atm-mobilebar">
+    <button
+      class="atm-sidebar-toggle"
+      type="button"
+      aria-label="Open navigation"
+      aria-haspopup="dialog"
+      onclick={(event) => sidebarDrawer?.open(event.currentTarget)}
+    ><span aria-hidden="true">☰</span></button>
+    <a class="atm-mobilebar__forum" href="/">{data.forum.name}</a>
+    {#if data.user}
+      <a class="atm-bell" class:atm-bell--unread={data.unread > 0} href="/notifications" aria-label="Notifications, {data.unread} unread">
+        <svg class="atm-bell__glyph" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 9a6 6 0 0 1 12 0v5l2 3H4l2-3z" /><path d="M10 20a2 2 0 0 0 4 0" />
+        </svg>
+        {#if data.unread > 0}<span class="atm-bell__count">{data.unread}</span>{/if}
       </a>
-      <div class="atm-masthead__right">
-        {#if data.user}
-          {#if data.membership && !data.membership.joined}
-            {#if data.joinMode === 'open' || data.standing === 'accepted-undeclared'}
-              <form method="POST" action="/?/join">
-                <button class="atm-btn atm-btn--sm">{data.joinMode === 'open' ? 'join this forum' : 'finish joining'}</button>
-              </form>
-            {:else if data.joinMode === 'apply'}
-              <a class="atm-btn atm-btn--sm" href="/apply">apply to join</a>
-            {/if}
-          {/if}
-          <a class="atm-bell" class:atm-bell--unread={data.unread > 0} href="/notifications" aria-label="Notifications, {data.unread} unread">
-              <svg class="atm-bell__glyph" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M6 9a6 6 0 0 1 12 0v5l2 3H4l2-3z" /><path d="M10 20a2 2 0 0 0 4 0" />
-              </svg>
-              {#if data.unread > 0}<span class="atm-bell__count">{data.unread}</span>{/if}
-            </a>
-          <a class="atm-userchip" href="/settings/profile" title="Edit your profile">
-            <Avatar seed={data.user.did} profile={data.avatarProfile} size={48} />
-            <span class="atm-userchip__name">@{data.user.handle}</span>
-          </a>
-          <form method="POST" action="/login?/logout">
-            <button class="atm-btn atm-btn--ghost atm-btn--sm">log out</button>
-          </form>
-        {:else}
-          <a class="atm-btn atm-btn--ghost atm-btn--sm" href="/login">log in</a>
-          <a class="atm-btn atm-btn--secondary atm-btn--sm" href="/register">register</a>
-        {/if}
-      </div>
-    </div>
-
-    {#if page.route.id === '/'}
-      <div class="atm-masthead__hero">
-        <div class="atm-masthead__name">{data.forum.name}</div>
-        {#if data.forum.description}
-          <div class="atm-masthead__tagline">{data.forum.description}</div>
-        {/if}
-        {#if data.forum.intro?.length}
-          <div class="atm-masthead__intro"><RichText body={data.forum.intro} /></div>
-        {/if}
-      </div>
+    {:else}
+      <a class="atm-btn atm-btn--ghost atm-btn--sm" href="/login">log in</a>
     {/if}
-
-    <nav class="atm-mastnav" aria-label="Forum">
-      {#each tabs as tab}
-        <a class="atm-mastnav__item {isActive(tab.href) ? 'atm-mastnav__item--active' : ''}" href={tab.href}
-          aria-current={isActive(tab.href) ? 'page' : undefined}>{tab.label}</a>
-      {/each}
-      <span class="atm-mastnav__spacer"></span>
-      {#if data.admin || data.forumUnclaimed}
-        <a class="atm-mastnav__item {isActive('/admin') ? 'atm-mastnav__item--active' : ''}" href="/admin"
-          aria-current={isActive('/admin') ? 'page' : undefined}>{data.admin ? 'Admin' : 'Set up this forum'}</a>
-      {/if}
-    </nav>
   </header>
 
   {#each data.bans as ban (ban.uri)}
@@ -236,8 +221,7 @@
 </div>
 </div>
 
-{#if sidebarEnabled}
-  <ForumSidebarDrawer
+<ForumSidebarDrawer
     bind:this={sidebarDrawer}
     groups={sidebarGroups}
     forumDid={data.forumDid}
@@ -245,60 +229,115 @@
     pathname={page.url.pathname}
     admin={data.admin}
     forumUnclaimed={data.forumUnclaimed}
-  />
-{/if}
+    signedIn={!!data.user}
+    unread={data.unread}
+  >
+    {@render account()}
+  </ForumSidebarDrawer>
 
 <style>
   @layer atmobb {
-  .atm-page { min-width: 0; }
-  .atm-page--sidebar {
+  /* Page changes fade the content panel only; the sidebar holds still. */
+  :global(::view-transition-old(root)), :global(::view-transition-new(root)) { animation-duration: 140ms; }
+  .atm-sidebar { view-transition-name: atm-sidebar; }
+  @media (prefers-reduced-motion: reduce) {
+    :global(::view-transition-group(*)), :global(::view-transition-old(*)), :global(::view-transition-new(*)) { animation: none !important; }
+  }
+
+  /* Sidebar-first shell: navigation in a fixed column, content in one panel. */
+  .atm-page {
     display: grid;
-    grid-template-columns: 260px minmax(0, var(--page-max));
-    justify-content: center;
-    gap: var(--space-4);
-    max-width: calc(var(--page-max) + 260px + var(--space-4));
-    margin: 0 auto;
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+    min-width: 0;
+    min-height: 100vh;
   }
   .atm-sidebar {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
     min-width: 0;
-    padding: var(--space-4) 0 var(--space-8) var(--space-3);
+    height: 100vh;
+  }
+  .atm-sidebar__brand {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 48px;
+    padding: var(--space-2) var(--space-4);
+    text-decoration: none;
+  }
+  .atm-sidebar__brand:hover { text-decoration: none; }
+  .atm-sidebar__forum {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: var(--w-bold) var(--text-md)/1.2 var(--font-display);
+    color: var(--forum-header-ink);
   }
   .atm-sidebar__scroll {
-    position: sticky;
-    top: var(--space-4);
-    max-height: calc(100vh - var(--space-8));
-    padding-right: var(--space-2);
+    flex: 1;
+    min-height: 0;
+    padding: 0 var(--space-2) var(--space-4);
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: thin;
   }
+  .atm-sidebar__account {
+    flex: none;
+    display: grid;
+    gap: var(--space-2);
+    margin: var(--space-2);
+    padding: var(--space-2);
+    background: var(--forum-surface);
+    border: var(--border-hair) solid var(--forum-edge);
+    border-radius: var(--radius-md);
+    box-shadow: inset 0 1px 0 var(--forum-bevel), var(--shadow-sm);
+  }
+  .atm-account { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+  .atm-account--guest { justify-content: flex-end; }
+  .atm-account__join { width: 100%; }
   .atm-shell {
     width: 100%;
     min-width: 0;
-    max-width: var(--page-max);
-    margin: 0 auto;
-    padding: var(--space-4) var(--space-4) var(--space-8);
+    max-width: calc(var(--page-max) + var(--space-16));
+    padding: var(--space-2) var(--space-2) var(--space-8) 0;
   }
-
-  .atm-masthead {
-    background: var(--forum-header-bg);
+  .atm-main {
+    --main-pad-x: var(--space-4);
+    --main-pad-y: var(--space-4);
+    min-width: 0;
+    padding: var(--main-pad-y) var(--main-pad-x);
+    background: var(--forum-surface);
     border: var(--border-hair) solid var(--forum-edge);
     border-radius: var(--radius-lg);
     box-shadow: inset 0 1px 0 var(--forum-bevel), var(--shadow-sm);
-    overflow: hidden;
-    margin-bottom: var(--space-5);
   }
 
-  .atm-masthead__bar {
-    display: flex;
+  /* Phone-width header: the sidebar becomes a drawer behind this button. */
+  .atm-mobilebar {
+    display: none;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-    padding: var(--space-3) var(--space-4);
-    border-bottom: var(--border-hair) solid var(--forum-line);
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    background: var(--forum-cat-bg);
+    border-bottom: var(--border-solid) solid var(--forum-cat-edge);
+  }
+  .atm-mobilebar__forum {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: var(--w-bold) var(--text-md)/1.2 var(--font-display);
+    color: var(--forum-cat-ink);
+    text-decoration: none;
   }
   .atm-sidebar-toggle {
-    display: none;
+    display: grid;
+    place-items: center;
     flex: none;
     width: 38px;
     height: 38px;
@@ -311,28 +350,9 @@
     cursor: pointer;
   }
   .atm-sidebar-toggle:hover { color: var(--forum-link); background: var(--forum-surface-2); }
-  .atm-masthead__brand {
-    display: inline-flex;
-    flex: 1;
-    min-width: 0;
-    align-items: center;
-    gap: var(--space-2);
-    text-decoration: none;
-  }
-  .atm-masthead__brand:hover { text-decoration: none; }
-  .atm-masthead__slash { color: var(--forum-ink-faint); font: var(--w-regular) var(--text-lg)/1 var(--font-display); }
-  .atm-masthead__forum {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font: var(--w-bold) var(--text-md)/1 var(--font-display);
-    color: var(--forum-header-ink);
-  }
-  .atm-masthead__right { display: flex; flex: none; align-items: center; gap: var(--space-3); }
-  .atm-userchip { display: inline-flex; align-items: center; gap: var(--space-2); text-decoration: none; border-radius: var(--radius-md); }
+  .atm-userchip { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; text-decoration: none; border-radius: var(--radius-md); }
   .atm-userchip:hover .atm-userchip__name { color: var(--forum-ink); }
-  .atm-userchip__name { font: var(--type-handle); color: var(--forum-ink-soft); }
+  .atm-userchip__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--type-handle); color: var(--forum-ink-soft); }
   .atm-bell {
     display: inline-flex;
     align-items: center;
@@ -346,56 +366,12 @@
   .atm-bell--unread { color: var(--forum-link); }
   .atm-bell__count { font: var(--type-handle); font-variant-numeric: tabular-nums; }
 
-  .atm-masthead__hero {
-    padding: var(--space-6) var(--space-5) var(--space-5);
-  }
-  .atm-masthead__name {
-    font: var(--type-masthead);
-    letter-spacing: var(--ls-tight);
-    color: var(--forum-header-ink);
-  }
-  .atm-masthead__tagline {
-    font: var(--type-ui);
-    color: var(--forum-ink-soft);
-    margin-top: var(--space-1);
-    max-width: 70ch;
-  }
-  .atm-masthead__intro {
-    margin-top: var(--space-4);
-    max-width: 70ch;
-    color: var(--forum-header-ink);
-  }
-
-  .atm-mastnav {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    padding: 0 var(--space-3);
-    background: var(--forum-cat-bg);
-    border-top: var(--border-hair) solid var(--forum-line);
-    box-shadow: inset 0 1px 0 var(--forum-bevel);
-  }
-  .atm-mastnav__item {
-    padding: 10px 14px 8px;
-    font: var(--w-semibold) var(--text-sm)/1 var(--font-body);
-    color: var(--forum-cat-ink);
-    text-decoration: none;
-    border-bottom: var(--border-solid) solid transparent;
-    transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
-  }
-  .atm-mastnav__item:hover { color: var(--forum-link); text-decoration: none; }
-  .atm-mastnav__item--active {
-    color: var(--forum-ink);
-    border-bottom-color: var(--forum-cat-edge);
-  }
-  .atm-mastnav__spacer { flex: 1; }
-
   .atm-colophon {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: var(--space-3);
-    padding: var(--space-6) 0 var(--space-2);
+    padding: var(--space-4) 0 var(--space-2);
   }
   .atm-webring {
     display: flex;
@@ -460,20 +436,14 @@
     text-decoration: none;
   }
 
-  @media (max-width: 720px) {
-    .atm-masthead__hero { padding: var(--space-4); }
-    .atm-masthead__name { font: var(--w-regular) var(--text-2xl)/var(--lh-tight) var(--font-display); }
-  }
   @media (max-width: 860px) {
-    .atm-page--sidebar { display: block; max-width: none; }
+    .atm-page { display: block; }
     .atm-sidebar { display: none; }
-    .atm-sidebar-toggle { display: grid; place-items: center; }
+    .atm-mobilebar { display: flex; }
+    .atm-shell { max-width: none; padding: 0 0 var(--space-8); }
+    .atm-main { --main-pad-x: var(--space-3); --main-pad-y: var(--space-3); border-width: 0 0 var(--border-hair); border-radius: 0; box-shadow: none; }
   }
   @media (max-width: 480px) {
-    .atm-mastnav { gap: 0; padding-inline: var(--space-1); }
-    .atm-mastnav__item { padding-inline: 9px; }
-    .atm-masthead__right { gap: var(--space-2); }
-    .atm-userchip__name { display: none; }
     .atm-webring { flex-direction: column; gap: var(--space-2); }
   }
   }

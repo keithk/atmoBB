@@ -25,10 +25,9 @@
 }
 
 .atm-btn--primary {
-  background: linear-gradient(180deg, color-mix(in oklch, var(--forum-accent) 86%, #fff), var(--forum-accent));
+  background: var(--forum-accent);
   color: var(--forum-accent-ink);
-  border-color: color-mix(in oklch, var(--forum-accent) 68%, #000);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), var(--shadow-sm);
+  border-color: color-mix(in oklch, var(--forum-accent) 78%, #000);
 }
 .atm-btn--primary:hover:not(:disabled) { background: var(--forum-accent-hover); }
 
@@ -36,7 +35,6 @@
   background: var(--forum-surface);
   color: var(--forum-ink);
   border-color: var(--forum-line-strong);
-  box-shadow: var(--shadow-sm);
 }
 .atm-btn--secondary:hover:not(:disabled) {
   background: var(--forum-surface-2);

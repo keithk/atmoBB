@@ -1,11 +1,14 @@
 <script lang="ts">
   import Avatar from '$lib/components/Avatar.svelte';
   import MemberLink from '$lib/components/MemberLink.svelte';
+  import PageBar from '$lib/components/PageBar.svelte';
   import StampRow from '$lib/components/StampRow.svelte';
   import { relTime } from '$lib/reltime';
 
   let { data } = $props();
 </script>
+
+<PageBar title="Members" />
 
 {#if data.membership?.joined}
   <div class="atm-membership">
@@ -16,11 +19,10 @@
   </div>
 {/if}
 
-<div class="atm-panel">
-  <div class="atm-board-section">Members</div>
+<div class="atm-member-list">
   {#each data.members as m}
     <article class="atm-memberrow">
-      <Avatar seed={m.did} profile={m.profile} size={56} />
+      <Avatar seed={m.did} profile={m.profile} size={40} />
       <div class="atm-memberrow__id">
         <MemberLink did={m.did} handle={data.handles[m.did]} class="atm-memberrow__name">
           {m.profile?.displayName ?? data.handles[m.did]}

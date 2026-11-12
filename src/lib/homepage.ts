@@ -8,14 +8,12 @@ export type HomepageWelcome = (typeof HOMEPAGE_WELCOME_STYLES)[number];
 
 export interface HomepageSettings {
   layout: HomepageLayout;
-  sidebar: boolean;
   welcome: HomepageWelcome;
   featuredThreads: string[];
 }
 
 export const DEFAULT_HOMEPAGE: HomepageSettings = {
-  layout: 'boards',
-  sidebar: false,
+  layout: 'latest',
   welcome: 'classic',
   featuredThreads: [],
 };
@@ -56,17 +54,15 @@ export function normalizeHomepage(value: unknown): HomepageSettings {
     : [];
 
   return {
-    layout: isOneOf(homepage.layout, HOMEPAGE_LAYOUTS) ? homepage.layout : 'boards',
-    sidebar: homepage.sidebar === true,
+    layout: isOneOf(homepage.layout, HOMEPAGE_LAYOUTS) ? homepage.layout : DEFAULT_HOMEPAGE.layout,
     welcome: isOneOf(homepage.welcome, HOMEPAGE_WELCOME_STYLES) ? homepage.welcome : 'classic',
     featuredThreads,
   };
 }
 
-/** Keep the profile record backwards-compatible and omit the all-classic default. */
+/** Keep the profile record backwards-compatible and omit the all-default object. */
 export function homepageRecord(settings: HomepageSettings): HomepageSettings | undefined {
   return settings.layout === DEFAULT_HOMEPAGE.layout &&
-    settings.sidebar === DEFAULT_HOMEPAGE.sidebar &&
     settings.welcome === DEFAULT_HOMEPAGE.welcome &&
     settings.featuredThreads.length === 0
     ? undefined

@@ -16,6 +16,7 @@
     lastActivity,
     replyCount,
     lastPostBy,
+    compact = false,
   }: {
     accountDid?: string | null;
     forumDid: string;
@@ -25,6 +26,8 @@
     lastActivity?: string;
     replyCount: number;
     lastPostBy?: string;
+    /** Dot only: an unread dot links to where reading stopped. */
+    compact?: boolean;
   } = $props();
 
   let state = $state<TopicReadState>(null);
@@ -56,7 +59,17 @@
   });
 </script>
 
-{#if state}
+{#if state && compact}
+  {#if state.status === 'unread'}
+    <a class="atm-topic-read-status atm-topic-read-status--unread" href={state.resumeHref} title="Unread. Resume where you stopped." aria-label="Unread. Resume where you stopped.">
+      <span class="atm-topic-read-status__dot" aria-hidden="true"></span>
+    </a>
+  {:else}
+    <span class="atm-topic-read-status atm-topic-read-status--{state.status}" title={state.status} aria-label="Topic status: {state.status}">
+      <span class="atm-topic-read-status__dot" aria-hidden="true"></span>
+    </span>
+  {/if}
+{:else if state}
   <span class="atm-topic-read-status atm-topic-read-status--{state.status}" aria-label="Topic status: {state.status}">
     <span class="atm-topic-read-status__dot" aria-hidden="true"></span>
     <span class="atm-topic-read-status__label">{state.status}</span>

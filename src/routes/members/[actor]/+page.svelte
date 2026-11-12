@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageBar from '$lib/components/PageBar.svelte';
   import Avatar from '$lib/components/Avatar.svelte';
   import Card from '$lib/components/Card.svelte';
   import { relTime } from '$lib/reltime';
@@ -80,10 +81,9 @@
   const panelTitle = (id: ProfilePanelId) => (id === 'pinned' && !data.isYou ? `Pinned by ${name}` : titles[id]);
 </script>
 
-<nav class="atm-crumbs atm-crumbs--spaced">
-  <a href="/members">members</a><span class="atm-crumbs__sep">›</span>
-  <span class="atm-crumbs__current">@{m.handle}</span>
-</nav>
+<PageBar>
+  {#snippet crumb()}<a href="/members">Members</a>{/snippet}
+</PageBar>
 
 {#if data.preview}
   <p class="atm-profile-preview">
