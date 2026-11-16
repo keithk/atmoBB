@@ -4,7 +4,7 @@ Versions follow [Semantic Versioning](https://semver.org) with the operator's
 workload in mind; [Releasing](docs/releasing.md) spells out what each level
 means. Every entry names the Happyview release it was tested against.
 
-## Unreleased
+## 0.10.0
 
 HappyView 2.16.0, unchanged from 0.9.3. No backfill is required.
 
