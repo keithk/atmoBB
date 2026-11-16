@@ -57,6 +57,23 @@
 }
 .atm-threadrow--compact.atm-threadrow--pinned,
 .atm-threadrow--compact.atm-threadrow--locked { border-radius: var(--radius-md); box-shadow: none; }
+
+/* Boards read as channels: a grey "#" instead of the color square, and on
+   wide lists the channel gets the reply count's room. */
+.atm-board-marker {
+  width: auto;
+  height: auto;
+  margin-right: 0.35em;
+  background: none;
+  color: var(--forum-ink-faint);
+  font-weight: var(--w-regular);
+}
+.atm-board-marker::before { content: '#'; }
+.atm-threadrow__board { font-size: var(--text-md); }
+@container (min-width: 821px) {
+  .atm-topic-list--boards .atm-threadrow--compact { grid-template-columns: minmax(0, 1fr) auto 260px 64px; }
+  .atm-topic-list--boards .atm-threadrow__nums { display: none; }
+}
 .atm-boardrow, .atm-memberrow { border-bottom-color: transparent; }
 .atm-board-section, .atm-card__header {
   font-size: var(--text-sm);
