@@ -133,6 +133,67 @@ def reserve(value):
         return dict(instance)
 
 
+def render_route(instance, caddyfile):
+    # Render the same gate and protected operator route as bundled Caddy.
+    # The public marker lives outside the root-only tenant bundle.
+    identifier = instance['id']
+    app_host = f"{instance['subdomain']}.{config['domain']}"
+    return (caddyfile
+            .replace('{$APP_HOST}', app_host)
+            .replace('{$HAPPYVIEW_HOST}', f'hv.{app_host}')
+            .replace('atmobb:3001', f"127.0.0.1:{instance['appPort']}")
+            .replace('happyview:3000', f"127.0.0.1:{instance['happyviewPort']}")
+            .replace('/srv/atmobb-maintenance', f'/var/lib/atmobb-maintenance-{identifier}')
+            .replace('/run/atmobb-updater-public', f'/run/atmobb-updater-{identifier}-public'))
+
+
+def write_routes(rendered):
+    """Write {instance id: route text}, then validate and reload host Caddy.
+    On any failure every route goes back to what it was, so Caddy keeps serving."""
+    routes = Path(config['routes'])
+    previous = {}
+    try:
+        for identifier, text in rendered.items():
+            route = routes / f'{identifier}.caddy'
+            previous[route] = route.read_text() if route.exists() else None
+            route.write_text(text)
+            route.chmod(0o644)  # Host Caddy runs as an unprivileged user.
+        subprocess.run(['caddy', 'validate', '--config', '/etc/caddy/Caddyfile'], check=True, capture_output=True)
+        subprocess.run(['systemctl', 'reload', 'caddy'], check=True, capture_output=True)
+    except Exception:
+        for route, text in previous.items():
+            if text is None:
+                route.unlink(missing_ok=True)
+            else:
+                route.write_text(text)
+        raise
+
+
+def refresh_routes(store):
+    """Re-render live tenants' routes from the operator template.
+
+    Tenant upgrades never touch proxy config, so proxy changes in a release
+    (such as the maintenance page) reach tenants when the operator installs a
+    new template, which restarts this service."""
+    caddyfile = (Path(config['template']) / 'Caddyfile').read_text()
+    routes = Path(config['routes'])
+    rendered = {}
+    for instance in store['instances']:
+        if instance['status'] != 'live':
+            continue
+        route = routes / f"{instance['id']}.caddy"
+        text = render_route(instance, caddyfile)
+        if not route.exists() or route.read_text() != text:
+            rendered[instance['id']] = text
+    if not rendered:
+        return
+    try:
+        write_routes(rendered)
+        print(f'Refreshed {len(rendered)} tenant Caddy route(s) from the template.', flush=True)
+    except Exception as error:
+        print(f'Refreshing tenant Caddy routes failed; kept the previous routes: {error}', flush=True)
+
+
 def provision(instance):
     identifier = instance['id']
     try:
@@ -178,29 +239,7 @@ def provision(instance):
                     if attempt == 29:
                         raise
                     time.sleep(2)
-            routes = Path(config['routes'])
-            route = routes / f'{identifier}.caddy'
-            previous_route = route.read_text() if route.exists() else None
-            # Render the same gate and protected operator route as bundled Caddy.
-            # The public marker lives outside the root-only tenant bundle.
-            route.write_text(
-                (destination / 'Caddyfile').read_text()
-                .replace('{$APP_HOST}', app_host)
-                .replace('{$HAPPYVIEW_HOST}', f'hv.{app_host}')
-                .replace('atmobb:3001', f"127.0.0.1:{instance['appPort']}")
-                .replace('happyview:3000', f"127.0.0.1:{instance['happyviewPort']}")
-                .replace('/srv/atmobb-maintenance', f'/var/lib/atmobb-maintenance-{identifier}')
-                .replace('/run/atmobb-updater-public', f'/run/atmobb-updater-{identifier}-public'))
-            route.chmod(0o644)  # Host Caddy runs as an unprivileged user.
-            try:
-                subprocess.run(['caddy', 'validate', '--config', '/etc/caddy/Caddyfile'], check=True, capture_output=True)
-                subprocess.run(['systemctl', 'reload', 'caddy'], check=True, capture_output=True)
-            except Exception:
-                if previous_route is None:
-                    route.unlink(missing_ok=True)
-                else:
-                    route.write_text(previous_route)
-                raise
+            write_routes({identifier: render_route(instance, (destination / 'Caddyfile').read_text())})
         result = {'status': 'live'}
     except Exception as error:
         print(f'Provisioning {identifier} failed: {error}', flush=True)
@@ -287,6 +326,7 @@ def main():
         if instance['status'] == 'provisioning':
             instance.update(status='failed', error='Hosting service stopped during provisioning. Inspect the instance before retrying; slot retained.')
     save(store)
+    refresh_routes(store)
     SOCKET.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
     os.chown(SOCKET.parent, 0, 10001)
     os.chmod(SOCKET.parent, 0o750)

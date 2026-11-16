@@ -48,7 +48,7 @@ are rejected before activation.
 
 5. In `/admin/hosting`, set the maximum number of **additional isolated forums**, create an invite, and approve a request. Setting zero pauses new approvals; lowering a limit never stops or deletes an existing forum. Pending requests do not reserve a slot; approval does, atomically, before creating anything.
 
-The hosting controller is separate from tenant updates. Update its root-owned code/template deliberately by rerunning the installer during a maintenance window with no provisioning/update running. This does not upgrade existing tenants. Do not run multiple hosting controllers against the same state.
+The hosting controller is separate from tenant updates. Update its root-owned code/template deliberately by rerunning the installer during a maintenance window with no provisioning/update running. This does not upgrade existing tenants. When the controller starts, it re-renders every live tenant's Caddy route from the template, validates the host config and reloads Caddy. If validation fails it keeps the previous routes and logs the error to the service journal. Do not run multiple hosting controllers against the same state.
 
 ## The hosting page
 
@@ -94,8 +94,8 @@ health before reopening. Failures and updater restarts preserve maintenance.
 Use that tenant's console or run `sudo ./atmobb maintenance recover` in its bundle
 directory; see [maintenance mode](self-hosting.md#maintenance-mode). Existing
 tenant routes must contain both maintenance gates and the protected operator
-route before managed maintenance is used. Updating the hosting template alone
-does not rewrite existing tenants' routes.
+route before managed maintenance is used. Tenant updates never touch routes;
+they change when the controller restarts with a new template.
 
 Backups are local and contain credentials/private data: copy them off-host and
 test restoration. Also back up the hosting controller's `state.json`,

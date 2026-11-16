@@ -210,6 +210,45 @@ class HostingTest(unittest.TestCase):
         self.assertEqual([cmd[0] if cmd[0] in ('caddy', 'systemctl') else 'install' for cmd in calls],
                          ['install', 'caddy', 'systemctl', 'install', 'caddy', 'systemctl'])
 
+    def route_fixture(self):
+        live = hosting.reserve(self.request(1))
+        failed = hosting.reserve(self.request(2))
+        store = hosting.load()
+        store['instances'][0]['status'] = 'live'
+        store['instances'][1]['status'] = 'failed'
+        hosting.save(store)
+        template = self.root / 'template'
+        template.mkdir()
+        (template / 'Caddyfile').write_text((Path(__file__).parent / 'release' / 'Caddyfile').read_text())
+        routes = self.root / 'routes'
+        routes.mkdir()
+        hosting.config.update(template=str(template), routes=str(routes))
+        stale = routes / f"{live['id']}.caddy"
+        stale.write_text('tenant1.example.test { respond "old gate" 503 }\n')
+        return hosting.load(), routes, stale, failed
+
+    def test_refresh_routes_rerenders_stale_live_routes_from_template(self):
+        store, routes, stale, failed = self.route_fixture()
+        with mock.patch.object(hosting.subprocess, 'run') as run:
+            hosting.refresh_routes(store)
+        self.assertIn('Locked for maintenance', stale.read_text())
+        self.assertIn('reverse_proxy 127.0.0.1:12000', stale.read_text())
+        self.assertNotIn('{$', stale.read_text())
+        self.assertFalse((routes / f"{failed['id']}.caddy").exists())
+        self.assertEqual([call.args[0][0] for call in run.call_args_list], ['caddy', 'systemctl'])
+
+        with mock.patch.object(hosting.subprocess, 'run') as run:
+            hosting.refresh_routes(store)
+        run.assert_not_called()
+
+    def test_refresh_routes_keeps_previous_routes_when_caddy_rejects_them(self):
+        store, _, stale, _ = self.route_fixture()
+        previous = stale.read_text()
+        error = hosting.subprocess.CalledProcessError(1, ['caddy', 'validate'])
+        with mock.patch.object(hosting.subprocess, 'run', side_effect=error):
+            hosting.refresh_routes(store)
+        self.assertEqual(stale.read_text(), previous)
+
     def test_wrong_socket_bearer_does_not_dispatch(self):
         socket_path = self.root / "hosting.sock"
         server = hosting.Server(str(socket_path), hosting.Handler)
