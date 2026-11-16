@@ -21,7 +21,7 @@ vi.mock('$lib/server/appview', async (importOriginal) => ({
 
 import { load } from './+page.server';
 
-const canonicalPath = '/t/bugs/cannot-crop-photo-correctly/did:plc:alice/3kaaa';
+const canonicalPath = '/t/cannot-crop-photo-correctly/did:plc:alice/3kaaa';
 
 function visit(path: string) {
   const url = new URL(path, 'https://forum.test');
@@ -42,12 +42,14 @@ function visit(path: string) {
 }
 
 describe('thread canonical redirect', () => {
-  it('redirects a newly indexed thread without reading the server URL fragment', async () => {
-    await expect(visit('/t/did:plc:alice/3kaaa?fresh')).rejects.toMatchObject({
-      status: 308,
-      location: `${canonicalPath}?fresh`,
+  for (const path of ['/t/did:plc:alice/3kaaa', canonicalPath]) {
+    it(`renders ${path} directly`, async () => {
+      const result = await visit(`${path}?fresh&cursor=25`) as any;
+      expect(result.thread.uri).toBe('at://did:plc:alice/app.atmobb.discussion.thread/3kaaa');
+      expect(result.metadata.canonical).toBe(canonicalPath);
+      expect(result.offset).toBe(25);
     });
-  });
+  }
 
   it('preserves query state when redirecting stale board and title slugs', async () => {
     await expect(visit('/t/general/old-title/did:plc:alice/3kaaa?cursor=25&quote=3kbbb')).rejects.toMatchObject({
@@ -56,10 +58,10 @@ describe('thread canonical redirect', () => {
     });
   });
 
-  it('redirects a bare legacy link without appending a fragment or query', async () => {
-    await expect(visit('/t/did:plc:alice/3kaaa')).rejects.toMatchObject({
+  it('redirects a stale title while preserving query state', async () => {
+    await expect(visit('/t/old-title/did:plc:alice/3kaaa?quote=3kbbb')).rejects.toMatchObject({
       status: 308,
-      location: canonicalPath,
+      location: `${canonicalPath}?quote=3kbbb`,
     });
   });
 });

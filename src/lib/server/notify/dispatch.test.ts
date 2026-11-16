@@ -125,7 +125,7 @@ describe('relay outcomes', () => {
     const toAlice = sent.find((s) => s.recipient === alice)!;
     expect(toAlice.title).toBe('bob.test replied in "Hello"');
     expect(toAlice.uri).toBe(
-      `https://forum.test/t/general/hello/${alice}/t1/p/${bob}/r1?via=notify`,
+      `https://forum.test/t/hello/${alice}/t1/p/${bob}/r1?via=notify`,
     );
     expect(toAlice.threadKey).toBe(thread);
     expect(toAlice.actors).toEqual([bob]);

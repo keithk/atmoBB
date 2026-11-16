@@ -4,7 +4,7 @@
 const SETTINGS = /^\/settings\/notifications(\?reconsented=1)?$/;
 const SLUG = String.raw`(?:[A-Za-z0-9-]|%[0-9A-Fa-f]{2})+`;
 const PUBLIC_THREAD = new RegExp(
-  String.raw`^\/t\/(?:did:[a-z0-9:.-]+\/[A-Za-z0-9._~-]+|${SLUG}\/${SLUG}\/did:[a-z0-9:.-]+\/[A-Za-z0-9._~-]+)$`,
+  String.raw`^\/t\/(?:did:[a-z0-9:.-]+\/[A-Za-z0-9._~-]+|${SLUG}\/(?:${SLUG}\/)?did:[a-z0-9:.-]+\/[A-Za-z0-9._~-]+)$`,
 );
 const SPACE_THREAD = /^\/b\/(did:[a-z0-9:.-]+\/)?[A-Za-z0-9._~-]+\/t\/did:[a-z0-9:.-]+\/[A-Za-z0-9._~-]+$/;
 const NOTIFICATIONS = /^\/notifications$/;

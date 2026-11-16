@@ -5,23 +5,20 @@ const route = (pathname: string) =>
   reroute({ url: new URL(pathname, 'https://forum.test'), fetch: globalThis.fetch });
 
 describe('thread URL rerouting', () => {
-  it('routes readable thread URLs by their stable DID and record key', () => {
-    expect(route('/t/general-chat/what-is-new/did:plc:alice/3kaaa')).toBe(
-      '/t/did:plc:alice/3kaaa',
-    );
-  });
+  for (const prefix of ['/t/hello', '/t/general/hello']) {
+    it(`routes ${prefix} by stable identity, including cards and replies`, () => {
+      const base = `${prefix}/did:plc:alice/3kaaa`;
+      const target = '/t/did:plc:alice/3kaaa';
+      expect(route(base)).toBe(target);
+      expect(route(`${base}/og.png`)).toBe(`${target}/og.png`);
+      expect(route(`${base}/p/did:plc:bob/3kbbb`)).toBe(`${target}/p/did:plc:bob/3kbbb`);
+    });
+  }
 
-  it('keeps social cards and reply permalinks working below readable URLs', () => {
-    expect(route('/t/general/hello/did:plc:alice/3kaaa/og.png')).toBe(
-      '/t/did:plc:alice/3kaaa/og.png',
-    );
-    expect(route('/t/general/hello/did:plc:alice/3kaaa/p/did:plc:bob/3kbbb')).toBe(
-      '/t/did:plc:alice/3kaaa/p/did:plc:bob/3kbbb',
-    );
-  });
-
-  it('does not reinterpret legacy or unrelated paths', () => {
+  it('leaves bare and unrelated paths alone', () => {
     expect(route('/t/did:plc:alice/3kaaa')).toBeUndefined();
+    expect(route('/t/did:plc:alice/3kaaa/p/did:plc:bob/3kbbb')).toBeUndefined();
+    expect(route('/t/hello/did:plc:alice')).toBeUndefined();
     expect(route('/members/alice.test')).toBeUndefined();
   });
 });

@@ -35,8 +35,11 @@ export function threadUriFromReference(value: string): string | null {
       .split('/')
       .filter(Boolean)
       .map(decodeURIComponent);
-    if (parts[0] !== 't' || !parts[1] || !parts[2]) return null;
-    const uri = `at://${parts[1]}/app.atmobb.discussion.thread/${parts[2]}`;
+    if (parts[0] !== 't') return null;
+    const identity = parts[1]?.startsWith('did:') ? 1 : parts[2]?.startsWith('did:') ? 2 : 3;
+    const [did, rkey] = parts.slice(identity);
+    if (!did?.startsWith('did:') || !rkey || parts.length !== identity + 2) return null;
+    const uri = `at://${did}/app.atmobb.discussion.thread/${rkey}`;
     return isThreadUri(uri) ? uri : null;
   } catch {
     return null;

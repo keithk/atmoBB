@@ -9,6 +9,7 @@ describe('safeReturnPath', () => {
 
   it('accepts public and members-only thread paths', () => {
     expect(safeReturnPath('/t/did:plc:x/abc')).toBe('/t/did:plc:x/abc');
+    expect(safeReturnPath('/t/welcome/did:plc:x/abc')).toBe('/t/welcome/did:plc:x/abc');
     expect(safeReturnPath('/t/general-chat/what-is-new/did:plc:x/abc')).toBe(
       '/t/general-chat/what-is-new/did:plc:x/abc',
     );

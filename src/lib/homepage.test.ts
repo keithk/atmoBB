@@ -16,6 +16,8 @@ describe('threadUriFromReference', () => {
     expect(threadUriFromReference(` ${thread('3kaaa')} `)).toBe(thread('3kaaa'));
     expect(threadUriFromReference('https://forum.example/t/did%3Aplc%3Aalice/3kaaa?from=admin')).toBe(thread('3kaaa'));
     expect(threadUriFromReference('/t/did:plc:alice/3kaaa')).toBe(thread('3kaaa'));
+    expect(threadUriFromReference('/t/welcome/did:plc:alice/3kaaa')).toBe(thread('3kaaa'));
+    expect(threadUriFromReference('/t/general/welcome/did:plc:alice/3kaaa')).toBe(thread('3kaaa'));
   });
 
   it('rejects other links and non-thread records', () => {

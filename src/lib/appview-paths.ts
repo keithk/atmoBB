@@ -11,7 +11,7 @@ export const pathSlug = (value: string, fallback: string) =>
     .replace(/[^\p{Letter}\p{Number}]+/gu, '-')
     .replace(/^-+|-+$/g, '') || fallback;
 
-export const threadPath = (uri: string, boardName?: string, title?: string) => {
+export const threadPath = (uri: string, _boardName?: string, title?: string) => {
   // Space thread: at://<forum>/space/<type>/<boardRkey>/<author>/<collection>/<rkey>.
   // These live under their private board at /b/<forum>/<boardRkey>/t/<author>/<rkey>.
   const parts = uri.split('/');
@@ -20,10 +20,9 @@ export const threadPath = (uri: string, boardName?: string, title?: string) => {
   }
   const p = parseAtUri(uri);
   if (!p) return '/';
-  if (!boardName || !title) return `/t/${p.did}/${p.rkey}`;
-  const board = encodeURIComponent(pathSlug(boardName, 'board'));
+  if (!title) return `/t/${p.did}/${p.rkey}`;
   const thread = encodeURIComponent(pathSlug(title, 'thread'));
-  return `/t/${board}/${thread}/${p.did}/${p.rkey}`;
+  return `/t/${thread}/${p.did}/${p.rkey}`;
 };
 
 export const boardPath = (uri: string, localDid: string) => {
