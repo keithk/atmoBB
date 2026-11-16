@@ -1,0 +1,99 @@
+/* Bulletin: a 2004 message board on purpose. Small Verdana, boxed tables,
+   gradient header bars, striped rows, square avatars. */
+:root {
+  --font-display: Verdana, Geneva, 'DejaVu Sans', sans-serif;
+  --font-wordmark: var(--font-display);
+  --font-body: Verdana, Geneva, 'DejaVu Sans', sans-serif;
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 13px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 22px;
+  --radius-xs: 0;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 0;
+  --sidebar-w: 228px;
+  --bulletin-bar: linear-gradient(color-mix(in oklch, var(--forum-cat-bg) 72%, #fff), var(--forum-cat-bg));
+}
+
+/* ---- sidebar: each block is its own bordered box under a header bar ---- */
+.atm-sidebar-nav__primary,
+.atm-sidebar-nav__group ul {
+  padding: 2px;
+  background: var(--forum-surface);
+  border: var(--border-hair) solid var(--forum-line);
+}
+.atm-sidebar-nav__heading {
+  padding: 5px var(--space-2);
+  background: var(--bulletin-bar);
+  border: var(--border-hair) solid var(--forum-cat-edge);
+  border-bottom: 0;
+  color: var(--forum-cat-ink);
+  font-size: var(--text-sm);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.atm-sidebar-nav__link { min-height: 24px; padding: 3px var(--space-2); border-radius: 0; color: var(--forum-link); font-weight: var(--w-regular); font-size: var(--text-sm); }
+.atm-sidebar-nav__link--active { color: var(--forum-ink); font-weight: var(--w-bold); }
+.atm-sidebar__account { border-radius: 0; box-shadow: none; }
+
+/* ---- the page panel and its header bar ---- */
+.atm-main { --main-pad-x: var(--space-3); --main-pad-y: var(--space-3); box-shadow: none; }
+.atm-pagebar {
+  min-height: 36px;
+  background: var(--bulletin-bar);
+  border-bottom: var(--border-hair) solid var(--forum-cat-edge);
+  border-radius: 0;
+}
+.atm-pagebar__title { letter-spacing: 0; }
+.atm-pagebar__title a:hover { color: var(--forum-cat-ink); text-decoration: underline; }
+.atm-pagebar__desc { color: color-mix(in oklch, var(--forum-cat-ink) 82%, transparent); }
+.atm-mobilebar { background: var(--bulletin-bar); border-bottom-width: var(--border-hair); }
+
+/* ---- lists become ruled, striped tables ---- */
+.atm-board-section,
+.atm-card__header {
+  padding: 5px var(--space-2);
+  background: var(--bulletin-bar);
+  border: var(--border-hair) solid var(--forum-cat-edge);
+  color: var(--forum-cat-ink);
+  font-size: var(--text-sm);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.atm-topic-list { border: var(--border-hair) solid var(--forum-line); }
+.atm-threadrow--compact.atm-threadrow--compact { margin-inline: 0; padding: 6px var(--space-3) 6px var(--space-4); }
+.atm-threadrow--compact:not(:last-child)::after { inset-inline: 0; }
+.atm-threadrow:nth-child(even) { background: var(--forum-surface-2); }
+.atm-threadrow--pinned:nth-child(n) { background: var(--forum-pin-bg); }
+.atm-threadrow--locked:nth-child(n) { background: var(--forum-lock-bg); }
+.atm-threadrow--compact .atm-threadrow__title { color: var(--forum-link); font-size: var(--text-sm); font-weight: var(--w-bold); }
+.atm-threadrow--compact:has(.atm-topic-read-status--read) .atm-threadrow__title { color: var(--forum-link); font-weight: var(--w-regular); }
+.atm-threadrow--compact .atm-threadrow__nums, .atm-threadrow__age { font-family: var(--font-body); font-size: var(--text-xs); }
+.atm-panel { border: var(--border-hair) solid var(--forum-line); border-top: 0; }
+.atm-panel > .atm-board-section { margin: 0 -1px; }
+.atm-boardrow, .atm-memberrow { padding-inline: var(--space-3); }
+.atm-boardrow:nth-child(odd), .atm-memberrow:nth-child(even) { background: var(--forum-surface-2); }
+
+/* ---- posts: the author rail is its own shaded column ---- */
+.atm-post { border: var(--border-hair) solid var(--forum-line); border-bottom-width: 0; }
+.atm-post:last-of-type { border-bottom-width: var(--border-hair); }
+.atm-postmeta { padding-left: var(--space-3); background: var(--forum-surface-2); border-right: var(--border-hair) solid var(--forum-line); }
+.atm-post__body { padding-inline: var(--space-4); }
+
+/* ---- controls: beveled, square ---- */
+.atm-btn { padding: 6px 12px; }
+.atm-btn--primary { background: var(--bulletin-bar); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35); }
+.atm-btn--primary:hover:not(:disabled) { background: var(--forum-accent-hover); }
+.atm-btn--secondary { background: linear-gradient(var(--forum-surface), var(--forum-surface-2)); }
+.atm-avatar, .atm-avatar--rounded, .atm-topic-participants .atm-avatar { border-radius: 2px; }
+.atm-chip, .atm-topic-tag { border-radius: 2px; }
+
+@media (max-width: 860px) {
+  .atm-main { border-width: 0; }
+  .atm-postmeta { border-right: 0; }
+}

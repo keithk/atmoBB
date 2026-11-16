@@ -1,0 +1,77 @@
+/* Atmosphere: a tinted sidebar with pill navigation beside one white sheet of
+   flat, borderless rows. Read topics sit back in grey; unread ones are bold. */
+:root {
+  --font-display: system-ui, 'Segoe UI', 'Noto Sans', sans-serif;
+  --font-wordmark: var(--font-display);
+  --font-body: system-ui, 'Segoe UI', 'Noto Sans', sans-serif;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+}
+
+/* ---- sidebar ---- */
+.atm-sidebar__brand { min-height: 64px; }
+.atm-sidebar__forum { font-weight: var(--w-semibold); }
+.atm-sidebar-nav__primary { border-bottom: 0; }
+.atm-sidebar-nav__link {
+  min-height: 38px;
+  padding: 6px var(--space-3);
+  font-weight: var(--w-regular);
+  font-size: var(--text-base);
+}
+.atm-sidebar-nav__link--active { font-weight: var(--w-medium); }
+.atm-sidebar-nav__board--child { font-size: var(--text-sm); }
+.atm-sidebar-nav__count { background: var(--forum-accent); color: var(--forum-accent-ink); border-radius: var(--radius-sm); }
+.atm-sidebar__account { border-color: var(--forum-line); border-radius: var(--radius-lg); box-shadow: none; }
+
+/* ---- the sheet: runs to the right edge, one rounded corner by the sidebar ---- */
+.atm-shell { max-width: none; padding: var(--space-2) 0 0; }
+.atm-main {
+  --main-pad-x: var(--space-6);
+  min-height: calc(100vh - var(--space-2));
+  box-shadow: none;
+  border-width: var(--border-hair) 0 0 var(--border-hair);
+  border-radius: var(--radius-lg) 0 0 0;
+}
+.atm-pagebar {
+  min-height: 62px;
+  background: var(--forum-surface);
+  border-bottom-width: var(--border-hair);
+  border-radius: var(--radius-lg) 0 0 0;
+}
+.atm-pagebar__title { font-weight: var(--w-semibold); font-size: var(--text-lg); letter-spacing: 0; }
+.atm-mobilebar { border-bottom-width: var(--border-hair); }
+.atm-tab--active { border-bottom-color: var(--forum-accent); }
+
+/* ---- lists: no rules between rows, room to breathe ---- */
+.atm-threadrow--compact { padding-block: 14px; }
+.atm-threadrow--compact:not(:last-child)::after { border-bottom: 0; }
+.atm-threadrow--compact .atm-threadrow__title { font-size: var(--text-md); }
+.atm-threadrow--compact:has(.atm-topic-read-status--new, .atm-topic-read-status--unread) .atm-threadrow__title { font-weight: var(--w-semibold); }
+.atm-threadrow--compact .atm-threadrow__nums,
+.atm-threadrow__age,
+.atm-threadrow__board {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--forum-ink-soft);
+}
+.atm-threadrow--compact.atm-threadrow--pinned,
+.atm-threadrow--compact.atm-threadrow--locked { border-radius: var(--radius-md); box-shadow: none; }
+.atm-boardrow, .atm-memberrow { border-bottom-color: transparent; }
+.atm-board-section, .atm-card__header {
+  font-size: var(--text-sm);
+  letter-spacing: 0;
+  text-transform: none;
+  border-bottom-color: var(--forum-line);
+}
+
+/* ---- controls ---- */
+.atm-btn { border-radius: var(--radius-md); }
+.atm-btn--sm { border-radius: var(--radius-sm); }
+.atm-btn--primary { border-color: transparent; }
+
+@media (max-width: 860px) {
+  .atm-shell { padding: 0 0 var(--space-8); }
+  .atm-main { --main-pad-x: var(--space-3); min-height: 0; border-width: 0 0 var(--border-hair); border-radius: 0; }
+  .atm-pagebar { border-radius: 0; }
+}

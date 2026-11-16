@@ -1,0 +1,56 @@
+/* Arcade: pixel headings with an offset shadow, scanlines, square
+   everything. Unread topics glow cyan; pinned ones wear gold. */
+:root {
+  --font-display: 'Pixelify Sans', 'IBM Plex Mono', ui-monospace, monospace;
+  --font-wordmark: var(--font-display);
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --arcade-cyan: var(--forum-cat-ink);
+  --arcade-outline: var(--border-solid) solid var(--forum-line);
+}
+body {
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 3px),
+    var(--forum-bg);
+}
+
+/* ---- sidebar ---- */
+.atm-sidebar__forum { text-transform: uppercase; }
+.atm-sidebar-nav__primary { border-bottom: var(--arcade-outline); }
+.atm-sidebar-nav__link { font-family: var(--font-display); font-size: var(--text-base); letter-spacing: 0.03em; text-transform: uppercase; }
+.atm-sidebar-nav__link--active { background: var(--arcade-cyan); color: #03222a; }
+.atm-sidebar-nav__heading { font-family: var(--font-display); color: var(--forum-accent); }
+.atm-sidebar-nav__count { background: var(--forum-accent); color: var(--forum-accent-ink); border-radius: 0; }
+.atm-sidebar__account { border: var(--arcade-outline); box-shadow: 4px 4px 0 var(--forum-sunken); }
+
+/* ---- the cabinet ---- */
+.atm-shell { padding: var(--space-3) var(--space-3) var(--space-8) 0; }
+.atm-main { border: var(--arcade-outline); box-shadow: 6px 6px 0 var(--forum-sunken); }
+.atm-pagebar { min-height: 54px; background: var(--forum-surface); border-radius: 0; }
+.atm-pagebar__title { font-size: var(--text-xl); letter-spacing: 0.02em; text-transform: uppercase; text-shadow: 2px 2px 0 var(--forum-accent); }
+.atm-mobilebar { background: var(--forum-surface); }
+
+/* ---- lists: one outlined slot per topic ---- */
+.atm-topic-list { display: grid; gap: var(--space-2); padding-block: var(--space-2); }
+.atm-threadrow { background: var(--forum-surface-2); }
+.atm-threadrow--compact.atm-threadrow--compact { margin-inline: 0; border: var(--arcade-outline); }
+.atm-threadrow--compact:not(:last-child)::after { border-bottom: 0; }
+.atm-threadrow--compact:has(.atm-topic-read-status--new, .atm-topic-read-status--unread) { border-color: var(--arcade-cyan); box-shadow: 0 0 12px color-mix(in srgb, var(--arcade-cyan) 40%, transparent); }
+.atm-threadrow--compact.atm-threadrow--pinned { border-color: var(--forum-pin-edge); box-shadow: none; }
+.atm-threadrow--compact.atm-threadrow--locked { box-shadow: none; }
+.atm-threadrow--compact .atm-threadrow__nums, .atm-threadrow__age { font-family: var(--font-display); font-size: var(--text-sm); text-transform: uppercase; }
+.atm-board-section, .atm-card__header { border-bottom: var(--arcade-outline); color: var(--arcade-cyan); font-family: var(--font-display); font-size: var(--text-sm); }
+.atm-avatar, .atm-avatar--rounded, .atm-topic-participants .atm-avatar { border-radius: 0; }
+
+/* ---- controls ---- */
+.atm-btn { font-family: var(--font-display); letter-spacing: 0.03em; text-transform: uppercase; }
+.atm-btn--primary { border-color: transparent; box-shadow: 3px 3px 0 color-mix(in srgb, var(--forum-accent) 45%, #000); }
+.atm-btn--primary:active { translate: 3px 3px; box-shadow: none; transform: none; }
+.atm-chip, .atm-topic-tag { border-radius: 0; }
+
+@media (max-width: 860px) {
+  .atm-shell { padding: 0 0 var(--space-8); }
+  .atm-main { border-width: 0 0 var(--border-solid); box-shadow: none; }
+}

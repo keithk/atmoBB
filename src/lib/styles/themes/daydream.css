@@ -1,0 +1,70 @@
+/* Daydream: a soft gradient sky behind frosted, rounded panels. Pills
+   everywhere, no hard lines. */
+:root {
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --daydream-glass: color-mix(in srgb, var(--forum-surface) 62%, transparent);
+  --daydream-glow: light-dark(rgba(122, 89, 230, 0.16), rgba(0, 0, 0, 0.45));
+  --daydream-button: linear-gradient(120deg, var(--forum-accent), #ec6fb0);
+}
+body {
+  background:
+    linear-gradient(135deg, light-dark(#efe4ff, #1c1535), light-dark(#ffe1ef, #2c1533) 55%, light-dark(#dfeeff, #131c38))
+    fixed;
+}
+
+/* ---- sidebar ---- */
+.atm-sidebar-nav__primary { border-bottom: 0; }
+.atm-sidebar-nav__link { padding-inline: var(--space-4); border-radius: var(--radius-round); font-weight: var(--w-medium); }
+.atm-sidebar-nav__link:hover, .atm-sidebar-nav__link--active { background: var(--daydream-glass); }
+.atm-sidebar-nav__count { background: var(--daydream-button); color: #fff; }
+.atm-sidebar__account { background: var(--daydream-glass); border-color: transparent; border-radius: var(--radius-md); box-shadow: none; }
+
+/* ---- the frosted panel ---- */
+.atm-shell { padding: var(--space-3) var(--space-3) var(--space-8) 0; }
+.atm-main {
+  --main-pad-x: var(--space-5);
+  background: var(--daydream-glass);
+  border-color: color-mix(in srgb, var(--forum-surface) 80%, transparent);
+  box-shadow: 0 12px 40px var(--daydream-glow);
+  backdrop-filter: blur(18px);
+}
+.atm-pagebar {
+  min-height: 58px;
+  background: color-mix(in srgb, var(--forum-surface) 78%, transparent);
+  border-bottom: 0;
+  border-radius: calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0;
+  backdrop-filter: blur(12px);
+}
+.atm-pagebar__title { font-weight: var(--w-semibold); font-size: var(--text-lg); letter-spacing: 0; }
+.atm-mobilebar { background: var(--daydream-glass); border-bottom: 0; backdrop-filter: blur(12px); }
+.atm-tab--active { border-bottom-color: var(--forum-accent); }
+
+/* ---- lists: soft rows, no rules ---- */
+.atm-threadrow { background: transparent; }
+.atm-threadrow--compact { border-radius: var(--radius-md); padding-block: 12px; }
+.atm-threadrow--compact:not(:last-child)::after { border-bottom: 0; }
+.atm-threadrow:hover { background: color-mix(in srgb, var(--forum-surface) 70%, transparent); }
+.atm-threadrow--compact.atm-threadrow--pinned { background: var(--forum-pin-bg); box-shadow: 0 6px 20px var(--daydream-glow); }
+.atm-threadrow--compact.atm-threadrow--locked { background: var(--forum-lock-bg); box-shadow: none; }
+.atm-boardrow, .atm-memberrow, .atm-post { border-bottom-color: color-mix(in srgb, var(--forum-line) 60%, transparent); }
+.atm-memberrow, .atm-empty { background: transparent; }
+.atm-board-section, .atm-card__header { border-bottom-color: transparent; }
+
+/* ---- controls ---- */
+.atm-btn, .atm-btn--sm { border-radius: var(--radius-round); }
+.atm-btn--primary {
+  background: var(--daydream-button);
+  border-color: transparent;
+  color: light-dark(#fff, var(--forum-accent-ink));
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--forum-accent) 35%, transparent);
+}
+.atm-btn--primary:hover:not(:disabled) { background: var(--daydream-button); filter: brightness(1.06); }
+.atm-input, .atm-textarea, .atm-select { border-radius: var(--radius-md); }
+
+@media (max-width: 860px) {
+  .atm-shell { padding: 0 0 var(--space-8); }
+  .atm-main { --main-pad-x: var(--space-3); }
+  .atm-pagebar { border-radius: 0; }
+}

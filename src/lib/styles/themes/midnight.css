@@ -1,0 +1,39 @@
+/* Midnight: a star-field page around one floating panel, with amber for
+   whatever is new. */
+:root {
+  --radius-lg: 14px;
+}
+body {
+  background:
+    radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1.5px) 0 0 / 26px 26px,
+    radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1.5px) 13px 9px / 38px 38px,
+    var(--forum-bg);
+  background-attachment: fixed;
+}
+
+/* ---- sidebar: the current page is lit, not boxed ---- */
+.atm-sidebar-nav__primary { border-bottom: 0; }
+.atm-sidebar-nav__heading, .atm-board-section, .atm-card__header { letter-spacing: 0.14em; }
+.atm-sidebar-nav__link--active {
+  background: transparent;
+  color: var(--forum-accent);
+  box-shadow: inset 2px 0 0 var(--forum-accent);
+  border-radius: 0;
+}
+.atm-sidebar-nav__link--active .atm-sidebar-nav__icon { filter: drop-shadow(0 0 6px var(--forum-accent)); }
+
+/* ---- the panel ---- */
+.atm-main { box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45); }
+.atm-pagebar { background: var(--forum-surface); border-bottom: var(--border-hair) solid var(--forum-line); }
+.atm-pagebar__title { font-weight: var(--w-semibold); }
+.atm-mobilebar { border-bottom-width: var(--border-hair); }
+
+/* ---- lists: unread topics glow amber ---- */
+.atm-threadrow--compact:has(.atm-topic-read-status--new, .atm-topic-read-status--unread) .atm-threadrow__title { color: var(--forum-accent); }
+.atm-threadrow__status .atm-topic-read-status__dot { box-shadow: 0 0 8px var(--forum-accent); }
+.atm-threadrow--compact .atm-threadrow__nums,
+.atm-threadrow__age { letter-spacing: 0.06em; text-transform: uppercase; }
+
+@media (max-width: 860px) {
+  .atm-main { box-shadow: none; }
+}
