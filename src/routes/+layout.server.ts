@@ -7,7 +7,7 @@ import { ringForums } from '$lib/server/webring';
 import { blobCid, blobUrl } from '$lib/server/profiles';
 import { countUnread, readMember } from '$lib/server/notify/store';
 import { forumStanding } from '$lib/server/membership';
-import { DEFAULT_THEME, personalTheme, normalizeTheme, themeCss, type ForumTheme } from '$lib/themes';
+import { DEFAULT_THEME, knownTheme, personalTheme, normalizeTheme, type ForumTheme } from '$lib/themes';
 import { profileForForum } from '$lib/profile-overrides';
 
 type ForumFavicon = { url: string; mimeType: string };
@@ -40,7 +40,7 @@ function safeCustomCss(value: unknown): string {
   return value.slice(0, 100_000).replace(/<\/style/gi, '\\3c /style');
 }
 
-export const load: LayoutServerLoad = async ({ locals, route }) => {
+export const load: LayoutServerLoad = async ({ locals, route, url }) => {
   // The app must render (degraded) even when the appview is unreachable —
   // health checks hit `/`, and a reads-down forum should still say so politely.
   let forum: ForumProfile = { name: 'atmoBB' };
@@ -90,8 +90,19 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
       return null;
     })(),
   ]);
+  // `?previewTheme=` shows the forum in another built-in theme without saving
+  // anything; the admin theme picker frames the home page this way.
+  const preview = knownTheme(url.searchParams.get('previewTheme'));
   const preference = personalTheme(avatarProfile, FORUM_DID());
-  if (preference) forumTheme = preference;
+  if (preview) {
+    forumTheme = preview;
+  } else if (preference) {
+    // A member's own theme restyles the whole forum, so the owner's CSS, written
+    // for the forum's theme, stays out of its way.
+    forumTheme = preference;
+    forumFontCss = '';
+    forumCustomCss = '';
+  }
   const notifyOn = notify?.status === 'on';
   // Standing on a gated forum (KTD7), computed once here beside the ban
   // load. It needs the profile, so it follows the index read; an open forum
@@ -116,7 +127,6 @@ export const load: LayoutServerLoad = async ({ locals, route }) => {
     forum,
     forumDid: FORUM_DID(),
     forumTheme,
-    personalThemeCss: preference ? themeCss(preference, true) : '',
     forumFontCss,
     forumCustomCss,
     forumFavicon,

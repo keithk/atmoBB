@@ -34,11 +34,11 @@
       {/key}
       <span class="atm-hint" id="theme-hint">
         {#if scope === 'forum'}
-          A choice here overrides your account default only on {data.forum.name}. Choose the forum’s own styling to keep its custom colors.
+          A choice here overrides your account default only on {data.forum.name}. Choose the forum’s own styling to see it the way its owner set it up.
         {:else}
           Used on every forum unless you have a forum-specific choice. Existing forum choices stay unchanged.
         {/if}
-        Personal themes replace colors, while keeping other forum custom styling. Save changes to apply.
+        A personal theme replaces the forum’s whole look, including its custom styling. Save changes to apply.
       </span>
     </label>
     <div class="actions">
