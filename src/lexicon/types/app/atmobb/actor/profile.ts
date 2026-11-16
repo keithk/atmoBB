@@ -23,7 +23,16 @@ export interface Main {
   forumProfiles?: ForumProfile[]
   /** Personal color theme across forums. Omit to follow each forum's default styling. */
   theme?:
-    'classic' | 'sky' | 'bubblegum' | 'midnight' | 'forest' | (string & {})
+    | 'atmosphere'
+    | 'coral'
+    | 'bulletin'
+    | 'bubblegum'
+    | 'graphite'
+    | 'daydream'
+    | 'midnight'
+    | 'terminal'
+    | 'arcade'
+    | (string & {})
   /** Per-forum personal theme overrides. Omit a forum to use the global theme; an empty theme preserves that forum's own styling. */
   forumThemes?: ForumTheme[]
   displayName?: string
@@ -44,7 +53,16 @@ export interface Main {
   website?: string
   /** Color skin visitors see on this member's profile page. Omit to use the forum's look; forums may turn skins off. */
   profileSkin?:
-    'classic' | 'sky' | 'bubblegum' | 'midnight' | 'forest' | (string & {})
+    | 'atmosphere'
+    | 'coral'
+    | 'bulletin'
+    | 'bubblegum'
+    | 'graphite'
+    | 'daydream'
+    | 'midnight'
+    | 'terminal'
+    | 'arcade'
+    | (string & {})
   banner?: Banner
   /** Short line shown under the member's name on their profile page. */
   headline?: string
@@ -117,7 +135,16 @@ export interface ForumProfile {
     | { $type: string }
   )[]
   profileSkin?:
-    'classic' | 'sky' | 'bubblegum' | 'midnight' | 'forest' | (string & {})
+    | 'atmosphere'
+    | 'coral'
+    | 'bulletin'
+    | 'bubblegum'
+    | 'graphite'
+    | 'daydream'
+    | 'midnight'
+    | 'terminal'
+    | 'arcade'
+    | (string & {})
   banner?: Banner
   headline?: string
   currently?: string
@@ -197,7 +224,17 @@ export interface ForumTheme {
   $type?: 'app.atmobb.actor.profile#forumTheme'
   forum: string
   theme:
-    '' | 'classic' | 'sky' | 'bubblegum' | 'midnight' | 'forest' | (string & {})
+    | ''
+    | 'atmosphere'
+    | 'coral'
+    | 'bulletin'
+    | 'bubblegum'
+    | 'graphite'
+    | 'daydream'
+    | 'midnight'
+    | 'terminal'
+    | 'arcade'
+    | (string & {})
 }
 
 const hashForumTheme = 'forumTheme'

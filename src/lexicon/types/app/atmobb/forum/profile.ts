@@ -39,9 +39,18 @@ export interface Main {
   /** Deprecated and no longer rendered: post-count ranks gave way to stamps (app.atmobb.forum.stamp). Kept so older records still validate. */
   ranks?: Rank[]
   links?: string[]
-  /** Built-in color theme preset. Absent means the classic atmobb skin. Custom CSS loads after the preset and may override it. */
+  /** Built-in theme. Absent means coral. Records from earlier releases may hold classic or forest (now coral) or sky (now atmosphere). Custom CSS loads after the theme and may override it. */
   theme?:
-    'classic' | 'sky' | 'bubblegum' | 'midnight' | 'forest' | (string & {})
+    | 'atmosphere'
+    | 'coral'
+    | 'bulletin'
+    | 'bubblegum'
+    | 'graphite'
+    | 'daydream'
+    | 'midnight'
+    | 'terminal'
+    | 'arcade'
+    | (string & {})
   /** Forum-owned CSS applied to public pages. Admin pages deliberately ignore it so a broken stylesheet can always be repaired. */
   customCss?: string
   /** Forum-owned webfont faces available to customCss. */
