@@ -4,7 +4,7 @@
  * Record values arrive unvalidated, so every saved string is used only as a
  * map key; nothing from the record is ever interpolated into style output.
  */
-import { FORUM_THEMES, profileSkinStyle, type ForumTheme } from './themes';
+import { knownTheme, profileSkinStyle } from './themes';
 
 /** Pattern drawers, each taking the ink color the lines or dots are drawn in. */
 const BANNER_PATTERNS: Record<string, (ink: string) => string> = {
@@ -69,7 +69,8 @@ export function profileLook({ profileSkin, banner, forumHidesSkins, ownerBanned 
   if (forumHidesSkins) {
     return { style: undefined, banner: bannerStyle(banner, FORUM_BANNER_BG, FORUM_BANNER_INK), plain: false };
   }
-  const skin = FORUM_THEMES.includes(profileSkin as ForumTheme) ? profileSkinStyle(profileSkin as ForumTheme) : undefined;
+  const theme = knownTheme(profileSkin);
+  const skin = theme ? profileSkinStyle(theme) : undefined;
   return { style: skin, banner: bannerStyle(banner, null, null), plain: false };
 }
 

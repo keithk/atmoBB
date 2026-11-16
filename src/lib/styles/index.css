@@ -5,8 +5,10 @@
 
    All built-ins live in a named layer. Forum-owner CSS is deliberately
    unlayered, so it overrides these rules without specificity contests or
-   !important — including Svelte's generated scoped selectors. */
-@layer atmobb;
+   !important — including Svelte's generated scoped selectors. The chosen
+   built-in theme's stylesheet (src/lib/styles/themes/) loads into
+   `atmobb-theme`, above the built-ins and still below owner CSS. */
+@layer atmobb, atmobb-theme;
 
 @import './tokens/fonts.css' layer(atmobb);
 @import './tokens/colors.css' layer(atmobb);

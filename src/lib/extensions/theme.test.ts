@@ -6,7 +6,7 @@ import { themeTokens } from '$lib/themes';
 const style = (values: Record<string, string>) => ({ getPropertyValue: (name: string) => values[name] ?? '' });
 
 const CLASSIC = {
-  ...themeTokens('classic'),
+  ...themeTokens('coral'),
   '--ok-1': '#2f7d55',
   '--ok-bg': '#e0efe4',
   '--warn-1': '#b06f13',

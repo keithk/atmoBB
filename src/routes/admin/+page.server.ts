@@ -6,6 +6,7 @@ import { putForumRecord } from '$lib/server/forum-repo';
 import { savedRedirect } from '$lib/server/saved-redirect';
 import { parseBBCode, type RichTextBlock } from '$lib/richtext/bbcode';
 import { blocksToDoc } from '$lib/richtext/blocks-tiptap';
+import { NEW_FORUM_THEME } from '$lib/themes';
 
 const NS = 'app.atmobb';
 
@@ -48,7 +49,8 @@ export const actions: Actions = {
     let current: ProfileRecord = {};
     try {
       const index = await getBoardIndex(FORUM_DID());
-      current = (index.forum ?? {}) as ProfileRecord;
+      // A forum saving its profile for the first time starts on the new-forum theme.
+      current = (index.forum ?? { theme: NEW_FORUM_THEME }) as ProfileRecord;
     } catch {
       return fail(502, { message: "We couldn't reach the appview. Try again in a few minutes." });
     }

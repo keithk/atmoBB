@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { FORUM_DID, getBoardIndex } from '$lib/server/appview';
-import { DEFAULT_THEME, normalizeTheme, themeColor, type ForumTheme } from '$lib/themes';
+import { DEFAULT_THEME, normalizeTheme, themeColors, type ForumTheme } from '$lib/themes';
 
 export const GET: RequestHandler = async () => {
   let name = 'atmobb';
@@ -25,8 +25,8 @@ export const GET: RequestHandler = async () => {
       start_url: '/',
       scope: '/',
       display: 'standalone',
-      background_color: themeColor(theme),
-      theme_color: themeColor(theme),
+      background_color: themeColors(theme).light,
+      theme_color: themeColors(theme).light,
       lang: 'en',
       categories: ['social'],
       icons: [

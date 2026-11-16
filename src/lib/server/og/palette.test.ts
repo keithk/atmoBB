@@ -5,9 +5,9 @@ describe('ogSkin', () => {
   it('uses the same built-in theme tokens as public pages', () => {
     const colors = ogSkin('bubblegum');
 
-    expect(colors.bg).toBe('#fdf0f5');
-    expect(colors.accent).toBe('#f472b6');
-    expect(colors.link).toBe('#0f8f8a');
+    expect(colors.bg).toBe('#ffe3f0');
+    expect(colors.accent).toBe('#ff5fa8');
+    expect(colors.link).toBe('#0b7f79');
   });
 
   it('applies :root custom-property overrides after the selected theme', () => {

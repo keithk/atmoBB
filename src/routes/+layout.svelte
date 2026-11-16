@@ -8,7 +8,7 @@
   import ForumSidebarDrawer from '$lib/components/ForumSidebarDrawer.svelte';
   import { groupBoards } from '$lib/board-presentation';
   import { resolveMetadata, serializeStructuredData, type PageMetadata } from '$lib/seo';
-  import { themeColor, themeCss } from '$lib/themes';
+  import { themeColors, themeCss } from '$lib/themes';
 
   let { data, children } = $props();
 
@@ -26,17 +26,17 @@
   const sidebarGroups = $derived(groupBoards(data.sidebarBoards, data.sidebarCategories));
   let sidebarDrawer = $state<ForumSidebarDrawer>();
 
-  // Built-in theme first, then fonts, owner CSS, and personal theme tokens. The theme preset is
-  // curated and cannot break the admin, so it applies everywhere; owner CSS
-  // stays off admin pages so a broken stylesheet is always repairable.
+  // Built-in theme first, then fonts and owner CSS. The theme is curated and
+  // cannot break the admin, so it applies everywhere; owner CSS stays off
+  // admin pages so a broken stylesheet is always repairable.
   const appearanceCss = $derived(
     [
       themeCss(data.forumTheme),
       data.forumFontCss,
       page.url.pathname.startsWith('/admin') ? '' : data.forumCustomCss,
-      data.personalThemeCss,
     ].filter(Boolean).join('\n'),
   );
+  const chromeColors = $derived(themeColors(data.forumTheme));
 
   // One document-level source of truth keeps search, Open Graph, Twitter, and
   // structured data in sync. Public dynamic routes provide `metadata` from
@@ -59,7 +59,8 @@
   <meta name="description" content={metadata.description} />
   <meta name="robots" content={metadata.robots} />
   <meta name="googlebot" content={metadata.robots} />
-  <meta name="theme-color" content={themeColor(data.forumTheme)} />
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content={chromeColors.light} />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content={chromeColors.dark} />
   <meta name="application-name" content={data.forum.name} />
   <meta name="apple-mobile-web-app-title" content={data.forum.name} />
   <link rel="canonical" href={metadata.canonical} />

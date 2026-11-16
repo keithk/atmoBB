@@ -15,6 +15,8 @@ export default defineConfig({
   test: {
     // The extension kit and Node-native setup tests have separate test runners.
     exclude: ['**/node_modules/**', '**/.git/**', 'docs/extensions/kit/**', 'appview/**/*.test.mjs'],
+    // Vitest blanks CSS imports by default; themes.ts reads the theme stylesheets as text.
+    css: { include: /styles\/themes\// },
   },
   server: {
     // The OAuth client registers http://127.0.0.1:5173/oauth/callback, so the

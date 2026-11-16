@@ -31,8 +31,8 @@ describe('profileLook', () => {
     expect(result.style).toContain('--forum-bg:#12131a');
     expect(result.style).toContain('color-scheme:dark');
     expect(result.banner?.style).toContain('background-color:#1f6f6b');
-    expect(look({ profileSkin: 'sky' }).style).toContain('color-scheme:light');
-    expect(look({ profileSkin: 'sky' }).style).toContain('--danger-bg:#f6ded9');
+    expect(look({ profileSkin: 'sky' }).style).toContain('color-scheme:light dark');
+    expect(look({ profileSkin: 'sky' }).style).toContain('--danger-bg:light-dark(#f6ded9, #3a1c19)');
   });
 
   it('shows no banner when the owner has not set one', () => {

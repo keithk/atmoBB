@@ -2,13 +2,13 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { FORUM_DID } from '$lib/server/appview';
 import { getActorProfile, saveProfile, type ProfileEdit } from '$lib/server/pds';
-import { FORUM_THEMES, forumThemeOverride, type ForumTheme } from '$lib/themes';
+import { FORUM_THEMES, forumThemeOverride, knownTheme, type ForumTheme } from '$lib/themes';
 
 export const load: PageServerLoad = async ({ locals }) => {
   if (!locals.user) redirect(302, '/login');
   const profile = await getActorProfile(locals.user.did);
   return {
-    globalTheme: FORUM_THEMES.includes(profile?.theme as ForumTheme) ? profile!.theme as ForumTheme : '',
+    globalTheme: knownTheme(profile?.theme) ?? '',
     localTheme: forumThemeOverride(profile?.forumThemes, FORUM_DID()) ?? 'inherit',
   };
 };

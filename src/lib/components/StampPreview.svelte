@@ -7,7 +7,7 @@
   let { name, look }: { name: string; look: StampLook } = $props();
 
   // One light and one dark preset: a stamp has to read on both before it ships.
-  const themes = [themePreset('classic'), themePreset('midnight')];
+  const themes = [themePreset('coral'), themePreset('midnight')];
 
   const entry = $derived<TrayEntry>({
     id: 'preview',

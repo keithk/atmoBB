@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   FORUM_THEMES,
   THEME_PRESETS,
+  knownTheme,
   normalizeTheme,
   profileSkinStyle,
+  themeColors,
   themeCss,
   themeInlineStyle,
   themeTokens,
@@ -18,15 +20,16 @@ const FORUM_TOKENS = [
   '--forum-cat-bg', '--forum-cat-ink', '--forum-cat-edge',
   '--forum-header-bg', '--forum-header-ink',
   '--forum-pin-bg', '--forum-pin-edge',
+  '--forum-lock-bg', '--forum-lock-edge',
   '--forum-rank', '--forum-rank-bg',
 ];
 
 describe('normalizeTheme', () => {
-  it('falls back to classic for missing, unknown, and non-string values', () => {
-    expect(normalizeTheme(undefined)).toBe('classic');
-    expect(normalizeTheme('neon')).toBe('classic');
-    expect(normalizeTheme('Midnight')).toBe('classic');
-    expect(normalizeTheme(42)).toBe('classic');
+  it('falls back to coral for missing, unknown, and non-string values', () => {
+    expect(normalizeTheme(undefined)).toBe('coral');
+    expect(normalizeTheme('neon')).toBe('coral');
+    expect(normalizeTheme('Midnight')).toBe('coral');
+    expect(normalizeTheme(42)).toBe('coral');
   });
 
   it('keeps every known theme', () => {
@@ -34,10 +37,24 @@ describe('normalizeTheme', () => {
   });
 });
 
+describe('knownTheme', () => {
+  it('follows the names earlier releases stored', () => {
+    expect(knownTheme('classic')).toBe('coral');
+    expect(knownTheme('forest')).toBe('coral');
+    expect(knownTheme('sky')).toBe('atmosphere');
+  });
+
+  it('is undefined for anything that never named a theme', () => {
+    expect(knownTheme('neon')).toBeUndefined();
+    expect(knownTheme('constructor')).toBeUndefined();
+    expect(knownTheme('')).toBeUndefined();
+    expect(knownTheme(null)).toBeUndefined();
+  });
+});
+
 describe('theme presets', () => {
-  it('lists every theme exactly once, classic first', () => {
+  it('lists every theme exactly once', () => {
     expect(THEME_PRESETS.map((preset) => preset.value)).toEqual([...FORUM_THEMES]);
-    expect(THEME_PRESETS[0].value).toBe('classic');
   });
 
   it('defines the complete --forum-* token set for every theme so no component is half-skinned', () => {
@@ -48,45 +65,68 @@ describe('theme presets', () => {
       }
     }
   });
+
+  it('gives a light theme a dark value for every token, and a dark theme none', () => {
+    for (const preset of THEME_PRESETS) {
+      if (preset.dark) expect(preset.darkTokens, preset.value).toBeUndefined();
+      else expect(Object.keys(preset.darkTokens ?? {}).sort(), preset.value).toEqual(Object.keys(preset.tokens).sort());
+    }
+  });
 });
 
 describe('themeCss', () => {
-  it('emits nothing for classic, whose values are the built-in defaults', () => {
-    expect(themeCss('classic')).toBe('');
+  it('writes a light theme\'s colors as light-dark() pairs that follow the visitor\'s scheme', () => {
+    const css = themeCss('coral');
+    expect(css.startsWith(':root{')).toBe(true);
+    expect(css).toContain('--forum-bg:light-dark(#eceae7, #1c1a19);');
+    expect(css).toContain('color-scheme:light dark;');
   });
 
-  it('emits a single :root rule with every token and a color-scheme hint', () => {
+  it('keeps a token that is the same in both modes as one plain value', () => {
+    expect(themeCss('coral')).toContain('--forum-accent:#f79b7a;');
+  });
+
+  it('moves dark shadows into a media query, since light-dark() only takes colors', () => {
+    const css = themeCss('coral');
+    expect(css).toContain('--shadow-lg:0 6px 24px rgba(33, 28, 22, 0.14);');
+    expect(css).toContain('@media (prefers-color-scheme: dark){:root{--shadow-sm:0 1px 0 rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.4);');
+  });
+
+  it('pins a dark theme to its one set of values', () => {
     const css = themeCss('midnight');
-    expect(css.startsWith(':root{')).toBe(true);
-    expect(css.endsWith('}')).toBe(true);
     expect(css).toContain('--forum-bg:#12131a;');
     expect(css).toContain('color-scheme:dark;');
-    expect(themeCss('sky')).toContain('color-scheme:light;');
+    expect(css).not.toContain('light-dark(');
+    expect(css).not.toContain('@media (prefers-color-scheme: dark){:root');
   });
 
-  it('never wraps output in the atmobb layer, so owner CSS still wins by order', () => {
-    for (const theme of FORUM_THEMES) expect(themeCss(theme)).not.toContain('@layer');
+  it('never puts tokens in a layer, so owner CSS still wins by order', () => {
+    for (const theme of FORUM_THEMES) expect(themeCss(theme).split('\n')[0]).not.toContain('@layer');
+  });
+
+  it('wraps a theme\'s layout rules in the atmobb-theme layer, below owner CSS', () => {
+    const css = themeCss('atmosphere');
+    expect(css).toContain('@layer atmobb-theme{');
+    expect(css).toContain('.atm-sidebar-nav__link');
+    expect(themeCss('coral')).not.toContain('@layer');
   });
 });
 
 describe('themeInlineStyle', () => {
-  it('spells out classic tokens so the preview can show the default next to the others', () => {
-    const style = themeInlineStyle('classic');
+  it('carries every token, the color-scheme hint, and a focus ring from the skinned accent', () => {
+    const style = themeInlineStyle('coral');
     expect(style).toContain('--forum-accent:#f79b7a');
-    expect(style.split(';').length).toBe(FORUM_TOKENS.length + 1);
-  });
-
-  it('carries the color-scheme hint so native controls match the skin', () => {
+    expect(style).toContain('--forum-bg:light-dark(#eceae7, #1c1a19)');
+    expect(style).toContain('color-scheme:light dark');
+    expect(style).toContain('--focus-ring:0 0 0 3px color-mix(in oklch, var(--forum-accent) 40%, transparent)');
     expect(themeInlineStyle('midnight')).toContain('color-scheme:dark');
-    expect(themeInlineStyle('sky')).toContain('color-scheme:light');
   });
 });
 
 describe('profileSkinStyle', () => {
-  const utilityTokens = [...new Set(THEME_PRESETS.flatMap((preset) => Object.keys(preset.tokens)))]
-    .filter((name) => !name.startsWith('--forum-'));
+  const utilityTokens = Object.keys(themeTokens('coral')).filter((name) => !name.startsWith('--forum-'));
 
-  it('declares every utility token any preset overrides, so a light skin never inherits dark status colors', () => {
+  it('declares every utility token, so a light skin never inherits dark status colors', () => {
     expect(utilityTokens).toContain('--danger-bg');
     for (const theme of FORUM_THEMES) {
       const style = profileSkinStyle(theme);
@@ -94,16 +134,16 @@ describe('profileSkinStyle', () => {
     }
   });
 
-  it('uses the light :root defaults for light skins and the preset values for dark ones', () => {
-    expect(profileSkinStyle('sky')).toContain('--danger-bg:#f6ded9');
-    expect(profileSkinStyle('sky')).toContain('--shadow-lg:0 6px 24px rgba(33, 28, 22, 0.14)');
+  it('pairs light and dark status colors for light skins and uses the dark ones for dark skins', () => {
+    expect(profileSkinStyle('atmosphere')).toContain('--danger-bg:light-dark(#f6ded9, #3a1c19)');
+    expect(profileSkinStyle('atmosphere')).toContain('--shadow-lg:0 6px 24px rgba(33, 28, 22, 0.14)');
     expect(profileSkinStyle('midnight')).toContain('--danger-bg:#3a1c19');
   });
+});
 
-  it('re-derives the focus ring from the skinned accent and keeps the color-scheme hint', () => {
-    const style = profileSkinStyle('midnight');
-    expect(style).toContain('--focus-ring:0 0 0 3px color-mix(in oklch, var(--forum-accent) 40%, transparent)');
-    expect(style).toContain('color-scheme:dark');
-    expect(style).toContain('--forum-bg:#12131a');
+describe('themeColors', () => {
+  it('gives the page background for each mode', () => {
+    expect(themeColors('coral')).toEqual({ light: '#eceae7', dark: '#1c1a19' });
+    expect(themeColors('midnight')).toEqual({ light: '#12131a', dark: '#12131a' });
   });
 });

@@ -29,7 +29,7 @@ import {
   resolvePanels,
   type ProfilePanelId,
 } from '$lib/profile-page';
-import { FORUM_THEMES, type ForumTheme } from '$lib/themes';
+import { FORUM_THEMES, knownTheme, type ForumTheme } from '$lib/themes';
 
 const THREAD = 'app.atmobb.discussion.thread';
 
@@ -236,7 +236,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
   const values: PageValues = {
     inherit: scope === 'forum' ? PAGE_FIELDS.filter((field) => !overridden.includes(field)) : [],
-    profileSkin: FORUM_THEMES.includes(profile?.profileSkin as ForumTheme) ? String(profile!.profileSkin) : '',
+    profileSkin: knownTheme(profile?.profileSkin) ?? '',
     bannerPattern,
     bannerSwatch,
     headline: typeof profile?.headline === 'string' ? profile.headline : '',

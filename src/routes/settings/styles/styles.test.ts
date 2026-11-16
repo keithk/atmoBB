@@ -44,16 +44,16 @@ describe('scoped styles', () => {
   });
   it('loads an explicit opt-out rather than treating it as inheritance', async () => {
     state.profile.forumThemes = [{ forum: 'did:plc:current', theme: '' }];
-    expect(await load({ locals: { user: { did: 'did:plc:user' } } } as never)).toEqual({ globalTheme: 'forest', localTheme: '' });
+    expect(await load({ locals: { user: { did: 'did:plc:user' } } } as never)).toEqual({ globalTheme: 'coral', localTheme: '' });
   });
   it('resolves forum > global > owner, including explicit opt-out and invalid records', () => {
     expect(personalTheme(state.profile, 'did:plc:current')).toBe('midnight');
-    expect(personalTheme(state.profile, 'did:plc:other')).toBe('sky');
-    expect(personalTheme(state.profile, 'did:plc:new')).toBe('forest');
+    expect(personalTheme(state.profile, 'did:plc:other')).toBe('atmosphere');
+    expect(personalTheme(state.profile, 'did:plc:new')).toBe('coral');
     state.profile.forumThemes = [{ forum: 'did:plc:current', theme: '' }];
     expect(personalTheme(state.profile, 'did:plc:current')).toBe('');
     state.profile.forumThemes = [{ forum: 'did:plc:current', theme: 'invalid' }];
-    expect(personalTheme(state.profile, 'did:plc:current')).toBe('forest');
+    expect(personalTheme(state.profile, 'did:plc:current')).toBe('coral');
     expect(personalTheme(null, 'did:plc:current')).toBe('');
   });
 });
