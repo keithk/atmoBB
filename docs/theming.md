@@ -1,17 +1,36 @@
 # Forum theming
 
-Forum owners pick a built-in color theme, and can add CSS and WOFF/WOFF2 fonts, from **Admin → Appearance**. Custom CSS loads after atmobb's own styles and the chosen theme on every non-admin page. Admin pages keep the built-in styles (and the chosen theme) no matter what, so a stylesheet that breaks everything is still repairable.
+Forum owners pick a built-in theme, and can add CSS and WOFF/WOFF2 fonts, from **Admin → Appearance**. Custom CSS loads after atmobb's own styles and the chosen theme on every non-admin page. Admin pages keep the built-in styles (and the chosen theme) no matter what, so a stylesheet that breaks everything is still repairable.
 
 ## Built-in themes
 
-Users can choose a personal theme in **Edit profile → Theme**, then save changes. The preference lives on their `app.atmobb.actor.profile` record and follows their account across forums. **Forum default** (no preference) uses the admin-selected theme and custom CSS. A personal preset, including Classic, applies its color tokens after owner custom CSS, preserving forum layout adjustments and fixes; it does not change anyone else's view. Normal CSS specificity and `!important` still apply: later theme tokens override equally specific declarations, not every possible custom rule.
+**Admin → Appearance → Theme** offers nine themes. A theme sets colors, type and layout together, and the picker previews the forum's own home page in the theme you select before you save.
 
-**Admin → Appearance → Theme** offers five presets: Classic (the greige-and-coral default), Sky (white and blue), Bubblegum (pink and teal), Midnight (dark navy and amber), and Forest (sage and moss). A preview on that page shows the masthead, a category bar, topic rows, and buttons in the selected colors before you save.
+| Theme | Modes | Look |
+| --- | --- | --- |
+| Atmosphere | light and dark | Tinted sidebar with pill navigation, one white sheet of flat rows. New forums start here. |
+| Coral | light and dark | The built-in look: a white card on greige with coral buttons. A forum with no saved theme shows this. |
+| Bulletin | light and dark | A 2004 message board. Small Verdana, boxed tables, gradient header bars. |
+| Bubblegum | light and dark | Thick outlines and hard drop shadows, each topic its own card. |
+| Graphite | light and dark | Dense and quiet, like an issue tracker. |
+| Daydream | light and dark | A gradient sky behind frosted, rounded panels. |
+| Midnight | dark | Navy panels on a star field, amber for unread. |
+| Terminal | dark | Monospace on near-black with dashed rules. |
+| Arcade | dark | Pixel headings, square corners, cyan and magenta. |
 
-A theme is nothing more than a full set of `--forum-*` values written to `:root` ahead of your custom CSS. It lives in `src/lib/themes.ts` and is stored on the forum profile as `theme`; an absent value means Classic. Because your CSS comes later in the same style tag, you can start from a preset and override just the tokens you care about:
+The six light themes follow the visitor's device: someone in dark mode gets the theme's dark version. There is no switch on the forum. The three dark themes look the same in both modes.
+
+A theme has two parts, both in the repo:
+
+- Its colors are a full set of `--forum-*` values (plus the status hues and shadows) in `src/lib/themes.ts`, written to `:root` ahead of your custom CSS. A light theme's colors are written as `light-dark(light, dark)` pairs with `color-scheme: light dark`; a dark theme sets `color-scheme: dark`.
+- Its layout and type rules are a stylesheet in `src/lib/styles/themes/`, loaded into the `atmobb-theme` cascade layer. Coral has no stylesheet because it is the built-in look.
+
+The theme is stored on the forum profile as `theme`; an absent value means Coral. Records saved by earlier releases may still say `classic` or `forest`, which now read as Coral, or `sky`, which reads as Atmosphere.
+
+Because your CSS comes later in the same style tag, you can start from a theme and override just the tokens you care about:
 
 ```css
-/* Midnight, but with the classic coral accent */
+/* Midnight, but with the coral accent */
 :root {
   --forum-accent: #f79b7a;
   --forum-accent-ink: #4a2a1c;
@@ -19,11 +38,21 @@ A theme is nothing more than a full set of `--forum-*` values written to `:root`
 }
 ```
 
-Midnight also re-tunes the shared status hues (`--ok-*`, `--warn-*`, `--danger-*`, `--info-*`) and shadows, since their light tints glare on dark panels, and sets `color-scheme: dark` so native form controls match.
+If your forum uses a light theme, a plain value like `--forum-bg: #fff` applies in dark mode too. Write `light-dark(#fff, #111)` to keep both modes, or set `color-scheme: light` on `:root` to keep the forum light for everyone.
+
+### Personal themes
+
+Members can choose a personal theme in **Edit profile → Styles**, for one forum or for every forum they visit. The preference lives on their `app.atmobb.actor.profile` record. **Forum default** (no preference) shows the forum the way its owner set it up.
+
+A personal theme replaces the forum's whole look for that member. The forum's custom CSS and custom fonts are not loaded for them, since that CSS was written for the forum's own theme. It does not change anyone else's view.
+
+### Previewing a theme
+
+Add `?previewTheme=<name>` to any forum URL to see that page in another built-in theme, with the forum's custom CSS still applied. Nothing is saved. The admin picker uses this for its preview.
 
 ## Cascade contract
 
-All built-in public-page CSS, Svelte component styles included, sits in a low-priority `atmobb` cascade layer. Unlayered owner CSS beats it without `!important`, and without caring about selector specificity.
+All built-in public-page CSS, Svelte component styles included, sits in a low-priority `atmobb` cascade layer, and the chosen theme's stylesheet sits in `atmobb-theme` just above it. Unlayered owner CSS beats both without `!important`, and without caring about selector specificity.
 
 Just write normal CSS:
 
@@ -129,7 +158,7 @@ A stamp with fixed colors (an admin's own stamp, a board's first-post stamp in t
 
 ### Member profile pages
 
-A member picks one of the five presets as the skin of their profile page, and visitors see it on the profile body only; the masthead, navigation, and everything outside the profile keep the visitor's own theme. The skin sets the same `--forum-*` tokens on the profile body, so it beats a visitor's personal theme there. A banner is drawn in CSS from one of eight swatches and a pattern (plain, stars, scanlines, or checker).
+A member picks one of the nine themes as the skin of their profile page, and visitors see it on the profile body only; the masthead, navigation, and everything outside the profile keep the visitor's own theme. The skin sets the same `--forum-*` tokens on the profile body, so it beats a visitor's personal theme there. A banner is drawn in CSS from one of eight swatches and a pattern (plain, stars, scanlines, or checker).
 
 Admin → Appearance has **Show member profile pages in this forum's colors**, stored as `hideProfileSkins` on the forum profile. With it on, profile pages ignore member skins and use the forum's theme and your CSS.
 

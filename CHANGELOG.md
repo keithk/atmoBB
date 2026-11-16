@@ -4,6 +4,20 @@ Versions follow [Semantic Versioning](https://semver.org) with the operator's
 workload in mind; [Releasing](docs/releasing.md) spells out what each level
 means. Every entry names the Happyview release it was tested against.
 
+## Unreleased
+
+HappyView 2.16.0, unchanged from 0.9.3. No backfill is required.
+
+- The built-in themes are rebuilt. There are nine: Atmosphere, Coral, Bulletin, Bubblegum, Graphite, Daydream, Midnight, Terminal and Arcade. A theme now sets type and layout as well as colors.
+- The six light themes have a dark version and follow the visitor's device setting. Midnight, Terminal and Arcade are dark in both modes.
+- Renamed and retired themes: Classic is now Coral, Sky becomes Atmosphere, and Forest becomes Coral. Saved records keep working without an edit. A forum with no saved theme still shows Coral, so it looks the way it did, plus a dark version for visitors in dark mode. Bubblegum and Midnight keep their names but look different.
+- New forums start on Atmosphere.
+- Admin → Appearance previews the forum's real home page in the selected theme. `?previewTheme=<name>` on any URL does the same without saving.
+- A member's personal theme now replaces the forum's whole look for them. The forum's custom CSS and custom fonts are not loaded for a member who has one.
+- Custom CSS: a forum on a light theme now has a dark mode. A color you hard-code applies in both modes; use `light-dark()` or set `color-scheme: light` on `:root` to opt out. Theme stylesheets load in a new `atmobb-theme` cascade layer that unlayered CSS still beats.
+- Lexicons: the `theme`, `profileSkin` and `forumThemes` known values list the nine new names. Publish `app.atmobb.forum.profile` and `app.atmobb.actor.profile`.
+- Fonts: Nunito and Pixelify Sans are added to the Google Fonts request for Bubblegum and Arcade.
+
 ## 0.9.3
 
 HappyView 2.16.0, unchanged from 0.9.2. No backfill is required.
