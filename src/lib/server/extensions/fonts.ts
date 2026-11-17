@@ -3,12 +3,12 @@ import monoRanges from '@fontsource/ibm-plex-mono/unicode.json';
 import sansRanges from '@fontsource/ibm-plex-sans/unicode.json';
 
 // The forum's own UI faces, IBM Plex Sans and IBM Plex Mono, for extension
-// panel frames. The forum page loads them from Google Fonts, but a frame's
-// policy names no third party: it may load this one stylesheet and the font
-// files beside it, served from the forum itself, and no other stylesheet or
-// font outside its own UI directory. The weights and styles match what the
-// forum page asks Google for (src/lib/styles/tokens/fonts.css). The files come
-// from the Fontsource packages at build time, so they ship in the build.
+// panel frames. A frame's policy names no third party: it may load this one
+// stylesheet and the font files beside it, served from the forum itself, and
+// no other stylesheet or font outside its own UI directory. The weights and
+// styles match the forum page's own (src/lib/styles/tokens/fonts.css). The
+// files come from the Fontsource packages at build time, so they ship in the
+// build.
 
 export const FONTS_DIRECTORY = '/x/fonts/';
 export const FONTS_STYLESHEET = `${FONTS_DIRECTORY}fonts.css`;

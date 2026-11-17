@@ -3,6 +3,35 @@
    - IBM Plex Mono : handles / DIDs / timestamps + small pixel-era labels (stamps/tags/flags)
    - Newsreader    : signatures & pull-quotes (reading-texture serif, italics)
    - Nunito        : the Bubblegum theme's rounded display and body face
-   - Pixelify Sans : the Arcade theme's pixel headings */
+   - Pixelify Sans : the Arcade theme's pixel headings
 
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=Nunito:wght@400;600;700;800;900&family=Pixelify+Sans:wght@500;700&display=swap');
+   The files come from the Fontsource packages and ship in the build, so the
+   forum serves its own fonts and no visitor request goes to a font host.
+   Declaring a face costs only these rules: a browser downloads a file when
+   text on the page is set in that face, weight, and script, so a theme that
+   uses system fonts downloads none of these. */
+
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-sans/700.css';
+@import '@fontsource/ibm-plex-sans/400-italic.css';
+@import '@fontsource/ibm-plex-sans/500-italic.css';
+
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import '@fontsource/ibm-plex-mono/600.css';
+
+@import '@fontsource/newsreader/400.css';
+@import '@fontsource/newsreader/500.css';
+@import '@fontsource/newsreader/400-italic.css';
+@import '@fontsource/newsreader/500-italic.css';
+
+@import '@fontsource/nunito/400.css';
+@import '@fontsource/nunito/600.css';
+@import '@fontsource/nunito/700.css';
+@import '@fontsource/nunito/800.css';
+@import '@fontsource/nunito/900.css';
+
+@import '@fontsource/pixelify-sans/500.css';
+@import '@fontsource/pixelify-sans/700.css';
