@@ -30,7 +30,7 @@ describe('readForumTheme', () => {
   it("reads the forum's colors and fonts from its computed tokens", () => {
     const theme = readForumTheme({ root: style(CLASSIC), background: 'rgb(236, 234, 231)', prefersDark: true });
     expect(theme.scheme).toBe('light');
-    expect(theme.colors).toMatchObject({ ground: '#eceae7', surface: '#ffffff', surfaceAlt: '#f4f2ef', accent: '#f79b7a', accentInk: '#4a2a1c', link: '#c05a37', ok: '#2f7d55', dangerSoft: '#f6ded9' });
+    expect(theme.colors).toMatchObject({ ground: '#eceae7', surface: '#ffffff', surfaceAlt: '#f4f2ef', accent: '#f79b7a', accentInk: '#4a2a1c', link: '#a84420', ok: '#2f7d55', dangerSoft: '#f6ded9' });
     expect(Object.keys(theme.colors).sort()).toEqual([...THEME_COLORS].sort());
     expect(theme.fonts).toEqual({
       body: "'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif",

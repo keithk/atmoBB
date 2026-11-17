@@ -7,7 +7,7 @@ describe('ogSkin', () => {
 
     expect(colors.bg).toBe('#ffe3f0');
     expect(colors.accent).toBe('#ff5fa8');
-    expect(colors.link).toBe('#0b7f79');
+    expect(colors.link).toBe('#086c67');
   });
 
   it('applies :root custom-property overrides after the selected theme', () => {
