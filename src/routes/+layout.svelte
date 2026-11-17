@@ -325,6 +325,7 @@
     padding: var(--space-2) var(--space-3);
     background: var(--forum-cat-bg);
     border-bottom: var(--border-solid) solid var(--forum-cat-edge);
+    --focus-color: var(--forum-cat-ink);
   }
   .atm-mobilebar__forum {
     flex: 1;

@@ -64,6 +64,7 @@
   font-size: var(--text-sm);
   letter-spacing: 0;
   text-transform: none;
+  --focus-color: var(--forum-cat-ink);
 }
 .atm-topic-list { border: var(--border-hair) solid var(--forum-line); }
 .atm-threadrow--compact.atm-threadrow--compact { margin-inline: 0; padding: 6px var(--space-3) 6px var(--space-4); }

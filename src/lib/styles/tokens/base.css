@@ -66,11 +66,11 @@ img { max-width: 100%; display: block; }
   image-rendering: crisp-edges;
 }
 
-/* focus-visible ring for interactive elements */
+/* focus-visible ring for interactive elements. An outline, not a box-shadow:
+   themes and components set their own shadows, which would replace a shadow
+   ring, and forced-colors mode drops shadows. */
 :where(button, a, input, select, textarea, [tabindex]):focus-visible {
-  /* Invisible normally; forced-colors mode drops the shadow and paints this. */
-  outline: 2px solid transparent;
+  outline: 2px solid var(--focus-color);
   outline-offset: 2px;
-  box-shadow: var(--focus-ring);
   border-radius: var(--radius-sm);
 }

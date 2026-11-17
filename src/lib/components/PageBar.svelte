@@ -44,6 +44,7 @@
     margin: calc(-1 * var(--main-pad-y)) calc(-1 * var(--main-pad-x)) var(--space-3);
     padding: 6px var(--main-pad-x);
     background: var(--forum-cat-bg);
+    --focus-color: var(--forum-cat-ink);
     border-bottom: var(--border-solid) solid var(--forum-cat-edge);
     border-radius: calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0;
   }

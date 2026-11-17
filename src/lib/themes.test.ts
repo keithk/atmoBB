@@ -167,6 +167,7 @@ describe('themeInlineStyle', () => {
     expect(style).toContain('--forum-accent:#f79b7a');
     expect(style).toContain('--forum-bg:light-dark(#eceae7, #1c1a19)');
     expect(style).toContain('color-scheme:light dark');
+    expect(style).toContain('--focus-color:var(--forum-link)');
     expect(style).toContain('--focus-ring:0 0 0 2px var(--forum-surface), 0 0 0 4px var(--forum-link)');
     expect(themeInlineStyle('midnight')).toContain('color-scheme:dark');
   });

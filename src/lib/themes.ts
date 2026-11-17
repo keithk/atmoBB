@@ -666,12 +666,13 @@ function declarations(preset: ThemePreset): string[] {
 /**
  * Inline `style` string that re-skins a subtree in a theme's colors, used by
  * the stamp preview and member profile skins. The subtree can sit inside a
- * page showing a different theme, so it also re-derives `--focus-ring`, which
- * :root resolves against the page's colors rather than the skin's.
+ * page showing a different theme, so it also re-derives `--focus-color` and
+ * `--focus-ring`, which :root resolves against the page's colors rather than
+ * the skin's.
  */
 export function themeInlineStyle(theme: ForumTheme): string {
   return declarations(themePreset(theme))
-    .concat('--focus-ring:0 0 0 2px var(--forum-surface), 0 0 0 4px var(--forum-link)')
+    .concat('--focus-color:var(--forum-link)', '--focus-ring:0 0 0 2px var(--forum-surface), 0 0 0 4px var(--forum-link)')
     .join(';');
 }
 

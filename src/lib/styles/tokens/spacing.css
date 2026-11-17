@@ -50,8 +50,11 @@
   --dur: 150ms;
   --dur-slow: 260ms;
 
-  /* --- focus ring ---
-     Two tones so it shows on any surface: a surface-colored gap, then a
-     link-colored ring, which every theme keeps at 4.5:1 against its surfaces. */
+  /* --- focus ---
+     Every theme keeps links at 4.5:1 on its surfaces, so they make the
+     outline color. Bands in the category color set it to their own ink.
+     Inputs draw a ring inside their well instead: a surface-colored gap,
+     then the link color. */
+  --focus-color: var(--forum-link);
   --focus-ring: 0 0 0 2px var(--forum-surface), 0 0 0 4px var(--forum-link);
 }

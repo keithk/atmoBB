@@ -299,9 +299,10 @@
   /* The container clips overflow, so the ring sits inside the segment. */
   .atm-home-nav__item:focus-visible {
     z-index: 1;
-    outline: 2px solid var(--forum-accent);
+    outline: 2px solid var(--forum-link);
     outline-offset: -2px;
   }
+  .atm-home-nav__item--active:focus-visible { outline-color: var(--forum-accent-ink); }
   .atm-home-nav__item--active,
   .atm-home-nav__item--active:hover {
     background: var(--forum-accent);

@@ -383,6 +383,7 @@
     gap: var(--space-2);
     padding: var(--space-3) var(--space-3) var(--space-3) var(--space-5);
     background: var(--forum-cat-bg);
+    --focus-color: var(--forum-cat-ink);
     border-bottom: var(--border-solid) solid var(--forum-cat-edge);
     box-shadow: inset 0 1px 0 var(--forum-bevel);
   }
@@ -501,7 +502,7 @@
     transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
   }
   .atm-compose__close:hover { background: var(--forum-surface); color: var(--forum-ink); }
-  .atm-compose__close:focus-visible { outline: 2px solid var(--forum-accent); outline-offset: 1px; }
+  .atm-compose__close:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 1px; }
 
   /* ---- Body ---- */
   .atm-compose__body {
