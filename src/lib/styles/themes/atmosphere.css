@@ -43,11 +43,13 @@
 .atm-mobilebar { border-bottom-width: var(--border-hair); }
 .atm-tab--active { border-bottom-color: var(--forum-accent); }
 
-/* ---- lists: no rules between rows, room to breathe ---- */
-.atm-threadrow--compact { padding-block: 14px; }
-.atm-threadrow--compact:not(:last-child)::after { border-bottom: 0; }
+/* ---- lists: the title is the one dark thing in a row, and a hairline
+   carries the eye from it across to the board and date ---- */
+.atm-threadrow--compact { padding-block: 11px; }
 .atm-threadrow--compact .atm-threadrow__title { font-size: var(--text-md); }
 .atm-threadrow--compact:has(.atm-topic-read-status--new, .atm-topic-read-status--unread) .atm-threadrow__title { font-weight: var(--w-semibold); }
+/* Read topics keep full ink; weight and the dot carry read state. */
+.atm-threadrow--compact:has(.atm-topic-read-status--read) .atm-threadrow__title { color: var(--forum-ink); }
 .atm-threadrow--compact .atm-threadrow__nums,
 .atm-threadrow__age,
 .atm-threadrow__board {
@@ -57,6 +59,14 @@
 }
 .atm-threadrow--compact.atm-threadrow--pinned,
 .atm-threadrow--compact.atm-threadrow--locked { border-radius: var(--radius-md); box-shadow: none; }
+/* Pinned rows in a run join into one block: only its outer corners are
+   round, and the hairlines stay between its rows. */
+.atm-threadrow--compact.atm-threadrow--pinned + .atm-threadrow--pinned { border-start-start-radius: 0; border-start-end-radius: 0; }
+.atm-threadrow--compact.atm-threadrow--pinned:has(+ .atm-threadrow--pinned) { border-end-start-radius: 0; border-end-end-radius: 0; }
+.atm-threadrow--compact.atm-threadrow--pinned:not(:has(+ .atm-threadrow--pinned))::after { border-bottom: 0; }
+.atm-threadrow--compact.atm-threadrow--pinned::after { border-bottom-color: color-mix(in oklch, var(--forum-pin-edge) 18%, transparent); }
+/* The block's own top edge stands in for the heading's rule. */
+.atm-home-pinned .atm-board-section { border-bottom: 0; }
 
 /* Boards read as channels: a grey "#" instead of the color square, and on
    wide lists the channel gets the reply count's room. */
@@ -69,9 +79,8 @@
   font-weight: var(--w-regular);
 }
 .atm-board-marker::before { content: '#'; }
-.atm-threadrow__board { font-size: var(--text-md); }
 @container (min-width: 821px) {
-  .atm-topic-list--boards .atm-topic-list__rows { grid-template-columns: minmax(0, 1fr) auto 260px max-content; }
+  .atm-topic-list--boards .atm-topic-list__rows { grid-template-columns: minmax(0, 1fr) auto 200px max-content; }
   .atm-topic-list--boards .atm-threadrow__nums { display: none; }
 }
 .atm-boardrow, .atm-memberrow { border-bottom-color: transparent; }

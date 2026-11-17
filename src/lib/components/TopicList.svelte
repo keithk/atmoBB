@@ -153,7 +153,9 @@
     .atm-threadrow--compact:focus-within .atm-threadrow__actions { opacity: 1; }
     @media (hover: none) { .atm-threadrow__actions { opacity: 1; } }
     .atm-threadrow__via { flex: none; font: var(--type-meta); color: var(--forum-ink-faint); white-space: nowrap; }
-    .atm-threadrow--compact .atm-topic-participants { padding-left: 6px; }
+    /* The pile hugs the column's far edge, so piles line up between lists whose
+       widest pile differs. */
+    .atm-threadrow--compact .atm-topic-participants { justify-content: flex-start; padding-left: 6px; }
     .atm-threadrow--compact .atm-topic-participants :global(a) { display: flex; margin-left: -6px; transition: margin-left var(--dur) var(--ease); }
     /* The pile fans out when you point at a row, so you can see who's in it. */
     .atm-threadrow--compact:hover .atm-topic-participants :global(a) { margin-left: 2px; }
