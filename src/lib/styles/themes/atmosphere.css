@@ -71,7 +71,7 @@
 .atm-board-marker::before { content: '#'; }
 .atm-threadrow__board { font-size: var(--text-md); }
 @container (min-width: 821px) {
-  .atm-topic-list--boards .atm-threadrow--compact { grid-template-columns: minmax(0, 1fr) auto 260px 64px; }
+  .atm-topic-list--boards .atm-topic-list__rows { grid-template-columns: minmax(0, 1fr) auto 260px max-content; }
   .atm-topic-list--boards .atm-threadrow__nums { display: none; }
 }
 .atm-boardrow, .atm-memberrow { border-bottom-color: transparent; }

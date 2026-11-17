@@ -34,6 +34,7 @@
 </script>
 
 <div class="atm-topic-list" class:atm-topic-list--boards={showBoard}>
+  <div class="atm-topic-list__rows">
   {#each threads as thread}
     <article class="atm-threadrow atm-threadrow--compact" class:atm-threadrow--pinned={thread.pinned} class:atm-threadrow--locked={thread.locked}>
       <div class="atm-threadrow__status">
@@ -69,7 +70,7 @@
       </div>
       <div class="atm-topic-participants" aria-label="Participants">
         {#each thread.participants?.length ? thread.participants : [{ did: thread.author, profile: thread.authorProfile }] as participant}
-          <MemberLink did={participant.did}><Avatar seed={participant.did} profile={participant.profile} size={24} alt="" /></MemberLink>
+          <MemberLink did={participant.did} label={participant.profile?.displayName || 'Member profile'}><Avatar seed={participant.did} profile={participant.profile} size={24} alt="" /></MemberLink>
         {/each}
       </div>
       {#if showBoard}
@@ -83,18 +84,29 @@
   {:else}
     <p class="atm-empty">{emptyMessage}</p>
   {/each}
+  </div>
 </div>
 
 <style>
   @layer atmobb {
     .atm-topic-list { container-type: inline-size; }
-    .atm-topic-list > :last-child { border-bottom: none; }
+    .atm-topic-list__rows > :last-child { border-bottom: none; }
 
-    /* One line per topic: read dot, title, who's in it, where, how much, when. */
+    /* One line per topic: read dot, title, who's in it, where, how much, when.
+       The list owns the columns and every row is a subgrid of them, so the
+       count and date columns fit their widest value in whatever font the
+       theme sets, and line up from row to row. */
+    .atm-topic-list__rows {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto max-content max-content;
+      column-gap: var(--space-3);
+    }
+    .atm-topic-list--boards .atm-topic-list__rows { grid-template-columns: minmax(0, 1fr) auto 180px max-content max-content; }
+    .atm-topic-list__rows > .atm-empty { grid-column: 1 / -1; }
     .atm-threadrow--compact {
       position: relative;
-      grid-template-columns: minmax(0, 1fr) auto 84px 96px;
-      gap: var(--space-3);
+      grid-column: 1 / -1;
+      grid-template-columns: subgrid;
       padding: 10px var(--space-4);
       box-shadow: none;
     }
@@ -111,7 +123,6 @@
       inset: auto var(--space-4) 0;
       border-bottom: var(--border-hair) solid var(--forum-line);
     }
-    .atm-topic-list--boards .atm-threadrow--compact { grid-template-columns: minmax(0, 1fr) auto 180px 84px 96px; }
     /* The read dot sits in the row's left padding, so titles line up whether
        or not there is one. */
     .atm-threadrow__status { position: absolute; left: 4px; top: 50%; display: flex; transform: translateY(-50%); }
@@ -162,17 +173,15 @@
     }
 
     @container (max-width: 820px) {
-      .atm-threadrow--compact,
-      .atm-topic-list--boards .atm-threadrow--compact { grid-template-columns: minmax(0, 1fr) 150px 96px; }
-      .atm-topic-list:not(.atm-topic-list--boards) .atm-threadrow--compact { grid-template-columns: minmax(0, 1fr) 84px 96px; }
+      .atm-topic-list__rows { grid-template-columns: minmax(0, 1fr) max-content max-content; }
+      .atm-topic-list--boards .atm-topic-list__rows { grid-template-columns: minmax(0, 1fr) 150px max-content; }
       .atm-threadrow--compact .atm-topic-participants,
       .atm-threadrow--compact .atm-topic-tags,
       .atm-topic-list--boards .atm-threadrow__nums { display: none; }
     }
     @container (max-width: 520px) {
-      .atm-threadrow--compact,
-      .atm-topic-list--boards .atm-threadrow--compact,
-      .atm-topic-list:not(.atm-topic-list--boards) .atm-threadrow--compact { grid-template-columns: minmax(0, 1fr) auto; }
+      .atm-topic-list__rows,
+      .atm-topic-list--boards .atm-topic-list__rows { grid-template-columns: minmax(0, 1fr) max-content; }
       .atm-threadrow__board, .atm-threadrow--compact .atm-threadrow__nums, .atm-threadrow__via { display: none; }
       .atm-threadrow__main { flex-wrap: wrap; }
       .atm-threadrow--compact .atm-threadrow__title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }

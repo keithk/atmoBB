@@ -37,7 +37,8 @@
 .atm-mobilebar { border-bottom: var(--bubblegum-outline); }
 
 /* ---- lists: one sticker per topic ---- */
-.atm-topic-list { display: grid; gap: var(--space-3); padding: var(--space-2) 4px 6px 0; }
+.atm-topic-list { padding: var(--space-2) 4px 6px 0; }
+.atm-topic-list__rows { row-gap: var(--space-3); }
 .atm-threadrow--compact.atm-threadrow--compact {
   margin-inline: 0;
   border: var(--bubblegum-outline);

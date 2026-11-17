@@ -10,8 +10,17 @@
     handle,
     showAvatar = false,
     class: klass = '',
+    label,
     children,
-  }: { did?: string; handle?: string; showAvatar?: boolean; class?: string; children: Snippet } = $props();
+  }: {
+    did?: string;
+    handle?: string;
+    showAvatar?: boolean;
+    class?: string;
+    /** Accessible name, for links whose content is only an image. */
+    label?: string;
+    children: Snippet;
+  } = $props();
 
   // A handle is enough (the card endpoint resolves it), so @-mentions that only
   // know the handle work too. Prefer the readable handle in the URL.
@@ -74,6 +83,7 @@
   <a
     href={profileHref(actor)}
     class={klass}
+    aria-label={label}
     onmouseenter={scheduleShow}
     onmouseleave={scheduleHide}
     onfocus={scheduleShow}
