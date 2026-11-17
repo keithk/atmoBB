@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   rebuildBindingsInBackground: vi.fn(),
   closeExtensionHost: vi.fn(),
   dispatchTimer: vi.fn(),
+  refreshExtensionScopes: vi.fn(),
 }));
 vi.mock('$app/environment', () => ({
   get building() {
@@ -24,6 +25,7 @@ vi.mock('$lib/server/extensions/scheduler', () => ({ startScheduler: state.start
 vi.mock('$lib/server/extensions/maintenance', () => ({ startMaintenance: state.startMaintenance }));
 vi.mock('$lib/server/extensions/bindings', () => ({ rebuildBindingsInBackground: state.rebuildBindingsInBackground }));
 vi.mock('$lib/server/extensions/host', () => ({ dispatchTimer: state.dispatchTimer, closeExtensionHost: state.closeExtensionHost }));
+vi.mock('$lib/server/extensions/scopes', () => ({ refreshExtensionScopes: state.refreshExtensionScopes }));
 vi.mock('$lib/server/secrets', () => ({ assertProductionSecrets: vi.fn() }));
 vi.mock('$lib/server/notify/sender', () => ({ senderDid: () => null, senderKeypair: vi.fn() }));
 vi.mock('$lib/server/session', () => ({ sessionDid: vi.fn() }));
@@ -53,6 +55,7 @@ beforeEach(async () => {
     return process;
   }) as typeof process.once);
   state.waitForExtensionsLock.mockReset().mockReturnValue({ firstAttempt: Promise.resolve(), stop: vi.fn() });
+  state.refreshExtensionScopes.mockReset().mockResolvedValue(undefined);
   state.startScheduler.mockReset().mockReturnValue({ stop: () => state.events.push('stop scheduler') });
   state.startMaintenance.mockReset().mockReturnValue({ stop: () => state.events.push('stop maintenance') });
   state.rebuildBindingsInBackground.mockReset();
@@ -74,6 +77,28 @@ describe('init', () => {
     expect(state.waitForExtensionsLock).not.toHaveBeenCalled();
     expect(state.startScheduler).not.toHaveBeenCalled();
     expect(state.startMaintenance).not.toHaveBeenCalled();
+    expect(state.refreshExtensionScopes).not.toHaveBeenCalled();
+  });
+
+  it('has the extension OAuth scopes loaded before it lets the first request through', async () => {
+    let finishLoading!: () => void;
+    state.refreshExtensionScopes.mockReturnValue(new Promise<void>((resolve) => (finishLoading = resolve)));
+    let ready = false;
+    const starting = Promise.resolve(init()).then(() => (ready = true));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(ready).toBe(false);
+
+    finishLoading();
+    await starting;
+    expect(ready).toBe(true);
+  });
+
+  it('still starts when the extension OAuth scopes cannot be loaded', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    state.refreshExtensionScopes.mockRejectedValue(new Error('registry unreadable'));
+    await init();
+    expect(logged).toHaveBeenCalledTimes(1);
+    expect(state.waitForExtensionsLock).toHaveBeenCalledTimes(1);
   });
 
   it('does not start the poller until the extensions lock is handed over, then starts it once', async () => {

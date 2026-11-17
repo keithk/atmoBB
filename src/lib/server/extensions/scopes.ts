@@ -9,8 +9,9 @@ import { listInstalls } from './registry';
 // admin reconnects the forum account after an install or update changes them.
 //
 // Client metadata is built synchronously on every request while the registry
-// is read from disk, so the installs' part is kept as a snapshot. Anything
-// that changes which collections are approved or active refreshes it.
+// is read from disk, so the installs' part is kept as a snapshot. The server's
+// init hook loads it before the first request, and anything that changes
+// which collections are approved or active refreshes it.
 
 /** Where atmobb.app staff endorse a repository and the release SHAs they reviewed, in the directory forum's repo. */
 export const ENDORSEMENT_COLLECTION = 'app.atmobb.extension.endorsement';
@@ -46,6 +47,8 @@ export async function refreshExtensionScopes(): Promise<void> {
 
 /** The space-separated scopes extensions add to the forum login, or '' when they add none. */
 export function extensionScope(): string {
+  // Only reached when the load at startup failed: until a retry succeeds the
+  // installs' scopes are missing from what this returns.
   if (!loaded) {
     loaded = true;
     refreshExtensionScopes().catch((error) => {

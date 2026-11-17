@@ -12,6 +12,7 @@ import { closeExtensionHost, dispatchTimer } from '$lib/server/extensions/host';
 import { startMaintenance } from '$lib/server/extensions/maintenance';
 import { rebuildBindingsInBackground } from '$lib/server/extensions/bindings';
 import { isFramePath } from '$lib/server/extensions/frame';
+import { refreshExtensionScopes } from '$lib/server/extensions/scopes';
 
 // Runs once when the server loads this module, so a production deploy with a
 // forgeable session secret dies at startup instead of serving requests.
@@ -43,6 +44,12 @@ export const init: ServerInit = async () => {
   // outright leaves a lock the next start takes over once it goes stale.
   process.once('sveltekit:shutdown', () => void stopExtensions());
   process.once('exit', () => running?.lock.release());
+  // OAuth client metadata is built synchronously from the extension scope
+  // snapshot, so it has to be read before the first request: a login that
+  // found it empty would build a client_id without the extensions' scopes.
+  // A registry that can't be read is logged rather than keeping the forum
+  // from starting; extensionScope() tries again when it is next asked.
+  await refreshExtensionScopes().catch((error) => console.error('Loading extension OAuth scopes failed', error));
   await waitForLock();
 };
 
