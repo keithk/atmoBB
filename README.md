@@ -27,7 +27,10 @@ git clone https://github.com/keithk/atmoBB.git atmobb
 cd atmobb
 bun install --frozen-lockfile
 
-# Pull the pinned upstream Happyview image and start it with Postgres.
+# Give Happyview a key for the OAuth tokens it stores, then pull the pinned
+# upstream image and start it with Postgres.
+printf 'TOKEN_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)" >> .env
+chmod 600 .env
 docker compose up -d
 
 # Resolve your handle, create the Happyview admin key, and configure the index.
@@ -35,8 +38,7 @@ export ADMIN_HANDLE=alice.bsky.social
 export ADMIN_DID="$(curl --fail --silent --show-error --get \
   --data-urlencode "handle=$ADMIN_HANDLE" \
   https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle | jq -er .did)"
-ADMIN_DID="$ADMIN_DID" sh appview/bootstrap-admin.sh > .env
-chmod 600 .env
+ADMIN_DID="$ADMIN_DID" sh appview/bootstrap-admin.sh >> .env
 sh appview/setup.sh
 
 # Add synthetic forum content and start the web app.

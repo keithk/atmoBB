@@ -27,7 +27,7 @@ services:
       DATABASE_URL: postgres://happyview:happyview@postgres/happyview
       PUBLIC_URL: ${PUBLIC_URL:-http://127.0.0.1:3000}
       SESSION_SECRET: ${SESSION_SECRET:-dev-only-secret-not-for-production}
-      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?add TOKEN_ENCRYPTION_KEY to .env (docs/development.md, step 2)}
       RELAY_URL: https://relay1.us-east.bsky.network
       PORT: 3000
     depends_on:

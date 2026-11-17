@@ -36,10 +36,21 @@ Plain `bun install` is only for when you're actually updating dependencies and `
 
 ## 2. Start Postgres and Happyview
 
+Happyview encrypts the OAuth tokens it stores, and it needs a key to do that. Generate one into `.env` before the first start:
+
+```sh
+printf 'TOKEN_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)" >> .env
+chmod 600 .env
+```
+
+Do this once per checkout. Compose refuses to run without the key, because a Happyview that starts without one serves the forum fine and then fails every login with a 500 from `/oauth/dpop-keys`.
+
 ```sh
 docker compose up -d
 docker compose ps
 ```
+
+If the containers were already running when you added the key, `docker compose up -d happyview` recreates Happyview so it picks the key up.
 
 Compose uses the Happyview release pinned in `docker-compose.yml`. Happyview listens on `127.0.0.1:3000`, Postgres on `127.0.0.1:5433`, both with development-only credentials. The bootstrap script waits up to 60 seconds for first-run migrations, so give it a minute.
 
@@ -59,14 +70,13 @@ The result has to start with `did:`. If you already know your DID, just `export 
 
 ## 4. Bootstrap an admin API key
 
-Create Happyview's super-user and drop its operator key in `.env`:
+Create Happyview's super-user and add its operator key to `.env`:
 
 ```sh
-ADMIN_DID="$ADMIN_DID" sh appview/bootstrap-admin.sh > .env
-chmod 600 .env
+ADMIN_DID="$ADMIN_DID" sh appview/bootstrap-admin.sh >> .env
 ```
 
-Only the key hash goes into Postgres. Rerunning the script rotates the key. If `.env` already has other values in it, run the script without the redirect and replace `HAPPYVIEW_API_KEY` by hand.
+Append, don't overwrite: `.env` already holds the `TOKEN_ENCRYPTION_KEY` from step 2. Only the key hash goes into Postgres. Rerunning the script rotates the key and appends a new `HAPPYVIEW_API_KEY` line. The appview scripts read the last one, so delete the older lines whenever you feel like tidying.
 
 This key is for configuring Happyview. The web app never touches it.
 
@@ -167,7 +177,9 @@ To wipe it and start clean, run `docker compose down --volumes`. Then repeat ste
 | `styleText` export error, an OAuth engine error, or a Vite engine warning | Node is too old; install 22.19 or newer. |
 | Happyview image pull fails | Confirm Docker can reach `ghcr.io`, then rerun `docker compose pull happyview`. |
 | Bootstrap times out waiting for migrations | Run `docker compose ps` and `docker compose logs happyview postgres`. The first database error is usually the one that matters. |
-| `setup.sh` returns 401 | `.env` has a stale key. Rerun step 4, which rotates and replaces it, then rerun setup. |
+| `docker compose` stops with `add TOKEN_ENCRYPTION_KEY to .env` | `.env` has no token encryption key. Run the first command in step 2. |
+| Login fails and the dev server logs `Failed to provision DPoP key: 500` | Happyview is running without `TOKEN_ENCRYPTION_KEY`. Confirm it is in `.env`, then run `docker compose up -d happyview`. |
+| `setup.sh` returns 401 | `.env` has a stale key. Rerun step 4, which rotates it, then rerun setup. |
 | Setup cannot resolve a lexicon | Check internet and DNS, then rerun. Record schemas resolve from the live atproto network. |
 | OAuth returns to a dead page | Open the app at `http://127.0.0.1:5173`, close any stale login tabs, and retry. |
 | Port 3000, 5173, or 5433 is already in use | Stop whatever else is on it. The checked-in dev defaults assume all three are free. |
