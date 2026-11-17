@@ -20,7 +20,7 @@
     <p class="atm-pitch__body">
       Already use <strong>Bluesky, {featuredApp.name}, or another app on the network?</strong>
       You already have an atmosphere account. Log in with it here to add your
-      reply—there's no separate forum account to create.
+      reply. You don't need a separate forum account.
     </p>
 
     <div class="atm-pitch__actions">

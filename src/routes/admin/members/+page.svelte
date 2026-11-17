@@ -45,15 +45,15 @@
           <div class="mode__options">
             <label class="mode__option">
               <input type="radio" name="mode" value="open" checked={data.mode === 'open'} />
-              <span><strong>Open</strong> — anyone with an atproto account can post.</span>
+              <span><strong>Open:</strong> anyone with an atmosphere account can post.</span>
             </label>
             <label class="mode__option">
               <input type="radio" name="mode" value="apply" checked={data.mode === 'apply'} disabled={!data.gatingAvailable} />
-              <span><strong>Apply</strong> — people ask to join and staff approve them.</span>
+              <span><strong>Apply:</strong> people ask to join and staff approve them.</span>
             </label>
             <label class="mode__option">
               <input type="radio" name="mode" value="invite" checked={data.mode === 'invite'} disabled={!data.gatingAvailable} />
-              <span><strong>Invite</strong> — members and staff hand out invite links.</span>
+              <span><strong>Invite:</strong> members and staff hand out invite links.</span>
             </label>
           </div>
           {#if !data.gatingAvailable}

@@ -26,8 +26,8 @@
   <h2 class="atm-pitch__title">Log in with your <mark>atmosphere account</mark>.</h2>
   <p class="atm-pitch__body">
     Already use <strong>Bluesky, {featuredApp.name}, or another app on the network?</strong>
-    That's your atmosphere account. Log in with it here—there's no separate
-    forum account to create.
+    That's your atmosphere account. Log in with it here. You don't need a
+    separate forum account.
   </p>
 
   {#if message}<p class="atm-err">{message}</p>{/if}
