@@ -4,6 +4,16 @@ Versions follow [Semantic Versioning](https://semver.org) with the operator's
 workload in mind; [Releasing](docs/releasing.md) spells out what each level
 means. Every entry names the Happyview release it was tested against.
 
+## 0.11.0
+
+HappyView 2.16.0, unchanged from 0.10.2. No backfill is required.
+
+- New threads start from a dialog. The home page gets a "new thread" button with a board picker grouped by category; it lists members-only boards only to their members and remembers the last board used. On a board page the same button opens the dialog for that board, and the form at the bottom of the board is gone.
+- The dialog keeps a draft when you close it (the button then reads "continue draft"), opens with `c`, and posts with Cmd/Ctrl+Enter. On members-only boards it hides images and polls, which those boards refuse.
+- The first sign-in after a restart no longer fails on a forum with extensions installed. Extension scopes now load before the server takes requests.
+- Sign-in and forum-connect failures are logged on the server with the underlying error, instead of only showing "check your handle".
+- Development: `docker compose` refuses to start the local Happyview without `TOKEN_ENCRYPTION_KEY`, which it previously defaulted to empty, so every login failed. Generate one into `.env` as described in `docs/development.md`.
+
 ## 0.10.2
 
 HappyView 2.16.0, unchanged from 0.10.1. No backfill is required.
