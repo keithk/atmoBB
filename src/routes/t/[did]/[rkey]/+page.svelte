@@ -168,9 +168,10 @@
       </div>
     {/if}
     <h1 class="atm-thread-head__title">{data.thread.value.title}</h1>
-    {#if data.thread.pinned || data.thread.locked}
+    {#if data.thread.pinned || data.frontPage?.pinned || data.thread.locked}
       <div class="atm-thread-head__flags">
         {#if data.thread.pinned}<span class="atm-chip" title="pinned to the top of its board">📌 pinned</span>{/if}
+        {#if data.frontPage?.pinned}<span class="atm-chip" title="pinned to the forum's front page">📌 on the front page</span>{/if}
         {#if data.thread.locked}<span class="atm-chip" title="no new replies">🔒 locked</span>{/if}
       </div>
     {/if}
@@ -193,8 +194,8 @@
   {#if data.canModerate}
     <div class="atm-modbar">
       <span>staff:</span>
-      {#snippet modact(action: string, label: string, title: string)}
-        <form class="atm-modact" method="POST" action="?/moderate">
+      {#snippet modact(action: string, label: string, title: string, formAction = '?/moderate')}
+        <form class="atm-modact" method="POST" action={formAction}>
           <input type="hidden" name="action" value={action} />
           <button class="atm-linkbtn atm-modact__btn" {title}>{label}</button>
         </form>
@@ -215,6 +216,13 @@
         {:else}
           {@render modact('pin', 'pin', 'Keep this thread at the top of its board')}
         {/if}
+      {/if}
+      {#if data.frontPage?.pinned}
+        {@render modact('unpin', 'unpin from front page', 'Take this thread off the front page', '?/frontPage')}
+      {:else if data.frontPage && !data.frontPage.full}
+        {@render modact('pin', 'pin to front page', 'Show this thread above the feed on the front page', '?/frontPage')}
+      {:else if data.frontPage}
+        <a class="atm-modact__btn" href="/admin/appearance/homepage" title="The front page holds three pins. Unpin one to make room.">front page full</a>
       {/if}
     </div>
   {/if}

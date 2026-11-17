@@ -42,10 +42,10 @@ export const actions: Actions = {
       return fail(400, { message: 'Choose up to three recent topics or paste valid topic URLs.' });
     }
     if (form.get('featuredEnabled') === 'on' && featuredThreads.length === 0) {
-      return fail(400, { message: 'Choose at least one featured topic, or turn featured topics off.' });
+      return fail(400, { message: 'Choose at least one topic to pin, or turn front-page pins off.' });
     }
     if (new Set(featuredThreads).size !== featuredThreads.length) {
-      return fail(400, { message: 'Choose each featured topic only once.' });
+      return fail(400, { message: 'Pin each topic only once.' });
     }
 
     let profile: ForumProfile;

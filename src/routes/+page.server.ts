@@ -91,7 +91,6 @@ export const load: PageServerLoad = async ({ url, locals }) => {
       : null;
     const top = index.boards.filter((b) => !b.value.parent);
     const childrenOf = (uri: string) => index.boards.filter((b) => b.value.parent === uri);
-    const latest = feed.threads.slice(0, 15);
     // Honest bounded ranking: most replies among the 100 most recently active
     // visible topics, with recent activity as the tie-breaker.
     const hot = rankHotThreads(feed.threads).slice(0, 12);
@@ -100,7 +99,10 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     const featuredPages = await Promise.all(homepage.featuredThreads.map((uri) =>
       getLatestThreads(undefined, 1, FORUM_DID(), { uri }).catch((): LatestThreads => ({ threads: [] })),
     ));
-    const featured = selectFeaturedThreads(featuredPages.flatMap((page) => page.threads), homepage.featuredThreads);
+    const featured = selectFeaturedThreads(featuredPages.flatMap((page) => page.threads), homepage.featuredThreads)
+      .map((thread) => ({ ...thread, pinned: true }));
+    // Pinned topics sit above the feed, so the feed skips them.
+    const latest = feed.threads.filter((thread) => !homepage.featuredThreads.includes(thread.uri)).slice(0, 15);
 
     // Authors in last-post columns without an atmobb profile get their handle
     const needsHandle = [
@@ -185,7 +187,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
       avatarProfiles,
       homepage: normalizeHomepage(undefined),
       homeView: null as 'categories' | 'latest' | 'hot' | null,
-      featured: [] as LatestThreads['threads'],
+      featured: [] as (LatestThreads['threads'][number] & { pinned: boolean })[],
       latest: [] as LatestThreads['threads'],
       hot: [] as LatestThreads['threads'],
       stats: { threads: 0, posts: 0, members: 0 },

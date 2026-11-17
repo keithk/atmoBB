@@ -18,7 +18,9 @@ interface Post {
   author: string;
   body?: RichTextBlock[];
 }
-import { boardModerator, canModerate } from '$lib/server/admin';
+import { adminActor, boardModerator, canModerate } from '$lib/server/admin';
+import { currentProfile, profileRedirect, saveProfile } from '$lib/server/forum-appearance';
+import { homepageRecord, MAX_FRONT_PAGE_PINS, normalizeHomepage } from '$lib/homepage';
 import { createForumRecord, forumWriteErrorMessage } from '$lib/server/forum-repo';
 import { savedRedirect } from '$lib/server/saved-redirect';
 import { actionFamily, isThreadAction } from '$lib/moderation';
@@ -214,6 +216,13 @@ export const load: PageServerLoad = async ({ params, url, parent, locals, isData
     boardName: board?.name,
     threadPath: canonicalPath,
     canModerate: page.thread ? await canModerate(locals.user?.did, page.thread.value.board) : false,
+    // Admins only: the front page is forum-wide, so board staff can't change it.
+    frontPage: page.thread && !page.thread.origin && (await adminActor(locals))
+      ? await currentProfile()
+          .then((profile) => normalizeHomepage(profile.homepage).featuredThreads)
+          .then((pins) => ({ pinned: pins.includes(uri), full: pins.length >= MAX_FRONT_PAGE_PINS }))
+          .catch(() => null)
+      : null,
     // The extension panel for a bound thread; staff on an unbound public thread get attach links instead.
     extension: page.thread
       ? await threadExtension({
@@ -407,5 +416,33 @@ export const actions: Actions = {
       () => getThreadPage(uri, { limit: 1 }),
       (p) => p.thread?.[flag] === want,
     );
+  },
+
+  // Admin: pin the thread to the front page, or take it off. Front-page pins
+  // are the homepage's featured topics, so Admin → Appearance → Homepage
+  // shows the same list.
+  frontPage: async ({ params, request, locals }) => {
+    if (!(await adminActor(locals))) return fail(403, { message: 'Only admins can pin to the front page.' });
+    const pin = String((await request.formData()).get('action') ?? '') === 'pin';
+    const uri = threadUri(params.did, params.rkey);
+    const { thread } = await getThreadPage(uri, { limit: 1 });
+    if (!thread) return fail(404, { message: 'Thread not found.' });
+    if (thread.origin) return fail(400, { message: "Only a thread's own forum can pin it." });
+    let profile;
+    try {
+      profile = await currentProfile();
+      const homepage = normalizeHomepage(profile.homepage);
+      const pins = homepage.featuredThreads.filter((pinned) => pinned !== uri);
+      if (pin && pins.length >= MAX_FRONT_PAGE_PINS) {
+        return fail(400, { message: `The front page holds ${MAX_FRONT_PAGE_PINS} pinned topics. Unpin one first.` });
+      }
+      const record = homepageRecord({ ...homepage, featuredThreads: pin ? [...pins, uri] : pins });
+      if (record) profile.homepage = record;
+      else delete profile.homepage;
+      await saveProfile(profile);
+    } catch (e) {
+      return fail(502, { message: e instanceof Error ? e.message : 'We couldn\'t update the front page. Try again.' });
+    }
+    await profileRedirect(`/t/${params.did}/${params.rkey}?moderated=1`, profile);
   },
 };

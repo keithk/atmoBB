@@ -3,6 +3,9 @@ import { parseAtUri } from './appview-paths';
 export const HOMEPAGE_LAYOUTS = ['boards', 'latest', 'categories-latest'] as const;
 export const HOMEPAGE_WELCOME_STYLES = ['classic', 'compact', 'hidden'] as const;
 
+/** The lexicon's cap on topics pinned to the front page. */
+export const MAX_FRONT_PAGE_PINS = 3;
+
 export type HomepageLayout = (typeof HOMEPAGE_LAYOUTS)[number];
 export type HomepageWelcome = (typeof HOMEPAGE_WELCOME_STYLES)[number];
 
@@ -53,7 +56,7 @@ export function normalizeHomepage(value: unknown): HomepageSettings {
   const featuredThreads = Array.isArray(homepage.featuredThreads)
     ? homepage.featuredThreads
         .filter((uri): uri is string => typeof uri === 'string' && isThreadUri(uri))
-        .slice(0, 3)
+        .slice(0, MAX_FRONT_PAGE_PINS)
     : [];
 
   return {

@@ -73,8 +73,8 @@
   {/if}
 
   {#if data.featured.length}
-    <section class="atm-panel atm-home-featured">
-      <div class="atm-board-section">Featured topics</div>
+    <section class="atm-panel atm-home-pinned" aria-labelledby="home-pinned">
+      <div class="atm-board-section" id="home-pinned">📌 Pinned</div>
       {@render topicList(data.featured, '')}
     </section>
   {/if}
@@ -264,6 +264,9 @@
 
   .atm-home-intro { max-width: 70ch; }
   .atm-home-note { margin: 0 0 var(--space-2); color: var(--forum-ink-faint); font: var(--type-meta); }
+
+  /* The section heading already says pinned; the per-row chip would repeat it. */
+  .atm-home-pinned :global(.atm-threadrow__flag) { display: none; }
 
   /* A view switcher, not site navigation: a segmented control in the same
      material as the pager and webring nav. */

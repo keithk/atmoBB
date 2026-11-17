@@ -24,8 +24,8 @@
   <div class="atm-card__header"><span>Homepage</span></div>
   <div class="atm-card__body">
     <p class="lede">
-      Choose what visitors see first. Featured topics are ordered independently from pinned topics;
-      inaccessible or removed topics are safely skipped.
+      Choose what visitors see first. Front-page pins are separate from board pins, and admins
+      can also set them from a thread's staff bar. Inaccessible or removed topics are skipped.
     </p>
     <form class="appearance" method="POST" action="?/saveHomepage">
       <div class="homepage-grid">
@@ -52,8 +52,8 @@
         <label class="homepage-check">
           <input type="checkbox" name="featuredEnabled" bind:checked={featuredEnabled} />
           <span>
-            <b>Show featured topics</b>
-            <small>Highlight up to three topics above the homepage lists.</small>
+            <b>Pin topics to the front page</b>
+            <small>Show up to three topics in a Pinned section above the homepage lists.</small>
           </span>
         </label>
         {#if featuredEnabled}
@@ -63,7 +63,7 @@
               <div class="featured-field">
                 <span class="featured-field__number" aria-hidden="true">{index + 1}</span>
                 <label class="atm-field">
-                  <span class="sr-only">Featured topic {index + 1}</span>
+                  <span class="sr-only">Pinned topic {index + 1}</span>
                   <select
                     class="atm-select"
                     name={featuredChoices[index] === customTopic ? undefined : 'featuredThread'}
