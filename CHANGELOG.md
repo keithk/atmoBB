@@ -4,6 +4,13 @@ Versions follow [Semantic Versioning](https://semver.org) with the operator's
 workload in mind; [Releasing](docs/releasing.md) spells out what each level
 means. Every entry names the Happyview release it was tested against.
 
+## 0.13.1
+
+HappyView 2.16.0, unchanged from 0.13.0. No backfill is required.
+
+- Atmosphere topic lists: consecutive pinned topics share one tinted block instead of stacking as separate pills. Titles stay in full ink once read, board names drop to metadata size, rows are tighter, and the hairlines between rows are back. Avatar piles sit against the board column so they line up from list to list.
+- No em or en dashes left in the interface. The admin save notice ends "Refresh to see it." as its own sentence, the settings scope pickers put the forum name in parentheses, page titles use " · " between parts ("Boards · Admin · Forum"), and validation errors say "3 to 30" instead of "3–30". The operator update console changed the same way.
+
 ## 0.13.0
 
 HappyView 2.16.0, unchanged from 0.12.0. No backfill is required.
