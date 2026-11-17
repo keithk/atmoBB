@@ -291,7 +291,7 @@
     cursor: text;
   }
   .atm-prose:focus-within {
-    outline: none;
+    outline: 2px solid transparent;
     border-color: var(--forum-accent);
     box-shadow: var(--shadow-well), var(--focus-ring);
   }

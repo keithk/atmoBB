@@ -432,7 +432,7 @@
   }
   .atm-compose__pick--chosen .atm-compose__select { padding-left: 28px; }
   .atm-compose__select:hover { border-color: var(--forum-accent); }
-  .atm-compose__select:focus-visible { outline: none; border-color: var(--forum-accent); box-shadow: var(--focus-ring); }
+  .atm-compose__select:focus-visible { outline: 2px solid transparent; border-color: var(--forum-accent); box-shadow: var(--focus-ring); }
   .atm-compose__select:has(option[value='']:checked) { color: var(--forum-ink-faint); }
 
   /* Where customizable selects ship, the board list becomes a proper panel. */

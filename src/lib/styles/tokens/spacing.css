@@ -50,6 +50,8 @@
   --dur: 150ms;
   --dur-slow: 260ms;
 
-  /* --- focus ring --- */
-  --focus-ring: 0 0 0 3px color-mix(in oklch, var(--forum-accent) 40%, transparent);
+  /* --- focus ring ---
+     Two tones so it shows on any surface: a surface-colored gap, then a
+     link-colored ring, which every theme keeps at 4.5:1 against its surfaces. */
+  --focus-ring: 0 0 0 2px var(--forum-surface), 0 0 0 4px var(--forum-link);
 }

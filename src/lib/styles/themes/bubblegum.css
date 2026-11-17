@@ -8,7 +8,7 @@
   --radius-md: 14px;
   --radius-lg: 20px;
   --bubblegum-drop: light-dark(#2b1b2e, #ff5fa8);
-  --bubblegum-pop: light-dark(#7ee8dc, #1f8f86);
+  --bubblegum-pop: light-dark(#7ee8dc, #007971);
   --bubblegum-outline: var(--border-solid) solid var(--forum-edge);
 }
 

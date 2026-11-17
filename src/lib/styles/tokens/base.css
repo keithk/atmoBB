@@ -68,7 +68,9 @@ img { max-width: 100%; display: block; }
 
 /* focus-visible ring for interactive elements */
 :where(button, a, input, select, textarea, [tabindex]):focus-visible {
-  outline: none;
+  /* Invisible normally; forced-colors mode drops the shadow and paints this. */
+  outline: 2px solid transparent;
+  outline-offset: 2px;
   box-shadow: var(--focus-ring);
   border-radius: var(--radius-sm);
 }

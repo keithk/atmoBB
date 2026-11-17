@@ -135,7 +135,7 @@ a.atm-btn:hover { text-decoration: none; }
 .atm-textarea { resize: vertical; min-height: 96px; line-height: var(--lh-normal); }
 .atm-input::placeholder, .atm-textarea::placeholder { color: var(--forum-ink-faint); }
 .atm-input:focus, .atm-textarea:focus, .atm-select:focus {
-  outline: none;
+  outline: 2px solid transparent;
   border-color: var(--forum-accent);
   box-shadow: var(--shadow-well), var(--focus-ring);
 }
