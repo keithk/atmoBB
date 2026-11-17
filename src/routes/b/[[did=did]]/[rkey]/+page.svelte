@@ -3,21 +3,34 @@
   import { page } from '$app/state';
   import BoardLabel from '$lib/components/BoardLabel.svelte';
   import PageBar from '$lib/components/PageBar.svelte';
-  import RichTextEditor from '$lib/components/RichTextEditor.svelte';
+  import NewThread from '$lib/components/NewThread.svelte';
   import TopicList from '$lib/components/TopicList.svelte';
   import JoinNotice from '$lib/components/JoinNotice.svelte';
   import { threadFilterHref } from '$lib/thread-filters';
   import { canPost } from '$lib/membership';
+  import type { BoardIndex } from '$lib/server/appview';
+  import type { ComposeBoard } from '$lib/new-thread';
 
   let { data, form } = $props();
-
-  // New-thread submit in flight; the action redirects to the fresh thread on success.
-  let posting = $state(false);
 
   const user = $derived(page.data.user);
   // On a gated forum, non-members read but see no write controls (R22).
   const mayPost = $derived(canPost(page.data.standing));
   const staff = $derived(data.canModerate);
+  // This board, as the new-thread composer shows it; color and emoji come from the sidebar index.
+  const composeBoard = $derived.by((): ComposeBoard => {
+    const indexed = (page.data.sidebarBoards as BoardIndex['boards'] | undefined)?.find((b) => b.uri === data.boardUri)?.value;
+    return {
+      uri: data.boardUri,
+      path: data.basePath,
+      name: data.board?.name ?? indexed?.name ?? 'this board',
+      color: indexed?.color,
+      emoji: indexed?.emoji,
+      private: !!data.private,
+      group: '',
+      child: false,
+    };
+  });
   const filtered = $derived(!!(data.filters.q || data.filters.tag));
   const boardThreads = $derived(data.board?.threadCount ?? 0);
   const totalPosts = $derived(boardThreads + (data.board?.replyCount ?? 0));
@@ -59,7 +72,7 @@
       </form>
     {/if}
     {#if !data.locked && mayPost}
-      <a class="atm-btn atm-btn--primary atm-btn--sm" href="#composer">✎ new thread</a>
+      <NewThread boards={[composeBoard]} selected={data.boardUri} handle={user.handle} />
     {/if}
   {/if}
 </PageBar>
@@ -170,59 +183,9 @@
   </div>
 {/if}
 
-{#if user && mayPost}
-  <div class="atm-composer" id="composer">
-    <div class="atm-composer__header">
-      <h2 class="atm-composer__title">Start a new thread</h2>
-      <span class="atm-composer__identity">posting as @{user.handle}</span>
-    </div>
-    <div class="atm-composer__body">
-      {#if form?.message && !form.watch}<p class="atm-err">{form.message}</p>{/if}
-      <form
-        class="atm-composer__form"
-        method="POST"
-        action="?/newThread"
-        use:enhance={() => {
-          posting = true;
-          return async ({ update }) => {
-            await update();
-            posting = false;
-          };
-        }}
-      >
-        <input type="hidden" name="boardName" value={data.board?.name ?? ''} />
-        <div class="atm-field">
-          <span class="atm-label">Title</span>
-          <input class="atm-input" name="title" maxlength="300" required placeholder="Give your thread a title" />
-        </div>
-        <div class="atm-field">
-          <span class="atm-label">Body</span>
-          <RichTextEditor name="body" placeholder="Write your post…" allowImages={!data.private} />
-        </div>
-        <div class="atm-field">
-          <span class="atm-label">Tags <span class="atm-label__hint">optional, comma separated</span></span>
-          <input class="atm-input" name="tags" aria-label="Tags" placeholder="help, projects" />
-        </div>
-        {#if !data.private}
-          <details class="atm-pollfields">
-            <summary class="atm-label">Add a poll</summary>
-            <div class="atm-pollfields__body">
-              <input class="atm-input" name="pollQuestion" maxlength="300" placeholder="Question (optional; the title works too)" />
-              <textarea class="atm-input" name="pollOptions" rows="4" placeholder="One option per line, 2 to 10"></textarea>
-              <label class="atm-pollfields__row"><input type="checkbox" name="pollMultiple" value="1" /> Voters can pick more than one</label>
-              <label class="atm-pollfields__row">Runs for <input class="atm-input atm-pollfields__days" type="number" name="pollDays" min="0" max="365" placeholder="∞" /> days</label>
-            </div>
-          </details>
-        {/if}
-        <button class="atm-btn atm-btn--primary" disabled={posting}>
-          {#if posting}<span class="atm-spinner" aria-hidden="true"></span> Posting…{:else}✎ post thread{/if}
-        </button>
-      </form>
-    </div>
-  </div>
-{:else if !mayPost}
+{#if !mayPost}
   <JoinNotice action="start a thread" />
-{:else}
+{:else if !user}
   <p class="atm-loginhint"><a href="/login">Log in</a> to start a thread.</p>
 {/if}
 {/if}

@@ -17,6 +17,45 @@ import { getPublicProfile } from '$lib/server/profiles';
 import { presenceSnapshot } from '$lib/server/presence';
 import { normalizeHomepage, rankHotThreads, selectFeaturedThreads } from '$lib/homepage';
 import { neverAskedAboutNotifications } from '$lib/server/notify/store';
+import { boardPath } from '$lib/appview-paths';
+import type { ComposeBoard } from '$lib/new-thread';
+
+type BoardRow = Awaited<ReturnType<typeof getBoardIndex>>['boards'][number];
+
+// Boards the viewer can start a thread in, in index order, for the new-thread
+// picker. Members-only boards appear only to their members.
+async function composeBoards(
+  groups: { title: string; boards: (BoardRow & { children: BoardRow[] })[] }[],
+  did: string,
+): Promise<ComposeBoard[]> {
+  const entries = groups.flatMap((group) =>
+    group.boards.flatMap((board) => [
+      { board, group: group.title, child: false },
+      ...board.children.map((child) => ({ board: child, group: group.title, child: true })),
+    ]),
+  );
+  const membership = new Map<string, Promise<boolean>>();
+  const allowed = await Promise.all(
+    entries.map(({ board }) => {
+      const space = spaceOfBoard(board.value.access);
+      if (!space) return true;
+      if (!membership.has(space)) membership.set(space, isSpaceMember(space, did).catch(() => false));
+      return membership.get(space)!;
+    }),
+  );
+  return entries
+    .filter((_, i) => allowed[i])
+    .map(({ board, group, child }) => ({
+      uri: board.uri,
+      path: boardPath(board.uri, FORUM_DID()),
+      name: board.value.name,
+      color: board.value.color,
+      emoji: board.value.emoji,
+      private: !!spaceOfBoard(board.value.access),
+      group,
+      child,
+    }));
+}
 
 // Real profiles for the who's-online members (cached in getPublicProfile).
 async function presenceProfiles(dids: string[]): Promise<Record<string, ActorProfile | null>> {
@@ -122,6 +161,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     ].filter((g) => g.boards.length);
 
     return {
+      composeBoards: locals.user ? await composeBoards(groups, locals.user.did) : [],
       metadata,
       groups,
       presence,
@@ -138,6 +178,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     };
   } catch {
     return {
+      composeBoards: [] as ComposeBoard[],
       metadata,
       groups: [] as { title: string; boards: never[] }[],
       presence,

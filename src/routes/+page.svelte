@@ -9,10 +9,15 @@
   import PageBar from '$lib/components/PageBar.svelte';
   import RichText from '$lib/components/RichText.svelte';
   import TopicList from '$lib/components/TopicList.svelte';
+  import NewThread from '$lib/components/NewThread.svelte';
+  import { page } from '$app/state';
+  import { canPost } from '$lib/membership';
   import { relTime } from '$lib/reltime';
   import type { LatestThreads } from '$lib/server/appview';
 
   let { data } = $props();
+  // On a gated forum, non-members read but see no write controls (R22).
+  const mayPost = $derived(canPost(page.data.standing));
 
   const authorName = (post?: { author: string; authorProfile?: { displayName?: string } }) =>
     post
@@ -44,6 +49,9 @@
       <a class:atm-home-nav__item--active={activeView === view.value} class="atm-home-nav__item" href="/?view={view.value}" aria-current={activeView === view.value ? 'page' : undefined}>{view.label}</a>
     {/each}
   </nav>
+  {#if data.user && mayPost && data.composeBoards.length}
+    <NewThread boards={data.composeBoards} handle={data.user.handle} />
+  {/if}
 </PageBar>
 
 <div class="stack">
