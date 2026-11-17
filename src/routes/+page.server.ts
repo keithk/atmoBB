@@ -1,4 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { env } from '$env/dynamic/private';
 import type { Actions, PageServerLoad } from './$types';
 import {
   getBoardIndex,
@@ -15,12 +16,13 @@ import { declareMembership } from '$lib/server/membership';
 import { safeReturnPath } from '$lib/server/notify/return-path';
 import { getPublicProfile } from '$lib/server/profiles';
 import { presenceSnapshot } from '$lib/server/presence';
-import { normalizeHomepage, rankHotThreads, selectFeaturedThreads } from '$lib/homepage';
+import { normalizeHomepage, rankHotThreads, selectFeaturedThreads, showsMarketingHomepage } from '$lib/homepage';
 import { neverAskedAboutNotifications } from '$lib/server/notify/store';
 import { boardPath } from '$lib/appview-paths';
 import type { ComposeBoard } from '$lib/new-thread';
 
 type BoardRow = Awaited<ReturnType<typeof getBoardIndex>>['boards'][number];
+type BoardStats = NonNullable<Awaited<ReturnType<typeof getBoardIndex>>['stats']>;
 
 // Boards the viewer can start a thread in, in index order, for the new-thread
 // picker. Members-only boards appear only to their members.
@@ -57,6 +59,20 @@ async function composeBoards(
     }));
 }
 
+// The home page with no forum content, for when the appview is down and for
+// the marketing page, which shows none of it.
+const emptyHome = () => ({
+  composeBoards: [] as ComposeBoard[],
+  groups: [] as { title: string; boards: never[] }[],
+  homepage: normalizeHomepage(undefined),
+  homeView: null as 'categories' | 'latest' | 'hot' | null,
+  featured: [] as (LatestThreads['threads'][number] & { pinned: boolean })[],
+  latest: [] as LatestThreads['threads'],
+  hot: [] as LatestThreads['threads'],
+  stats: { threads: 0, posts: 0, members: 0 } as BoardStats,
+  handles: {} as Record<string, string>,
+});
+
 // Real profiles for the who's-online members (cached in getPublicProfile).
 async function presenceProfiles(dids: string[]): Promise<Record<string, ActorProfile | null>> {
   const entries = await Promise.all(
@@ -72,6 +88,20 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     type: 'website' as const,
     noindex: false,
   };
+  if (showsMarketingHomepage(env.ATMOBB_MARKETING_HOMEPAGE === '1', Boolean(locals.user), url.searchParams)) {
+    return {
+      ...emptyHome(),
+      metadata: {
+        ...metadata,
+        description: 'atmoBB is phpBB-style forum software for the AT Protocol. People log in with the atmosphere account they already have.',
+      },
+      presence: presenceSnapshot(),
+      avatarProfiles: {} as Record<string, ActorProfile | null>,
+      offerNotifications: false,
+      appviewDown: false,
+      marketing: true,
+    };
+  }
   const presence = presenceSnapshot();
   const avatarProfiles = await presenceProfiles(presence.members.map((m) => m.did));
   // The same one-time offer the thread page makes after a first post, so a
@@ -177,23 +207,17 @@ export const load: PageServerLoad = async ({ url, locals }) => {
       handles,
       offerNotifications,
       appviewDown: false,
+      marketing: false,
     };
   } catch {
     return {
-      composeBoards: [] as ComposeBoard[],
+      ...emptyHome(),
       metadata,
-      groups: [] as { title: string; boards: never[] }[],
       presence,
       avatarProfiles,
-      homepage: normalizeHomepage(undefined),
-      homeView: null as 'categories' | 'latest' | 'hot' | null,
-      featured: [] as (LatestThreads['threads'][number] & { pinned: boolean })[],
-      latest: [] as LatestThreads['threads'],
-      hot: [] as LatestThreads['threads'],
-      stats: { threads: 0, posts: 0, members: 0 },
-      handles: {} as Record<string, string>,
       offerNotifications,
       appviewDown: true,
+      marketing: false,
     };
   }
 };

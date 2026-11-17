@@ -3,6 +3,7 @@
   import Avatar from '$lib/components/Avatar.svelte';
   import Card from '$lib/components/Card.svelte';
   import LoginCard from '$lib/components/LoginCard.svelte';
+  import MarketingHome from '$lib/components/marketing/MarketingHome.svelte';
   import MemberLink from '$lib/components/MemberLink.svelte';
   import BoardLabel from '$lib/components/BoardLabel.svelte';
   import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
@@ -35,6 +36,11 @@
 {#snippet topicList(threads: LatestThreads['threads'], emptyMessage: string)}
   <TopicList {threads} {emptyMessage} accountDid={data.user?.did} forumDid={data.forumDid} showBoard />
 {/snippet}
+
+<!-- atmobb.app shows signed-out visitors a page about atmoBB itself; see showsMarketingHomepage. -->
+{#if data.marketing}
+  <MarketingHome />
+{:else}
 
 {#if data.appviewDown}
   <p class="atm-notice atm-notice--danger">
@@ -243,6 +249,7 @@
   </div>
   {/if}
 </div>
+{/if}
 
 <style>
   @layer atmobb {

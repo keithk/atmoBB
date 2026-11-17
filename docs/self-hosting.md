@@ -515,6 +515,7 @@ Relevant app environment variables:
 | `HAPPYVIEW_CLIENT_KEY` | Required public HappyView OAuth API-client key (`hvc_…`), provisioned by `./atmobb configure-oauth`. Never use the admin key here. |
 | `HAPPYVIEW_OAUTH_CLIENT_ID` | Optional exact metadata-ID check for HTTPS. Required for HTTP development, where it must match the app's localhost exception and the registered HappyView client. |
 | `ATMOBB_AVATAR_BUILDER_URL` | Optional. Links an external avatar builder from profile settings. |
+| `ATMOBB_MARKETING_HOMEPAGE` | `1` gives signed-out visitors to `/` atmobb.app's page about atmoBB instead of the board index. Members, and anyone who opens `/?view=…`, still get the forum. It's written for atmobb.app (it offers hosting at `/host`), so leave it unset on your forum. |
 
 Rotating the Happyview session secret requires changing both environment files and restarting Happyview and atmobb. Rotating the Postgres password requires changing the database role and its environment together; editing only the env file locks Happyview out.
 

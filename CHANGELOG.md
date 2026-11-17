@@ -4,6 +4,11 @@ Versions follow [Semantic Versioning](https://semver.org) with the operator's
 workload in mind; [Releasing](docs/releasing.md) spells out what each level
 means. Every entry names the Happyview release it was tested against.
 
+## Unreleased
+
+- atmobb.app front page: with `ATMOBB_MARKETING_HOMEPAGE=1`, signed-out visitors to `/` see a page about atmoBB in the forum's own shell instead of the board index. It covers logging in with an atmosphere account, the nine themes, the admin panel, shared topics and the smaller features, and ends with the install command and hosting. Members, and `/?view=…`, still get the forum. Every other forum leaves it unset and nothing changes. Theme screenshots live in `static/marketing/`.
+- The log-in and reply cards and the Admin → Members join modes no longer use em dashes, and the Open join mode now says "atmosphere account".
+
 ## 0.12.0
 
 HappyView 2.16.0, unchanged from 0.11.0. No backfill is required.

@@ -6,6 +6,7 @@ import {
   normalizeHomepage,
   rankHotThreads,
   selectFeaturedThreads,
+  showsMarketingHomepage,
   threadUriFromReference,
 } from './homepage';
 
@@ -93,5 +94,17 @@ describe('homepage feed selection', () => {
   it('ranks replied-to topics by replies then recent activity', () => {
     expect(rankHotThreads(topics).map((topic) => topic.uri))
       .toEqual([thread('tie-new'), thread('tie-old'), thread('low')]);
+  });
+});
+
+describe('showsMarketingHomepage', () => {
+  it('shows signed-out visitors the marketing page when it is turned on', () => {
+    expect(showsMarketingHomepage(true, false, new URLSearchParams())).toBe(true);
+  });
+
+  it('keeps the forum for members, a chosen view, and forums that leave it off', () => {
+    expect(showsMarketingHomepage(true, true, new URLSearchParams())).toBe(false);
+    expect(showsMarketingHomepage(true, false, new URLSearchParams('view=latest'))).toBe(false);
+    expect(showsMarketingHomepage(false, false, new URLSearchParams())).toBe(false);
   });
 });

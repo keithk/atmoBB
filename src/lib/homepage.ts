@@ -91,3 +91,12 @@ export function rankHotThreads<T extends { replyCount: number; lastActivity: str
     .filter((thread) => thread.replyCount > 0)
     .toSorted((a, b) => b.replyCount - a.replyCount || b.lastActivity.localeCompare(a.lastActivity));
 }
+
+/**
+ * atmobb.app's front page. With ATMOBB_MARKETING_HOMEPAGE=1, a signed-out
+ * visitor to `/` gets the page about atmoBB itself. Members, and anyone who
+ * picks a view with `?view=`, still get the forum.
+ */
+export function showsMarketingHomepage(enabled: boolean, signedIn: boolean, params: URLSearchParams): boolean {
+  return enabled && !signedIn && !params.has('view');
+}
