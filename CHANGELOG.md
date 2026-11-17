@@ -4,8 +4,11 @@ Versions follow [Semantic Versioning](https://semver.org) with the operator's
 workload in mind; [Releasing](docs/releasing.md) spells out what each level
 means. Every entry names the Happyview release it was tested against.
 
-## Unreleased
+## 0.10.2
 
+HappyView 2.16.0, unchanged from 0.10.1. No backfill is required.
+
+- Thread URLs no longer include the category: `/t/[topic-name]/[did]/[rkey]`. The topic name is optional, so `/t/[did]/[rkey]` renders directly. Existing category URLs redirect to the new structure, and reply links and social cards continue to work.
 - Hosted tenants: the hosting controller re-renders live tenants' Caddy routes from its template on startup, so proxy changes in a release (like the maintenance page) reach existing tenants when you rerun `install-hosting.sh`. A route Caddy rejects is rolled back and logged. Tenant updates still never touch proxy config, and the operator forum's own route is still yours to re-render.
 
 ## 0.10.1
