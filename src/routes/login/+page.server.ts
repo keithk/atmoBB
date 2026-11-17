@@ -20,6 +20,8 @@ export const actions: Actions = {
         context: { purpose: 'member', ...(next ? { next } : {}) },
       });
     } catch (e) {
+      // Name and message only: SDK errors can carry whole upstream response bodies.
+      console.error(`[oauth] login authorize failed for ${JSON.stringify(handle)}:`, e instanceof Error ? `${e.name}: ${e.message}` : e);
       return fail(502, { message: e instanceof OAuthConfigurationError ? e.message : 'Login failed. Check your handle and try again.', handle });
     }
     redirect(303, authorizeUrl.toString());
