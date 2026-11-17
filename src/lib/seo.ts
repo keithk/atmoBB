@@ -44,15 +44,15 @@ const PAGE_TITLES: Record<string, string> = {
   '/settings/avatar': 'Userpic maker',
   '/settings/profile': 'Edit profile',
   '/admin': 'Admin',
-  '/admin/appearance': 'Appearance — Admin',
-  '/admin/appearance/homepage': 'Homepage — Appearance — Admin',
-  '/admin/appearance/branding': 'Branding — Appearance — Admin',
-  '/admin/appearance/css': 'Custom CSS — Appearance — Admin',
-  '/admin/boards': 'Boards — Admin',
-  '/admin/connect': 'Connection — Admin',
-  '/admin/hosting': 'Hosting — Admin',
-  '/admin/staff': 'Staff — Admin',
-  '/admin/topics': 'Topics — Admin',
+  '/admin/appearance': 'Appearance · Admin',
+  '/admin/appearance/homepage': 'Homepage · Appearance · Admin',
+  '/admin/appearance/branding': 'Branding · Appearance · Admin',
+  '/admin/appearance/css': 'Custom CSS · Appearance · Admin',
+  '/admin/boards': 'Boards · Admin',
+  '/admin/connect': 'Connection · Admin',
+  '/admin/hosting': 'Hosting · Admin',
+  '/admin/staff': 'Staff · Admin',
+  '/admin/topics': 'Topics · Admin',
 };
 
 const isPrivateRoute = (routeId: string) =>
@@ -134,7 +134,7 @@ export function resolveMetadata({
 
   return {
     title,
-    documentTitle: title === siteName ? siteName : `${title} — ${siteName}`,
+    documentTitle: title === siteName ? siteName : `${title} · ${siteName}`,
     description,
     image,
     imageAlt: page?.imageAlt?.trim() || `${title} on ${siteName}`,

@@ -71,7 +71,7 @@
                   >
                     <option value="">Choose a recent topic…</option>
                     {#each data.recentThreads as thread}
-                      <option value={thread.uri}>{thread.title}{thread.boardName ? ` — ${thread.boardName}` : ''}</option>
+                      <option value={thread.uri}>{thread.title}{thread.boardName ? ` · ${thread.boardName}` : ''}</option>
                     {/each}
                     <option value={customTopic}>Paste a topic URL…</option>
                   </select>

@@ -19,8 +19,8 @@
     <label class="atm-field">
       <span class="atm-label">Apply to</span>
       <select class="atm-input" name="scope" bind:value={scope}>
-        <option value="forum">This forum only — {data.forum.name}</option>
-        <option value="all">All atmobb forums — account default</option>
+        <option value="forum">This forum only ({data.forum.name})</option>
+        <option value="all">All atmobb forums (account default)</option>
       </select>
     </label>
     <label class="atm-field">

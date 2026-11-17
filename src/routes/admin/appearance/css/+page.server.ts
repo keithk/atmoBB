@@ -66,7 +66,7 @@ export const actions: Actions = {
     const style = String(form.get('style') ?? 'normal');
 
     if (!FAMILY.test(family)) {
-      return fail(400, { message: 'Font family must be 1–64 letters, numbers, spaces, dots, dashes, or underscores.' });
+      return fail(400, { message: 'Font family must be 1 to 64 letters, numbers, spaces, dots, dashes, or underscores.' });
     }
     if (!Number.isInteger(weight) || weight < 100 || weight > 900 || weight % 100 !== 0) {
       return fail(400, { message: 'Font weight must be a multiple of 100 from 100 to 900.' });

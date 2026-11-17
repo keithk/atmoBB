@@ -42,7 +42,7 @@
 {#if savedMessage}
   <p class="atm-ok">
     {savedMessage}
-    {#if pending} The change is taking a few extra seconds to show up here — refresh to see it.{/if}
+    {#if pending} The change is taking a few extra seconds to show up here. Refresh to see it.{/if}
   </p>
 {/if}
 

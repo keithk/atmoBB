@@ -427,7 +427,7 @@
                 <summary>Give a stamp</summary>
                 {#if !data.stampsByHand.length}
                   <p class="atm-empty atm-empty--bare standing__note">
-                    No hand-awarded stamps yet — <a href="/admin/stamps">create one in Admin → Stamps</a>.
+                    No hand-awarded stamps yet. <a href="/admin/stamps">Create one in Admin → Stamps</a>.
                   </p>
                 {:else}
                   {#if held.length}

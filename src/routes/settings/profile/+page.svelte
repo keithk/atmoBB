@@ -135,8 +135,8 @@
       <label class="atm-field">
         <span class="atm-label">Editing</span>
         <select class="atm-input" value={data.scope} onchange={(event) => window.location.assign(`?scope=${event.currentTarget.value}`)}>
-          <option value="forum">This forum only — {data.forum.name}</option>
-          <option value="all">All atmobb forums — account defaults</option>
+          <option value="forum">This forum only ({data.forum.name})</option>
+          <option value="all">All atmobb forums (account defaults)</option>
         </select>
         <span class="atm-hint">Save before switching. {data.scope === 'forum' ? 'Uncheck a field to customize it here. An empty signature, bio, pronouns, or website hides it on this forum.' : 'Used wherever you have not chosen a forum-specific value. Existing forum choices stay unchanged.'}</span>
       </label>

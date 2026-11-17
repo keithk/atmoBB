@@ -126,7 +126,7 @@ https://github.com/keithk/atmoBB`;
 }
 
 export const SUBDOMAIN_RULE =
-  'Use 3–30 lowercase letters, numbers, or hyphens. Start and end with a letter or number.';
+  'Use 3 to 30 lowercase letters, numbers, or hyphens. Start and end with a letter or number.';
 const SUBDOMAIN_RE = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
 // The queue and host registry also reserve existing forum names.
 const RESERVED = new Set([

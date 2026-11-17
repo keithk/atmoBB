@@ -122,9 +122,9 @@
 
       <nav class="scope" aria-label="Where these settings apply">
         <a class="atm-btn atm-btn--sm {data.scope === 'forum' ? 'atm-btn--primary' : 'atm-btn--secondary'}"
-          href="?scope=forum" aria-current={data.scope === 'forum' ? 'page' : undefined}>This forum only — {data.forum.name}</a>
+          href="?scope=forum" aria-current={data.scope === 'forum' ? 'page' : undefined}>This forum only ({data.forum.name})</a>
         <a class="atm-btn atm-btn--sm {data.scope === 'all' ? 'atm-btn--primary' : 'atm-btn--secondary'}"
-          href="?scope=all" aria-current={data.scope === 'all' ? 'page' : undefined}>All atmobb forums — account defaults</a>
+          href="?scope=all" aria-current={data.scope === 'all' ? 'page' : undefined}>All atmobb forums (account defaults)</a>
       </nav>
       <p class="atm-hint">
         Save before switching.

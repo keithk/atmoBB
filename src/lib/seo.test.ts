@@ -22,7 +22,7 @@ describe('resolveMetadata', () => {
 
   it('gives public sections distinct metadata', () => {
     const meta = resolve('/latest', 'https://forum.example/latest');
-    expect(meta.documentTitle).toBe('Latest — Test Forum');
+    expect(meta.documentTitle).toBe('Latest · Test Forum');
     expect(meta.description).toContain('latest conversations');
     expect(meta.robots).toContain('max-image-preview:large');
   });
@@ -30,7 +30,7 @@ describe('resolveMetadata', () => {
   it('keeps private and account pages out of search results', () => {
     expect(resolve('/settings/profile', 'https://forum.example/settings/profile').robots).toBe('noindex, nofollow');
     expect(resolve('/admin/boards', 'https://forum.example/admin/boards').noindex).toBe(true);
-    expect(resolve(null, 'https://forum.example/missing').documentTitle).toBe('Page not found — Test Forum');
+    expect(resolve(null, 'https://forum.example/missing').documentTitle).toBe('Page not found · Test Forum');
     expect(resolve('/host', 'https://forum.example/host', {}, 404).noindex).toBe(true);
   });
 

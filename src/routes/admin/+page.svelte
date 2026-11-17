@@ -9,7 +9,7 @@
 </script>
 
 {#if pending}
-  <p class="atm-ok">Saved. The change is taking a few extra seconds to show up here — refresh to see it.</p>
+  <p class="atm-ok">Saved. The change is taking a few extra seconds to show up here. Refresh to see it.</p>
 {:else if saved}
   <p class="atm-ok">Saved.</p>
 {/if}

@@ -167,7 +167,7 @@ export const load: PageServerLoad = async ({ params, url, parent, locals, isData
           title,
           description: opening || `Started by ${authorName} · ${replySummary}`,
           image,
-          imageAlt: `${title} — a discussion started by ${authorName}`,
+          imageAlt: `${title}, a discussion started by ${authorName}`,
           type: 'article' as const,
           noindex: false,
           canonical: canonicalPath,

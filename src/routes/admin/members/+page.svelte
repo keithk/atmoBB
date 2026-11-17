@@ -23,14 +23,14 @@
 </script>
 
 {#if pending}
-  <p class="atm-ok">Saved. The change is taking a few extra seconds to show up here — refresh to see it.</p>
+  <p class="atm-ok">Saved. The change is taking a few extra seconds to show up here. Refresh to see it.</p>
 {:else if saved}
   <p class="atm-ok">Saved.</p>
 {/if}
 {#if form?.message}<p class="atm-err">{form.message}</p>{/if}
 {#if form?.minted}
   <p class="atm-ok minted">
-    Invite minted. Copy it now — it won't be shown again:
+    Invite minted. It won't be shown again, so copy it now:
     <code class="minted__link">{page.url.origin}{form.minted.path}</code>
     <span class="minted__exp">expires {day(form.minted.expiresAt)}</span>
   </p>

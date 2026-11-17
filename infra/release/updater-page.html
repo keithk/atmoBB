@@ -23,7 +23,7 @@ dt{font-weight:600}dd{margin:0 0 12px;overflow-wrap:anywhere}:focus-visible{outl
 <p id="notice" role="status" aria-live="polite">Checking your operator session…</p>
 <section class="panel" aria-labelledby="current"><h2 id="current">Current operation</h2>
 <dl><dt>Forum access</dt><dd id="maintenance">Checking…</dd><dt>Operation</dt><dd id="operation">Checking…</dd>
-<dt>Installed version</dt><dd id="version">—</dd><dt>Last backup</dt><dd id="backup">—</dd></dl>
+<dt>Installed version</dt><dd id="version">Checking…</dd><dt>Last backup</dt><dd id="backup">Checking…</dd></dl>
 <p id="message"></p><h2>Operation log</h2><pre id="log" tabindex="0" aria-label="Operation log">No log yet.</pre></section>
 <section aria-labelledby="actions"><h2 id="actions">Update the forum</h2>
 <p>Install the latest stable release, or choose main explicitly. Main is development code and may be unstable. Recover an interrupted update before starting another.</p>
@@ -59,7 +59,7 @@ async function refresh() {
       button.disabled = active || (recovery ? !state.maintenance : state.maintenance);
     });
     setText('notice', active ? 'An operation is active. You can leave this page; work continues on the host.' : state.status === 'failed' ? 'The last operation failed. Review the log before retrying or recovering.' : 'Operator session active. Status refreshes every three seconds.');
-    setText('maintenance', state.maintenance ? 'Maintenance enabled — forum access is paused.' : 'Maintenance disabled.');
+    setText('maintenance', state.maintenance ? 'Maintenance enabled. Forum access is paused.' : 'Maintenance disabled.');
     setText('operation', [state.action, state.target, state.status].filter(Boolean).join(' · '));
     setText('version', state.installedVersion || 'Unknown');
     setText('backup', state.backup || 'No backup recorded');
