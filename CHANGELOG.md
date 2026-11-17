@@ -4,6 +4,15 @@ Versions follow [Semantic Versioning](https://semver.org) with the operator's
 workload in mind; [Releasing](docs/releasing.md) spells out what each level
 means. Every entry names the Happyview release it was tested against.
 
+## 0.12.0
+
+HappyView 2.16.0, unchanged from 0.11.0. No backfill is required.
+
+- Pinned threads: an admin's pin on a thread's staff bar puts it in a Pinned panel at the top of the home page, in the theme's pinned style. The Latest feed leaves pinned topics out so they don't show twice. This reuses the homepage's existing featured list, so no lexicon changes.
+- Topic lists: dates no longer run past the right edge in Atmosphere, Arcade or Midnight. A date in the current year drops the year ("Oct 10"); earlier dates read "Oct 2025". Participant avatar links are named for screen readers.
+- Accessibility: every built-in theme keeps text at 4.5:1 contrast on its surfaces, in both light and dark modes. Keyboard focus is a 2px outline in a color that contrasts with its surface, replacing the faint shadow ring. Some theme colors changed to meet this, including Coral's links and the faint and secondary text in most themes. Custom CSS that hard-codes the old values keeps them.
+- Fonts: the forum serves its IBM Plex, Newsreader, Nunito and Pixelify Sans files from the build instead of loading them from Google Fonts, so visitors' browsers no longer contact Google for a font.
+
 ## 0.11.0
 
 HappyView 2.16.0, unchanged from 0.10.2. No backfill is required.
